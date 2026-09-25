@@ -171,3 +171,152 @@
   background: var(--red);
   color: #1a0000;
 }
+
+/* ---- side collection panel ---- */
+
+.collection-tab {
+  position: fixed;
+  top: 50%;
+  right: 0;
+  transform: translateY(-50%);
+  z-index: 60;
+  font-family: var(--font);
+  background: var(--bg-inset);
+  color: var(--green);
+  border: 1px solid var(--green-dim);
+  border-right: none;
+  border-radius: 6px 0 0 6px;
+  padding: 12px 8px;
+  writing-mode: vertical-rl;
+  cursor: pointer;
+  font-size: 0.85rem;
+  letter-spacing: 0.05em;
+}
+
+.collection-tab:hover {
+  background: #101c10;
+}
+
+.collection-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+  z-index: 55;
+}
+
+.collection-backdrop.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.collection-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 100vh;
+  width: min(360px, 88vw);
+  background: var(--bg-panel);
+  border-left: 1px solid var(--border);
+  transform: translateX(100%);
+  transition: transform 0.25s ease;
+  z-index: 58;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.collection-panel.open {
+  transform: translateX(0);
+}
+
+.collection-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--green);
+  font-size: 1rem;
+}
+
+.collection-close {
+  background: transparent;
+  border: none;
+  color: var(--green-faint);
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.collection-close:hover {
+  color: var(--green);
+}
+
+.collection-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.collection-section h3 {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--green-faint);
+  font-weight: normal;
+}
+
+.collection-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.collection-row {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 8px 10px;
+  background: var(--bg-inset);
+}
+
+.collection-row-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  margin-bottom: 6px;
+}
+
+.collection-icon {
+  font-size: 1rem;
+}
+
+.collection-name {
+  flex: 1;
+  color: var(--text);
+}
+
+.collection-count {
+  color: var(--cyan);
+}
+
+.collection-icons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  min-height: 1.3rem;
+}
+
+.collection-icons span {
+  font-size: 1.05rem;
+  line-height: 1;
+}
+
+.collection-icons:empty::after {
+  content: "none yet";
+  color: #4a5a4a;
+  font-size: 0.72rem;
+  font-style: italic;
+}

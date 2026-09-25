@@ -6,28 +6,28 @@ const SAVE_KEY = "clickerGameSave";
 // replaced outright by later ones.
 const UPGRADES = [
   // ---- click power (typing upgrades) ----
-  { id: "keyboard", name: "Mechanical Keyboard", type: "click", baseCost: 15, costGrowth: 1.15, baseAmount: 1, amountGrowth: 1.08 },
-  { id: "monitor2", name: "Second Monitor", type: "click", baseCost: 60, costGrowth: 1.15, baseAmount: 2, amountGrowth: 1.08 },
-  { id: "duck", name: "Rubber Duck", type: "click", baseCost: 200, costGrowth: 1.15, baseAmount: 4, amountGrowth: 1.08 },
-  { id: "coffee", name: "Coffee IV Drip", type: "click", baseCost: 600, costGrowth: 1.15, baseAmount: 8, amountGrowth: 1.08 },
-  { id: "standingdesk", name: "Standing Desk", type: "click", baseCost: 1800, costGrowth: 1.15, baseAmount: 15, amountGrowth: 1.08 },
-  { id: "headphones", name: "Noise-Cancelling Headphones", type: "click", baseCost: 5000, costGrowth: 1.15, baseAmount: 28, amountGrowth: 1.08 },
-  { id: "autocomplete", name: "AI Autocomplete", type: "click", baseCost: 14000, costGrowth: 1.15, baseAmount: 50, amountGrowth: 1.08 },
-  { id: "vim", name: "Vim Motions Mastery", type: "click", baseCost: 40000, costGrowth: 1.15, baseAmount: 90, amountGrowth: 1.08 },
-  { id: "battlestation", name: "4-Monitor Battlestation", type: "click", baseCost: 110000, costGrowth: 1.15, baseAmount: 160, amountGrowth: 1.08 },
-  { id: "neuralkeyboard", name: "Neural Keyboard Interface", type: "click", baseCost: 300000, costGrowth: 1.15, baseAmount: 300, amountGrowth: 1.08 },
+  { id: "keyboard", name: "Mechanical Keyboard", icon: "⌨️", type: "click", baseCost: 15, costGrowth: 1.15, baseAmount: 1, amountGrowth: 1.08 },
+  { id: "monitor2", name: "Second Monitor", icon: "🖥️", type: "click", baseCost: 60, costGrowth: 1.15, baseAmount: 2, amountGrowth: 1.08 },
+  { id: "duck", name: "Rubber Duck", icon: "🦆", type: "click", baseCost: 200, costGrowth: 1.15, baseAmount: 4, amountGrowth: 1.08 },
+  { id: "coffee", name: "Coffee IV Drip", icon: "☕", type: "click", baseCost: 600, costGrowth: 1.15, baseAmount: 8, amountGrowth: 1.08 },
+  { id: "standingdesk", name: "Standing Desk", icon: "🪑", type: "click", baseCost: 1800, costGrowth: 1.15, baseAmount: 15, amountGrowth: 1.08 },
+  { id: "headphones", name: "Noise-Cancelling Headphones", icon: "🎧", type: "click", baseCost: 5000, costGrowth: 1.15, baseAmount: 28, amountGrowth: 1.08 },
+  { id: "autocomplete", name: "AI Autocomplete", icon: "💡", type: "click", baseCost: 14000, costGrowth: 1.15, baseAmount: 50, amountGrowth: 1.08 },
+  { id: "vim", name: "Vim Motions Mastery", icon: "🥷", type: "click", baseCost: 40000, costGrowth: 1.15, baseAmount: 90, amountGrowth: 1.08 },
+  { id: "battlestation", name: "4-Monitor Battlestation", icon: "🎛️", type: "click", baseCost: 110000, costGrowth: 1.15, baseAmount: 160, amountGrowth: 1.08 },
+  { id: "neuralkeyboard", name: "Neural Keyboard Interface", icon: "🧠", type: "click", baseCost: 300000, costGrowth: 1.15, baseAmount: 300, amountGrowth: 1.08 },
 
   // ---- CPS (ci/cd upgrades) ----
-  { id: "intern", name: "Intern", type: "auto", baseCost: 25, costGrowth: 1.15, baseAmount: 1, amountGrowth: 1.08 },
-  { id: "juniorbot", name: "Junior Dev Bot", type: "auto", baseCost: 100, costGrowth: 1.15, baseAmount: 2, amountGrowth: 1.08 },
-  { id: "reviewbot", name: "Code Review Bot", type: "auto", baseCost: 350, costGrowth: 1.15, baseAmount: 4, amountGrowth: 1.08 },
-  { id: "cipipeline", name: "CI Pipeline", type: "auto", baseCost: 1000, costGrowth: 1.15, baseAmount: 8, amountGrowth: 1.08 },
-  { id: "automerge", name: "Auto-merge Bot", type: "auto", baseCost: 3000, costGrowth: 1.15, baseAmount: 15, amountGrowth: 1.08 },
-  { id: "devops", name: "DevOps Engineer", type: "auto", baseCost: 8500, costGrowth: 1.15, baseAmount: 28, amountGrowth: 1.08 },
-  { id: "kubernetes", name: "Kubernetes Cluster", type: "auto", baseCost: 24000, costGrowth: 1.15, baseAmount: 50, amountGrowth: 1.08 },
-  { id: "autoscaler", name: "Cloud Auto-scaler", type: "auto", baseCost: 65000, costGrowth: 1.15, baseAmount: 90, amountGrowth: 1.08 },
-  { id: "aipair", name: "AI Pair Programmer", type: "auto", baseCost: 180000, costGrowth: 1.15, baseAmount: 160, amountGrowth: 1.08 },
-  { id: "agi", name: "Self-Improving AGI", type: "auto", baseCost: 500000, costGrowth: 1.15, baseAmount: 300, amountGrowth: 1.08 },
+  { id: "intern", name: "Intern", icon: "🧑", type: "auto", baseCost: 25, costGrowth: 1.15, baseAmount: 1, amountGrowth: 1.08 },
+  { id: "juniorbot", name: "Junior Dev Bot", icon: "🤖", type: "auto", baseCost: 100, costGrowth: 1.15, baseAmount: 2, amountGrowth: 1.08 },
+  { id: "reviewbot", name: "Code Review Bot", icon: "🔍", type: "auto", baseCost: 350, costGrowth: 1.15, baseAmount: 4, amountGrowth: 1.08 },
+  { id: "cipipeline", name: "CI Pipeline", icon: "🔄", type: "auto", baseCost: 1000, costGrowth: 1.15, baseAmount: 8, amountGrowth: 1.08 },
+  { id: "automerge", name: "Auto-merge Bot", icon: "🔀", type: "auto", baseCost: 3000, costGrowth: 1.15, baseAmount: 15, amountGrowth: 1.08 },
+  { id: "devops", name: "DevOps Engineer", icon: "🛠️", type: "auto", baseCost: 8500, costGrowth: 1.15, baseAmount: 28, amountGrowth: 1.08 },
+  { id: "kubernetes", name: "Kubernetes Cluster", icon: "⚙️", type: "auto", baseCost: 24000, costGrowth: 1.15, baseAmount: 50, amountGrowth: 1.08 },
+  { id: "autoscaler", name: "Cloud Auto-scaler", icon: "📈", type: "auto", baseCost: 65000, costGrowth: 1.15, baseAmount: 90, amountGrowth: 1.08 },
+  { id: "aipair", name: "AI Pair Programmer", icon: "👥", type: "auto", baseCost: 180000, costGrowth: 1.15, baseAmount: 160, amountGrowth: 1.08 },
+  { id: "agi", name: "Self-Improving AGI", icon: "🌐", type: "auto", baseCost: 500000, costGrowth: 1.15, baseAmount: 300, amountGrowth: 1.08 },
 ];
 
 function defaultState() {
@@ -45,6 +45,13 @@ const clickZone = document.getElementById("clickZone");
 const clickUpgradeList = document.getElementById("clickUpgradeList");
 const autoUpgradeList = document.getElementById("autoUpgradeList");
 const resetBtn = document.getElementById("resetBtn");
+
+const collectionTab = document.getElementById("collectionTab");
+const collectionPanel = document.getElementById("collectionPanel");
+const collectionBackdrop = document.getElementById("collectionBackdrop");
+const collectionClose = document.getElementById("collectionClose");
+const collectionClickList = document.getElementById("collectionClickList");
+const collectionAutoList = document.getElementById("collectionAutoList");
 
 let audioCtx = null;
 
@@ -187,10 +194,57 @@ function refreshUpgradeButtons() {
   });
 }
 
+function buildCollectionPanel() {
+  UPGRADES.forEach((upg) => {
+    const row = document.createElement("div");
+    row.className = "collection-row";
+    row.dataset.id = upg.id;
+    row.innerHTML = `
+      <div class="collection-row-header">
+        <span class="collection-icon">${upg.icon}</span>
+        <span class="collection-name">${upg.name}</span>
+        <span class="collection-count" data-role="count">x0</span>
+      </div>
+      <div class="collection-icons" data-role="icons"></div>
+    `;
+    (upg.type === "click" ? collectionClickList : collectionAutoList).appendChild(row);
+  });
+}
+
+function refreshCollectionPanel() {
+  UPGRADES.forEach((upg) => {
+    const row = document.querySelector(`.collection-row[data-id="${upg.id}"]`);
+    if (!row) return;
+    const owned = state.upgrades[upg.id];
+    row.querySelector('[data-role="count"]').textContent = `x${owned}`;
+    const iconsEl = row.querySelector('[data-role="icons"]');
+    if (iconsEl.childElementCount !== owned) {
+      iconsEl.innerHTML = `<span>${upg.icon}</span>`.repeat(owned);
+    }
+  });
+}
+
+function openCollectionPanel() {
+  collectionPanel.classList.add("open");
+  collectionBackdrop.classList.add("open");
+}
+
+function closeCollectionPanel() {
+  collectionPanel.classList.remove("open");
+  collectionBackdrop.classList.remove("open");
+}
+
+collectionTab.addEventListener("click", () => {
+  collectionPanel.classList.contains("open") ? closeCollectionPanel() : openCollectionPanel();
+});
+collectionClose.addEventListener("click", closeCollectionPanel);
+collectionBackdrop.addEventListener("click", closeCollectionPanel);
+
 function render() {
   scoreEl.textContent = `commits: ${state.score}`;
   statsEl.textContent = `lines/commit: ${getClickPower()}  |  CI bots: ${getAutoPower()}/sec`;
   refreshUpgradeButtons();
+  refreshCollectionPanel();
 }
 
 function onClick() {
@@ -222,5 +276,6 @@ resetBtn.addEventListener("click", resetGame);
 
 load();
 buildUpgradeButtons();
+buildCollectionPanel();
 render();
 setInterval(tick, 1000);
