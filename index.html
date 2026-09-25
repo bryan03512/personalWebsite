@@ -3,27 +3,38 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Clicker Game</title>
-<link rel="stylesheet" href="style.css">
+<title>Arcade Menu</title>
+<link rel="stylesheet" href="theme.css">
+<link rel="stylesheet" href="menu.css">
 </head>
 <body>
-  <main class="game">
-    <h1>Clicker Game</h1>
+  <main class="menu-wrap">
+    <div class="window menu-window">
+      <div class="window-titlebar">
+        <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+        <span class="title-text">bryan@arcade:~</span>
+      </div>
+      <div class="terminal-body">
+        <p class="prompt-line glow">visitor@arcade<span class="prompt-sep">:~$</span> <span class="cursor">select_game</span></p>
 
-    <p class="score" id="score">Score: 0</p>
-
-    <button class="click-btn" id="clickBtn">CLICK ME</button>
-
-    <div class="upgrades">
-      <button class="upgrade-btn" id="clickUpgradeBtn"></button>
-      <button class="upgrade-btn" id="autoUpgradeBtn"></button>
+        <nav class="game-list">
+          <a class="game-entry" href="clicker.html">
+            <span class="entry-icon">&gt;</span>
+            <span class="entry-text">
+              <span class="entry-title glow">./clicker.sh</span>
+              <span class="entry-desc"># commit code, hire CI bots, go idle</span>
+            </span>
+          </a>
+          <a class="game-entry" href="towerdefense.html">
+            <span class="entry-icon">&gt;</span>
+            <span class="entry-text">
+              <span class="entry-title glow">./tower_defense.sh</span>
+              <span class="entry-desc"># deploy devs, squash bugs, survive sprints</span>
+            </span>
+          </a>
+        </nav>
+      </div>
     </div>
-
-    <p class="stats" id="stats"></p>
-
-    <button class="reset-btn" id="resetBtn">Reset Progress</button>
   </main>
-
-  <script src="script.js"></script>
 </body>
 </html>

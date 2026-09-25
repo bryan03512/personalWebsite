@@ -1,0 +1,67 @@
+.menu-wrap {
+  min-height: calc(100vh - 32px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.menu-window {
+  width: 100%;
+  max-width: 520px;
+}
+
+.terminal-body {
+  padding: 24px 20px;
+}
+
+.prompt-line {
+  margin: 0 0 20px;
+  font-size: 1rem;
+}
+
+.prompt-sep {
+  color: var(--green-faint);
+}
+
+.game-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.game-entry {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  text-decoration: none;
+  color: var(--text);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.game-entry:hover {
+  border-color: var(--green-dim);
+  background: var(--bg-inset);
+}
+
+.entry-icon {
+  color: var(--green);
+}
+
+.entry-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.entry-title {
+  color: var(--green);
+  font-size: 1.05rem;
+}
+
+.entry-desc {
+  color: var(--green-faint);
+  font-size: 0.82rem;
+}

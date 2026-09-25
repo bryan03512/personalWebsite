@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Tower Defense</title>
+<link rel="stylesheet" href="theme.css">
+<link rel="stylesheet" href="towerdefense.css">
+</head>
+<body>
+  <div class="td-wrap">
+    <a class="back-link" href="index.html">&larr; menu</a>
+
+    <div class="window td-window">
+      <div class="window-titlebar">
+        <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+        <span class="title-text">tower_defense.sh</span>
+      </div>
+
+      <div class="td-layout">
+        <div class="canvas-holder">
+          <canvas id="gameCanvas" width="780" height="600"></canvas>
+          <div class="game-over-overlay" id="gameOverOverlay">
+            <div class="game-over-box">
+              <h2 class="glow">SYSTEM CRASH</h2>
+              <p id="gameOverText"></p>
+              <button class="btn" id="restartBtn">restart --fresh</button>
+            </div>
+          </div>
+        </div>
+
+        <aside class="panel">
+          <div class="stats">
+            <div class="stat"><span>credits</span><strong id="goldStat">0</strong></div>
+            <div class="stat"><span>uptime</span><strong id="livesStat">0</strong></div>
+            <div class="stat"><span>sprint</span><strong id="waveStat">0</strong></div>
+            <div class="stat"><span>bugs fixed</span><strong id="killsStat">0</strong></div>
+          </div>
+
+          <h3># deploy a dev</h3>
+          <div class="tower-list" id="towerList"></div>
+
+          <button class="btn wave-btn" id="waveBtn">deploy sprint 1</button>
+
+          <p class="hint">select a dev, then click an empty tile off the pipeline to deploy them.</p>
+        </aside>
+      </div>
+    </div>
+  </div>
+
+  <script src="towerdefense.js"></script>
+</body>
+</html>

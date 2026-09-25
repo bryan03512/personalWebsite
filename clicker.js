@@ -11,9 +11,48 @@ let state = {
 const scoreEl = document.getElementById("score");
 const statsEl = document.getElementById("stats");
 const clickBtn = document.getElementById("clickBtn");
+const clickZone = document.getElementById("clickZone");
 const clickUpgradeBtn = document.getElementById("clickUpgradeBtn");
 const autoUpgradeBtn = document.getElementById("autoUpgradeBtn");
 const resetBtn = document.getElementById("resetBtn");
+
+let audioCtx = null;
+
+function playClickSound() {
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  if (!AudioCtx) return;
+  if (!audioCtx) audioCtx = new AudioCtx();
+  if (audioCtx.state === "suspended") audioCtx.resume();
+
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = "square";
+  osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(440, audioCtx.currentTime + 0.08);
+  gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1);
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.start();
+  osc.stop(audioCtx.currentTime + 0.1);
+}
+
+function spawnFloatText(amount) {
+  const el = document.createElement("span");
+  el.className = "float-text";
+  el.textContent = `+${amount}`;
+  el.style.marginLeft = `${(Math.random() - 0.5) * 40}px`;
+  clickZone.appendChild(el);
+  el.addEventListener("animationend", () => el.remove());
+}
+
+function playClickEffect(amount) {
+  clickBtn.classList.remove("pulse");
+  void clickBtn.offsetWidth; // restart animation
+  clickBtn.classList.add("pulse");
+  spawnFloatText(amount);
+  playClickSound();
+}
 
 function load() {
   const saved = localStorage.getItem(SAVE_KEY);
@@ -31,16 +70,17 @@ function save() {
 }
 
 function render() {
-  scoreEl.textContent = `Score: ${state.score}`;
-  statsEl.textContent = `Click Power: ${state.clickPower}  |  Auto/sec: ${state.autoPower}`;
-  clickUpgradeBtn.textContent = `Upgrade Click Power (${state.clickUpgradeCost} pts)`;
-  autoUpgradeBtn.textContent = `Buy Auto-Clicker (${state.autoUpgradeCost} pts)`;
+  scoreEl.textContent = `commits: ${state.score}`;
+  statsEl.textContent = `lines/commit: ${state.clickPower}  |  CI bots: ${state.autoPower}`;
+  clickUpgradeBtn.textContent = `upgrade typing speed (${state.clickUpgradeCost}c)`;
+  autoUpgradeBtn.textContent = `hire CI bot (${state.autoUpgradeCost}c)`;
   clickUpgradeBtn.disabled = state.score < state.clickUpgradeCost;
   autoUpgradeBtn.disabled = state.score < state.autoUpgradeCost;
 }
 
 function onClick() {
   state.score += state.clickPower;
+  playClickEffect(state.clickPower);
   render();
   save();
 }

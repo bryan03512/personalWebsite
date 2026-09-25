@@ -1,0 +1,124 @@
+.page-wrap {
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.game-body {
+  padding: 24px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.click-zone {
+  position: relative;
+}
+
+.score {
+  font-size: clamp(1.3rem, 5vw, 1.7rem);
+  margin: 0;
+  color: var(--green);
+}
+
+.commit-btn {
+  width: min(220px, 65vw);
+  height: min(220px, 65vw);
+  border-radius: 50%;
+  border: 2px solid var(--green-dim);
+  background: var(--bg-inset);
+  color: var(--green);
+  font-family: var(--font);
+  font-size: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  box-shadow: 0 0 18px rgba(57, 255, 20, 0.15);
+  transition: transform 0.05s ease, box-shadow 0.15s ease, background 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  user-select: none;
+}
+
+.commit-btn .commit-icon {
+  font-size: 1.6rem;
+}
+
+.commit-btn:hover {
+  background: #101c10;
+  box-shadow: 0 0 26px rgba(57, 255, 20, 0.3);
+}
+
+.commit-btn:active {
+  transform: scale(0.96);
+}
+
+.commit-btn.pulse {
+  animation: commitPulse 0.18s ease-out;
+}
+
+@keyframes commitPulse {
+  0% {
+    transform: scale(0.92);
+    box-shadow: 0 0 40px rgba(57, 255, 20, 0.7);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 18px rgba(57, 255, 20, 0.15);
+  }
+}
+
+.float-text {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  color: var(--green);
+  font-weight: bold;
+  font-size: 1.1rem;
+  text-shadow: 0 0 6px currentColor;
+  pointer-events: none;
+  animation: floatUp 0.7s ease-out forwards;
+}
+
+@keyframes floatUp {
+  from {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -160%);
+  }
+}
+
+.upgrades {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.upgrade-btn {
+  width: 100%;
+  text-align: left;
+}
+
+.stats {
+  margin: 0;
+  color: var(--green-faint);
+  font-size: 0.9rem;
+}
+
+.reset-btn {
+  color: var(--red);
+  border-color: #5a2323;
+}
+
+.reset-btn:hover {
+  background: var(--red);
+  color: #1a0000;
+}
