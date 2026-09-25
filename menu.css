@@ -65,3 +65,8 @@
   color: var(--green-faint);
   font-size: 0.82rem;
 }
+
+.entry-ext {
+  color: var(--cyan);
+  font-size: 0.85rem;
+}
