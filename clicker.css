@@ -95,16 +95,65 @@
   }
 }
 
-.upgrades {
+.upgrade-section {
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
+}
+
+.upgrade-section h3 {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--green-faint);
+  font-weight: normal;
+}
+
+.upgrade-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 220px;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .upgrade-btn {
   width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   text-align: left;
+  padding: 8px 10px;
+  font-size: 0.8rem;
+}
+
+.upgrade-btn .u-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 1px;
+}
+
+.upgrade-btn .u-name {
+  color: var(--text);
+}
+
+.upgrade-btn .u-gain {
+  color: var(--green-faint);
+  font-size: 0.7rem;
+}
+
+.upgrade-btn .u-owned {
+  color: var(--cyan);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.upgrade-btn .u-cost {
+  color: var(--yellow);
+  font-weight: bold;
+  white-space: nowrap;
 }
 
 .stats {
