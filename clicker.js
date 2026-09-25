@@ -271,7 +271,52 @@ function tick() {
   }
 }
 
-clickBtn.addEventListener("click", onClick);
+// ---- hold-to-type: hold the button 1s to start auto-committing repeatedly ----
+const HOLD_THRESHOLD_MS = 1000;
+const TYPING_INTERVAL_MS = 120;
+const commitLabel = clickBtn.querySelector(".commit-label");
+
+let holdTimer = null;
+let typingInterval = null;
+let isTyping = false;
+
+function startTyping() {
+  isTyping = true;
+  clickBtn.classList.add("typing");
+  if (commitLabel) commitLabel.textContent = "typing...";
+  typingInterval = setInterval(onClick, TYPING_INTERVAL_MS);
+}
+
+function stopHold() {
+  clearTimeout(holdTimer);
+  holdTimer = null;
+  if (typingInterval) {
+    clearInterval(typingInterval);
+    typingInterval = null;
+  }
+  if (isTyping) {
+    isTyping = false;
+    clickBtn.classList.remove("typing");
+    if (commitLabel) commitLabel.textContent = "git commit";
+  }
+}
+
+function handlePointerDown(evt) {
+  evt.preventDefault();
+  holdTimer = setTimeout(startTyping, HOLD_THRESHOLD_MS);
+}
+
+function handlePointerUp() {
+  const wasTyping = isTyping;
+  stopHold();
+  if (!wasTyping) onClick();
+}
+
+clickBtn.addEventListener("pointerdown", handlePointerDown);
+clickBtn.addEventListener("pointerup", handlePointerUp);
+clickBtn.addEventListener("pointerleave", stopHold);
+clickBtn.addEventListener("pointercancel", stopHold);
+
 resetBtn.addEventListener("click", resetGame);
 
 load();

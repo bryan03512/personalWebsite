@@ -56,6 +56,11 @@
   transform: scale(0.96);
 }
 
+.commit-btn.typing {
+  border-color: var(--cyan);
+  box-shadow: 0 0 30px rgba(0, 229, 255, 0.55);
+}
+
 .commit-btn.pulse {
   animation: commitPulse 0.18s ease-out;
 }
