@@ -167,6 +167,59 @@
   font-size: 0.9rem;
 }
 
+.prestige-bar {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--magenta, #ff4fd8);
+  border-radius: 4px;
+  background: var(--bg-inset);
+  font-size: 0.82rem;
+}
+
+.prestige-bar span {
+  color: #ff4fd8;
+}
+
+.prestige-btn {
+  border-color: #ff4fd8;
+  color: #ff4fd8;
+  font-size: 0.78rem;
+  padding: 8px 10px;
+  white-space: nowrap;
+}
+
+.prestige-btn:hover:not(:disabled) {
+  background: #ff4fd8;
+  color: #1a0016;
+}
+
+.offline-banner {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--cyan);
+  border-radius: 4px;
+  background: var(--bg-inset);
+  color: var(--cyan);
+  font-size: 0.8rem;
+}
+
+.offline-banner button {
+  background: transparent;
+  border: none;
+  color: var(--cyan);
+  font-size: 1.1rem;
+  cursor: pointer;
+  line-height: 1;
+}
+
 .reset-btn {
   color: var(--red);
   border-color: #5a2323;
@@ -324,4 +377,109 @@
   color: #4a5a4a;
   font-size: 0.72rem;
   font-style: italic;
+}
+
+/* ---- prestige tree panel (mirrors the collection panel, but from the left) ---- */
+
+.tree-tab {
+  left: 0;
+  right: auto;
+  border-radius: 0 6px 6px 0;
+  border: 1px solid #ff4fd8;
+  border-left: none;
+  color: #ff4fd8;
+}
+
+.tree-tab:hover {
+  background: #1a0016;
+}
+
+.tree-panel {
+  left: 0;
+  right: auto;
+  border-left: none;
+  border-right: 1px solid var(--border);
+  transform: translateX(-100%);
+}
+
+.tree-panel.open {
+  transform: translateX(0);
+}
+
+.tree-container {
+  position: relative;
+  padding-top: 8px;
+}
+
+.tree-lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.tree-row {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 22px;
+  z-index: 1;
+}
+
+.tree-row.two-col {
+  justify-content: space-between;
+}
+
+.tree-node {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 9px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg-inset);
+  color: var(--text);
+  font-family: var(--font);
+  text-align: left;
+  cursor: pointer;
+  font-size: 0.74rem;
+}
+
+.tree-node .t-name {
+  color: var(--text);
+  font-size: 0.78rem;
+}
+
+.tree-node .t-desc {
+  color: var(--green-faint);
+  font-size: 0.68rem;
+}
+
+.tree-node .t-cost {
+  color: var(--yellow);
+  font-weight: bold;
+  font-size: 0.72rem;
+}
+
+.tree-node.owned {
+  border-color: #ff4fd8;
+  background: #1a0016;
+  cursor: default;
+}
+
+.tree-node.owned .t-name {
+  color: #ff4fd8;
+}
+
+.tree-node.locked {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.tree-node:disabled {
+  cursor: not-allowed;
 }

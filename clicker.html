@@ -29,6 +29,13 @@
 
         <p class="stats" id="stats"></p>
 
+        <div class="prestige-bar">
+          <span id="prestigeStat">prestige: 0 pts</span>
+          <button class="btn prestige-btn" id="prestigeBtn">refactor --prestige</button>
+        </div>
+
+        <div id="offlineBanner" class="offline-banner" hidden></div>
+
         <div class="upgrade-section">
           <h3># typing upgrades</h3>
           <div class="upgrade-list" id="clickUpgradeList"></div>
@@ -62,6 +69,26 @@
     <div class="collection-section">
       <h3># ci/cd upgrades</h3>
       <div class="collection-list" id="collectionAutoList"></div>
+    </div>
+  </aside>
+
+  <button class="collection-tab tree-tab" id="treeTab" aria-label="Toggle prestige tree">&#127795; prestige</button>
+
+  <div class="collection-backdrop" id="treeBackdrop"></div>
+
+  <aside class="collection-panel tree-panel" id="treePanel">
+    <div class="collection-panel-header">
+      <span>prestige tree &mdash; <span id="treePointsLabel">0</span> pts</span>
+      <button class="collection-close" id="treeClose">&times;</button>
+    </div>
+
+    <div class="tree-container" id="treeContainer">
+      <svg class="tree-lines" id="treeLines"></svg>
+      <div class="tree-row" data-row="root"></div>
+      <div class="tree-row two-col" data-row="tier1"></div>
+      <div class="tree-row two-col" data-row="tier2"></div>
+      <div class="tree-row two-col" data-row="tier3"></div>
+      <div class="tree-row" data-row="capstone"></div>
     </div>
   </aside>
 

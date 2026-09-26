@@ -30,10 +30,25 @@ const UPGRADES = [
   { id: "agi", name: "Self-Improving AGI", icon: "🌐", type: "auto", baseCost: 500000, costGrowth: 1.15, baseAmount: 300, amountGrowth: 1.08 },
 ];
 
+// Prestige tree: a root node splitting into a "typing" branch and an "ops"
+// branch, converging into a capstone node that requires both branches maxed.
+const PRESTIGE_TREE = [
+  { id: "root", name: "Refactor Mastery", desc: "+5% commits & CI bots", icon: "🌱", row: "root", cost: 1, requires: [], effect: { clickMult: 0.05, autoMult: 0.05 } },
+  { id: "typing1", name: "Faster Fingers", desc: "+10% commits per click", icon: "⚡", row: "tier1", col: 0, cost: 1, requires: ["root"], effect: { clickMult: 0.10 } },
+  { id: "ops1", name: "Better Tooling", desc: "+10% CI bot output", icon: "🔧", row: "tier1", col: 1, cost: 1, requires: ["root"], effect: { autoMult: 0.10 } },
+  { id: "typing2", name: "Muscle Memory", desc: "+15% commits per click", icon: "💪", row: "tier2", col: 0, cost: 2, requires: ["typing1"], effect: { clickMult: 0.15 } },
+  { id: "ops2", name: "Pipeline Tuning", desc: "+15% CI bot output", icon: "📡", row: "tier2", col: 1, cost: 2, requires: ["ops1"], effect: { autoMult: 0.15 } },
+  { id: "typing3", name: "Flow State", desc: "hold-to-type fires 2x faster", icon: "🌀", row: "tier3", col: 0, cost: 3, requires: ["typing2"], effect: { typingSpeed: true } },
+  { id: "ops3", name: "Offline Commits", desc: "CI bots earn while you're away (up to 8h)", icon: "🌙", row: "tier3", col: 1, cost: 3, requires: ["ops2"], effect: { offline: true } },
+  { id: "capstone", name: "10x Engineer", desc: "+25% to everything", icon: "🚀", row: "capstone", cost: 5, requires: ["typing3", "ops3"], effect: { clickMult: 0.25, autoMult: 0.25 } },
+];
+
 function defaultState() {
   const upgrades = {};
   UPGRADES.forEach((u) => (upgrades[u.id] = 0));
-  return { score: 0, upgrades };
+  const treeNodes = {};
+  PRESTIGE_TREE.forEach((n) => (treeNodes[n.id] = false));
+  return { score: 0, upgrades, runEarned: 0, prestigePoints: 0, treeNodes, lastSaveTime: Date.now() };
 }
 
 let state = defaultState();
@@ -52,6 +67,18 @@ const collectionBackdrop = document.getElementById("collectionBackdrop");
 const collectionClose = document.getElementById("collectionClose");
 const collectionClickList = document.getElementById("collectionClickList");
 const collectionAutoList = document.getElementById("collectionAutoList");
+
+const prestigeStat = document.getElementById("prestigeStat");
+const prestigeBtn = document.getElementById("prestigeBtn");
+const offlineBanner = document.getElementById("offlineBanner");
+
+const treeTab = document.getElementById("treeTab");
+const treePanel = document.getElementById("treePanel");
+const treeBackdrop = document.getElementById("treeBackdrop");
+const treeClose = document.getElementById("treeClose");
+const treePointsLabel = document.getElementById("treePointsLabel");
+const treeContainer = document.getElementById("treeContainer");
+const treeLines = document.getElementById("treeLines");
 
 let audioCtx = null;
 
@@ -97,11 +124,19 @@ function load() {
   try {
     const parsed = JSON.parse(saved);
     state.score = typeof parsed.score === "number" ? parsed.score : 0;
+    state.runEarned = typeof parsed.runEarned === "number" ? parsed.runEarned : 0;
+    state.prestigePoints = typeof parsed.prestigePoints === "number" ? parsed.prestigePoints : 0;
+    state.lastSaveTime = typeof parsed.lastSaveTime === "number" ? parsed.lastSaveTime : Date.now();
     if (parsed.upgrades) {
       UPGRADES.forEach((u) => {
         if (typeof parsed.upgrades[u.id] === "number") {
           state.upgrades[u.id] = parsed.upgrades[u.id];
         }
+      });
+    }
+    if (parsed.treeNodes) {
+      PRESTIGE_TREE.forEach((n) => {
+        if (parsed.treeNodes[n.id]) state.treeNodes[n.id] = true;
       });
     }
   } catch {
@@ -110,6 +145,7 @@ function load() {
 }
 
 function save() {
+  state.lastSaveTime = Date.now();
   localStorage.setItem(SAVE_KEY, JSON.stringify(state));
 }
 
@@ -135,12 +171,32 @@ function totalContribution(upg) {
   return total;
 }
 
+function ownedNodes() {
+  return PRESTIGE_TREE.filter((n) => state.treeNodes[n.id]);
+}
+
+function getPrestigeClickMult() {
+  return 1 + ownedNodes().reduce((sum, n) => sum + (n.effect.clickMult || 0), 0);
+}
+
+function getPrestigeAutoMult() {
+  return 1 + ownedNodes().reduce((sum, n) => sum + (n.effect.autoMult || 0), 0);
+}
+
+function hasFlowState() {
+  return !!state.treeNodes.typing3;
+}
+
+function hasOfflineCommits() {
+  return !!state.treeNodes.ops3;
+}
+
 function getClickPower() {
   let power = 1;
   UPGRADES.filter((u) => u.type === "click").forEach((u) => {
     power += totalContribution(u);
   });
-  return power;
+  return Math.max(1, Math.round(power * getPrestigeClickMult()));
 }
 
 function getAutoPower() {
@@ -148,7 +204,7 @@ function getAutoPower() {
   UPGRADES.filter((u) => u.type === "auto").forEach((u) => {
     power += totalContribution(u);
   });
-  return power;
+  return Math.round(power * getPrestigeAutoMult());
 }
 
 function buyUpgrade(id) {
@@ -240,23 +296,151 @@ collectionTab.addEventListener("click", () => {
 collectionClose.addEventListener("click", closeCollectionPanel);
 collectionBackdrop.addEventListener("click", closeCollectionPanel);
 
+// ---- prestige tree panel ----
+
+function canBuyNode(node) {
+  if (state.treeNodes[node.id]) return false;
+  if (state.prestigePoints < node.cost) return false;
+  return node.requires.every((r) => state.treeNodes[r]);
+}
+
+function buyNode(id) {
+  const node = PRESTIGE_TREE.find((n) => n.id === id);
+  if (!canBuyNode(node)) return;
+  state.prestigePoints -= node.cost;
+  state.treeNodes[id] = true;
+  render();
+  save();
+}
+
+function buildPrestigeTree() {
+  PRESTIGE_TREE.forEach((node) => {
+    const row = treeContainer.querySelector(`.tree-row[data-row="${node.row}"]`);
+    const btn = document.createElement("button");
+    btn.className = "tree-node";
+    btn.dataset.id = node.id;
+    btn.innerHTML = `
+      <span class="t-name">${node.icon} ${node.name}</span>
+      <span class="t-desc">${node.desc}</span>
+      <span class="t-cost" data-role="cost"></span>
+    `;
+    btn.addEventListener("click", () => buyNode(node.id));
+    row.appendChild(btn);
+  });
+}
+
+function drawTreeLines() {
+  const containerRect = treeContainer.getBoundingClientRect();
+  treeLines.setAttribute("width", containerRect.width);
+  treeLines.setAttribute("height", containerRect.height);
+  treeLines.innerHTML = "";
+
+  PRESTIGE_TREE.forEach((node) => {
+    const childEl = treeContainer.querySelector(`.tree-node[data-id="${node.id}"]`);
+    if (!childEl) return;
+    const childRect = childEl.getBoundingClientRect();
+    const childX = childRect.left + childRect.width / 2 - containerRect.left;
+    const childY = childRect.top - containerRect.top;
+
+    node.requires.forEach((parentId) => {
+      const parentEl = treeContainer.querySelector(`.tree-node[data-id="${parentId}"]`);
+      if (!parentEl) return;
+      const parentRect = parentEl.getBoundingClientRect();
+      const parentX = parentRect.left + parentRect.width / 2 - containerRect.left;
+      const parentY = parentRect.bottom - containerRect.top;
+
+      const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      line.setAttribute("x1", parentX);
+      line.setAttribute("y1", parentY);
+      line.setAttribute("x2", childX);
+      line.setAttribute("y2", childY);
+      line.setAttribute("stroke", state.treeNodes[node.id] ? "#ff4fd8" : "#2a352a");
+      line.setAttribute("stroke-width", "2");
+      treeLines.appendChild(line);
+    });
+  });
+}
+
+function refreshPrestigeTree() {
+  treePointsLabel.textContent = state.prestigePoints;
+  PRESTIGE_TREE.forEach((node) => {
+    const btn = treeContainer.querySelector(`.tree-node[data-id="${node.id}"]`);
+    if (!btn) return;
+    const owned = state.treeNodes[node.id];
+    const met = node.requires.every((r) => state.treeNodes[r]);
+    btn.classList.toggle("owned", owned);
+    btn.classList.toggle("locked", !owned && !met);
+    btn.disabled = owned || !canBuyNode(node);
+    btn.querySelector('[data-role="cost"]').textContent = owned ? "owned" : `${node.cost} pt${node.cost === 1 ? "" : "s"}`;
+  });
+  drawTreeLines();
+}
+
+function openTreePanel() {
+  treePanel.classList.add("open");
+  treeBackdrop.classList.add("open");
+  drawTreeLines();
+}
+
+function closeTreePanel() {
+  treePanel.classList.remove("open");
+  treeBackdrop.classList.remove("open");
+}
+
+treeTab.addEventListener("click", () => {
+  treePanel.classList.contains("open") ? closeTreePanel() : openTreePanel();
+});
+treeClose.addEventListener("click", closeTreePanel);
+treeBackdrop.addEventListener("click", closeTreePanel);
+window.addEventListener("resize", () => {
+  if (treePanel.classList.contains("open")) drawTreeLines();
+});
+
+// ---- offline progress ----
+
+function applyOfflineProgress() {
+  if (!hasOfflineCommits() || !state.lastSaveTime) return;
+  const elapsedSec = Math.max(0, (Date.now() - state.lastSaveTime) / 1000);
+  const cappedSec = Math.min(elapsedSec, 8 * 3600);
+  const auto = getAutoPower();
+  const earned = Math.floor(auto * cappedSec);
+  if (earned < 1) return;
+  state.score += earned;
+  state.runEarned += earned;
+  const hours = Math.floor(cappedSec / 3600);
+  const mins = Math.floor((cappedSec % 3600) / 60);
+  offlineBanner.textContent = `welcome back — CI bots earned +${earned} commits while you were away (${hours}h ${mins}m)`;
+  const closeBtn = document.createElement("button");
+  closeBtn.textContent = "×";
+  closeBtn.addEventListener("click", () => (offlineBanner.hidden = true));
+  offlineBanner.appendChild(closeBtn);
+  offlineBanner.hidden = false;
+}
+
 function render() {
   scoreEl.textContent = `commits: ${state.score}`;
   statsEl.textContent = `lines/commit: ${getClickPower()}  |  CI bots: ${getAutoPower()}/sec`;
   refreshUpgradeButtons();
   refreshCollectionPanel();
+
+  const gain = getPrestigeGain();
+  prestigeStat.textContent = `prestige: ${state.prestigePoints} pts`;
+  prestigeBtn.textContent = gain > 0 ? `refactor --prestige (+${gain})` : "refactor --prestige";
+  prestigeBtn.disabled = gain < 1;
+  refreshPrestigeTree();
 }
 
 function onClick() {
   const power = getClickPower();
   state.score += power;
+  state.runEarned += power;
   playClickEffect(power);
   render();
   save();
 }
 
 function resetGame() {
-  if (!confirm("Reset all progress?")) return;
+  if (!confirm("Reset ALL progress, including your prestige tree? This cannot be undone.")) return;
   state = defaultState();
   render();
   save();
@@ -266,10 +450,34 @@ function tick() {
   const auto = getAutoPower();
   if (auto > 0) {
     state.score += auto;
+    state.runEarned += auto;
     render();
     save();
   }
 }
+
+// ---- prestige ----
+
+function getPrestigeGain() {
+  return Math.floor(Math.sqrt(state.runEarned / 100000));
+}
+
+function doPrestige() {
+  const gain = getPrestigeGain();
+  if (gain < 1) return;
+  const ok = confirm(
+    `Refactor the codebase for +${gain} prestige point${gain === 1 ? "" : "s"}?\n\nThis resets your commits and typing/CI-CD upgrades back to zero. Your prestige points and tree stay permanently.`,
+  );
+  if (!ok) return;
+  state.prestigePoints += gain;
+  state.score = 0;
+  state.runEarned = 0;
+  UPGRADES.forEach((u) => (state.upgrades[u.id] = 0));
+  render();
+  save();
+}
+
+prestigeBtn.addEventListener("click", doPrestige);
 
 // ---- hold-to-type: hold the button 1s to start auto-committing repeatedly ----
 const HOLD_THRESHOLD_MS = 1000;
@@ -284,7 +492,8 @@ function startTyping() {
   isTyping = true;
   clickBtn.classList.add("typing");
   if (commitLabel) commitLabel.textContent = "typing...";
-  typingInterval = setInterval(onClick, TYPING_INTERVAL_MS);
+  const interval = hasFlowState() ? TYPING_INTERVAL_MS / 2 : TYPING_INTERVAL_MS;
+  typingInterval = setInterval(onClick, interval);
 }
 
 function stopHold() {
@@ -322,5 +531,7 @@ resetBtn.addEventListener("click", resetGame);
 load();
 buildUpgradeButtons();
 buildCollectionPanel();
+buildPrestigeTree();
+applyOfflineProgress();
 render();
 setInterval(tick, 1000);
