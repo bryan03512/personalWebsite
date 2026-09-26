@@ -61,9 +61,57 @@ const TOWER_TYPES = {
   },
 };
 
-const MAX_TOWER_LEVEL = 5;
 const OVERCLOCK_DURATION = 8;
 const OVERCLOCK_COOLDOWN = 30;
+
+// Each tower unlocks a choice between two mutually-exclusive specialization
+// paths once it reaches PATH_UNLOCK_LEVEL. Choosing one is permanent and
+// locks out the other, but leveling continues independently afterward -
+// path bonuses are separate multipliers layered on top of level scaling.
+const PATH_UNLOCK_LEVEL = 3;
+
+const TOWER_PATHS = {
+  gamer: {
+    speedrunner: {
+      name: "Speedrunner", desc: "much faster fire rate, shorter range", cost: 80,
+      apply: (t) => { t.pathRateMult = 1.6; t.pathRangeMult = 0.8; },
+    },
+    multiplayer: {
+      name: "Multiplayer", desc: "fires at 2 enemies at once", cost: 80,
+      apply: (t) => { t.multiShot = 2; },
+    },
+  },
+  coder: {
+    architect: {
+      name: "Architect", desc: "huge range & damage, even slower", cost: 140,
+      apply: (t) => { t.pathDamageMult = 1.6; t.pathRangeMult = 1.4; t.pathRateMult = 0.7; },
+    },
+    debugger: {
+      name: "Debugger", desc: "slows hit enemies 40% for 2s", cost: 140,
+      apply: (t) => { t.slowOnHit = { pct: 0.4, duration: 2 }; },
+    },
+  },
+  hacker: {
+    ddos: {
+      name: "DDoS", desc: "much bigger blast radius", cost: 200,
+      apply: (t) => { t.pathSplashMult = 1.7; t.pathDamageMult = 1.15; },
+    },
+    zeroday: {
+      name: "Zero-Day", desc: "+100% dmg vs bosses, +50% vs merge conflicts", cost: 200,
+      apply: (t) => { t.bossDamageMult = 2.0; t.tankDamageMult = 1.5; },
+    },
+  },
+  manager: {
+    scrummaster: {
+      name: "Scrum Master", desc: "much bigger fire-rate buff to allies", cost: 130,
+      apply: (t) => { t.pathBuffRateMult = 2.2; t.pathBuffDamageMult = 0.5; },
+    },
+    techlead: {
+      name: "Tech Lead", desc: "much bigger damage buff to allies", cost: 130,
+      apply: (t) => { t.pathBuffDamageMult = 2.2; t.pathBuffRateMult = 0.5; },
+    },
+  },
+};
 
 const ENEMY_TYPES = {
   basic: { label: "Bug", emoji: "🐛", hp: 50, speed: 60, reward: 5, lifeDamage: 1, color: "#e05353", radius: 14 },
@@ -115,6 +163,7 @@ const autoRunBtn = document.getElementById("autoRunBtn");
 const towerInfoPanel = document.getElementById("towerInfoPanel");
 const towerInfoName = document.getElementById("towerInfoName");
 const towerInfoLevel = document.getElementById("towerInfoLevel");
+const towerPathSection = document.getElementById("towerPathSection");
 const towerInfoClose = document.getElementById("towerInfoClose");
 const towerUpgradeBtn = document.getElementById("towerUpgradeBtn");
 const towerSellBtn = document.getElementById("towerSellBtn");
@@ -196,7 +245,7 @@ function handlePlacementOrSelection(pos) {
 
   state.gold -= def.cost;
   const center = cellCenter([col, row]);
-  state.towers.push({
+  const tower = {
     type: state.selectedTowerType,
     col,
     row,
@@ -204,10 +253,13 @@ function handlePlacementOrSelection(pos) {
     y: center.y,
     cooldown: 0,
     level: 1,
+    path: null,
     totalInvested: def.cost,
     totalDamageDealt: 0,
     ...def,
-  });
+  };
+  recomputeTowerStats(tower);
+  state.towers.push(tower);
   updateStats();
 }
 
@@ -250,22 +302,44 @@ function towerUpgradeCost(t) {
   return Math.round(baseCost * 0.6 * Math.pow(1.6, t.level - 1));
 }
 
+// Recomputes a tower's derived stats from its base definition, level, and
+// (if chosen) its path multipliers. Path bonuses are permanent multipliers
+// layered on top of level scaling, so leveling keeps working the same way
+// after a path is chosen - called on placement, on level-up, and right
+// after a path is picked.
+function recomputeTowerStats(t) {
+  const def = TOWER_TYPES[t.type];
+  const levelFactor = 1 + 0.25 * (t.level - 1);
+  const rangeLevelFactor = 1 + 0.06 * (t.level - 1);
+  t.range = def.range * rangeLevelFactor * (t.pathRangeMult || 1);
+  if (t.isSupport) {
+    t.buffDamagePct = def.buffDamagePct * levelFactor * (t.pathBuffDamageMult || 1);
+    t.buffRatePct = def.buffRatePct * levelFactor * (t.pathBuffRateMult || 1);
+  } else {
+    t.damage = def.damage * levelFactor * (t.pathDamageMult || 1);
+    t.fireRate = def.fireRate / (t.pathRateMult || 1);
+    t.splashRadius = (def.splashRadius || 0) * (t.pathSplashMult || 1);
+  }
+}
+
 function upgradeTower(t) {
-  if (t.level >= MAX_TOWER_LEVEL) return;
   const cost = towerUpgradeCost(t);
   if (state.gold < cost) return;
   state.gold -= cost;
   t.level += 1;
   t.totalInvested += cost;
+  recomputeTowerStats(t);
+  updateStats();
+}
 
-  const def = TOWER_TYPES[t.type];
-  if (t.isSupport) {
-    t.buffDamagePct = def.buffDamagePct * (1 + 0.25 * (t.level - 1));
-    t.buffRatePct = def.buffRatePct * (1 + 0.25 * (t.level - 1));
-  } else {
-    t.damage = def.damage * (1 + 0.25 * (t.level - 1));
-    t.range = def.range * (1 + 0.06 * (t.level - 1));
-  }
+function choosePath(t, pathId) {
+  if (t.path) return;
+  const pathDef = TOWER_PATHS[t.type]?.[pathId];
+  if (!pathDef || t.level < PATH_UNLOCK_LEVEL || state.gold < pathDef.cost) return;
+  state.gold -= pathDef.cost;
+  t.path = pathId;
+  pathDef.apply(t);
+  recomputeTowerStats(t);
   updateStats();
 }
 
@@ -286,21 +360,51 @@ function refreshTowerInfoPanel() {
   }
   towerInfoPanel.hidden = false;
   const def = TOWER_TYPES[t.type];
-  towerInfoName.textContent = `${def.emoji} ${def.name} (Lv.${t.level})`;
+  const pathLabel = t.path ? ` - ${TOWER_PATHS[t.type][t.path].name}` : "";
+  towerInfoName.textContent = `${def.emoji} ${def.name} (Lv.${t.level})${pathLabel}`;
   const statsLine = t.isSupport
     ? `+${Math.round(t.buffDamagePct * 100)}% dmg, +${Math.round(t.buffRatePct * 100)}% rate to devs in range`
     : `dmg ${Math.round(t.damage)} | range ${Math.round(t.range)}`;
   towerInfoLevel.textContent = `${statsLine} | dealt: ${Math.round(t.totalDamageDealt || 0).toLocaleString()}`;
 
-  if (t.level >= MAX_TOWER_LEVEL) {
-    towerUpgradeBtn.textContent = "max level";
-    towerUpgradeBtn.disabled = true;
-  } else {
-    const cost = towerUpgradeCost(t);
-    towerUpgradeBtn.textContent = `upgrade (${cost}c)`;
-    towerUpgradeBtn.disabled = state.gold < cost;
-  }
+  const cost = towerUpgradeCost(t);
+  towerUpgradeBtn.textContent = `upgrade (${cost}c)`;
+  towerUpgradeBtn.disabled = state.gold < cost;
   towerSellBtn.textContent = `sell (+${Math.round(t.totalInvested * 0.6)}c)`;
+
+  refreshTowerPathSection(t);
+}
+
+function refreshTowerPathSection(t) {
+  const paths = TOWER_PATHS[t.type];
+  towerPathSection.innerHTML = "";
+  if (!paths) return;
+
+  if (t.path) {
+    const chosen = paths[t.path];
+    const p = document.createElement("p");
+    p.className = "tower-path-chosen";
+    p.textContent = `path: ${chosen.name} - ${chosen.desc}`;
+    towerPathSection.appendChild(p);
+    return;
+  }
+
+  if (t.level < PATH_UNLOCK_LEVEL) {
+    const p = document.createElement("p");
+    p.className = "tower-path-hint";
+    p.textContent = `reach level ${PATH_UNLOCK_LEVEL} to choose a specialization path`;
+    towerPathSection.appendChild(p);
+    return;
+  }
+
+  Object.entries(paths).forEach(([pathId, pathDef]) => {
+    const btn = document.createElement("button");
+    btn.className = "btn path-btn";
+    btn.innerHTML = `<span class="path-name">${pathDef.name}</span><span class="path-desc">${pathDef.desc}</span><span class="path-cost">${pathDef.cost}c</span>`;
+    btn.disabled = state.gold < pathDef.cost;
+    btn.addEventListener("click", () => choosePath(t, pathId));
+    towerPathSection.appendChild(btn);
+  });
 }
 
 towerInfoClose.addEventListener("click", hideTowerInfoPanel);
@@ -429,8 +533,14 @@ function updateEnemies(dt) {
       if (state.lives <= 0) triggerGameOver();
       continue;
     }
+    if (e.slowTimer > 0) {
+      e.slowTimer -= dt;
+      if (e.slowTimer < 0) e.slowTimer = 0;
+    }
+    const speedMult = e.slowTimer > 0 ? 1 - e.slowPct : 1;
+
     const d = distance(e.x, e.y, target.x, target.y);
-    const step = e.speed * dt;
+    const step = e.speed * speedMult * dt;
     if (step >= d) {
       e.x = target.x;
       e.y = target.y;
@@ -442,38 +552,54 @@ function updateEnemies(dt) {
   }
 }
 
+// Returns up to `count` enemies within range, nearest first.
+function findTargets(t, count) {
+  const inRange = [];
+  for (const e of state.enemies) {
+    const d = distance(t.x, t.y, e.x, e.y);
+    if (d <= t.range) inRange.push({ e, d });
+  }
+  inRange.sort((a, b) => a.d - b.d);
+  return inRange.slice(0, count).map((entry) => entry.e);
+}
+
 function updateTowers(dt) {
   for (const t of state.towers) {
     if (t.isSupport) continue; // managers boost - they don't attack
     t.cooldown -= dt;
     if (t.cooldown > 0) continue;
-    let best = null;
-    let bestDist = Infinity;
-    for (const e of state.enemies) {
-      const d = distance(t.x, t.y, e.x, e.y);
-      if (d <= t.range && d < bestDist) {
-        best = e;
-        bestDist = d;
-      }
-    }
-    if (best) {
+
+    const targets = findTargets(t, t.multiShot || 1);
+    if (targets.length > 0) {
       const buffs = getTowerBuffs(t);
-      state.projectiles.push({
-        x: t.x,
-        y: t.y,
-        target: best,
-        speed: t.projectileSpeed,
-        damage: t.damage * buffs.damageMult,
-        splashRadius: t.splashRadius || 0,
-        color: t.color,
-        sourceTower: t,
-      });
+      for (const target of targets) {
+        state.projectiles.push({
+          x: t.x,
+          y: t.y,
+          target,
+          speed: t.projectileSpeed,
+          damage: t.damage * buffs.damageMult,
+          splashRadius: t.splashRadius || 0,
+          color: t.color,
+          sourceTower: t,
+        });
+      }
       t.cooldown = t.fireRate / buffs.rateMult;
     }
   }
 }
 
 function applyDamage(enemy, amount, sourceTower) {
+  if (sourceTower) {
+    if (sourceTower.bossDamageMult && enemy.isBoss) amount *= sourceTower.bossDamageMult;
+    else if (sourceTower.tankDamageMult && enemy.type === "tank") amount *= sourceTower.tankDamageMult;
+
+    if (sourceTower.slowOnHit) {
+      enemy.slowPct = sourceTower.slowOnHit.pct;
+      enemy.slowTimer = sourceTower.slowOnHit.duration;
+    }
+  }
+
   enemy.hp -= amount;
   if (sourceTower) sourceTower.totalDamageDealt = (sourceTower.totalDamageDealt || 0) + amount;
   if (enemy.hp <= 0) {
@@ -672,6 +798,14 @@ function draw() {
       ctx.lineWidth = 3;
       ctx.beginPath();
       ctx.arc(e.x, e.y, e.radius + 6, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    if (e.slowTimer > 0) {
+      ctx.strokeStyle = "#00e5ff";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, e.radius + 4, 0, Math.PI * 2);
       ctx.stroke();
     }
 

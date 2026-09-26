@@ -233,6 +233,54 @@ canvas {
   color: var(--green-faint);
 }
 
+.tower-path-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tower-path-section:empty {
+  display: none;
+}
+
+.tower-path-hint {
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--green-faint);
+  font-style: italic;
+}
+
+.tower-path-chosen {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--yellow);
+}
+
+.path-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+  font-size: 0.72rem;
+  text-align: left;
+}
+
+.path-btn .path-name {
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.path-btn .path-desc {
+  flex: 1;
+  color: var(--green-faint);
+}
+
+.path-btn .path-cost {
+  color: var(--yellow);
+  font-weight: bold;
+  white-space: nowrap;
+}
+
 .tower-info-actions {
   display: flex;
   gap: 8px;
