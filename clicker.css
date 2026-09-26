@@ -88,10 +88,34 @@
   pointer-events: none;
   z-index: 200;
   will-change: transform, opacity;
-  animation: fountain 0.9s cubic-bezier(0.3, 0, 0.7, 1) forwards;
+  animation: numberRise 0.8s ease-out forwards;
 }
 
-/* sprays outward and up like shower droplets, then falls partway down and fades */
+/* the +N number just rises a short distance and fades - no fall */
+@keyframes numberRise {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% - 85px));
+  }
+}
+
+.float-particle {
+  position: fixed;
+  left: 0;
+  top: 0;
+  transform: translate(-50%, -50%);
+  font-size: 1.3rem;
+  pointer-events: none;
+  z-index: 199;
+  will-change: transform, opacity;
+  animation: fountain 1.9s cubic-bezier(0.3, 0, 0.7, 1) forwards;
+}
+
+/* sprays outward and up like shower droplets, then falls slowly partway down and fades */
 @keyframes fountain {
   0% {
     opacity: 1;

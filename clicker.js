@@ -117,6 +117,8 @@ function updateClickZoneOrigin() {
 window.addEventListener("resize", updateClickZoneOrigin);
 
 const MAX_FLOAT_TEXTS = 30;
+const MAX_FLOAT_PARTICLES = 30;
+const PARTICLE_EMOJIS = ["💧", "✨", "⚡"];
 
 function spawnFloatText(amount) {
   if (!clickZoneOrigin) updateClickZoneOrigin();
@@ -125,6 +127,19 @@ function spawnFloatText(amount) {
   const el = document.createElement("span");
   el.className = "float-text";
   el.textContent = `+${amount}`;
+  el.style.left = `${clickZoneOrigin.x}px`;
+  el.style.top = `${clickZoneOrigin.y}px`;
+  document.body.appendChild(el);
+  el.addEventListener("animationend", () => el.remove());
+}
+
+function spawnParticle() {
+  if (!clickZoneOrigin) updateClickZoneOrigin();
+  if (document.querySelectorAll(".float-particle").length >= MAX_FLOAT_PARTICLES) return;
+
+  const el = document.createElement("span");
+  el.className = "float-particle";
+  el.textContent = PARTICLE_EMOJIS[Math.floor(Math.random() * PARTICLE_EMOJIS.length)];
   el.style.left = `${clickZoneOrigin.x}px`;
   el.style.top = `${clickZoneOrigin.y}px`;
   el.style.setProperty("--drift", `${(Math.random() - 0.5) * 320}px`);
@@ -138,6 +153,7 @@ function playClickEffect(amount) {
   void clickBtn.offsetWidth; // restart animation
   clickBtn.classList.add("pulse");
   spawnFloatText(amount);
+  spawnParticle();
   playClickSound();
 }
 
