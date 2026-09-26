@@ -157,26 +157,30 @@ function playClickEffect(amount) {
   playClickSound();
 }
 
+function applyLoadedState(parsed) {
+  if (!parsed) return;
+  state.score = typeof parsed.score === "number" ? parsed.score : 0;
+  state.prestigePoints = typeof parsed.prestigePoints === "number" ? parsed.prestigePoints : 0;
+  state.lastSaveTime = typeof parsed.lastSaveTime === "number" ? parsed.lastSaveTime : Date.now();
+  if (parsed.upgrades) {
+    UPGRADES.forEach((u) => {
+      if (typeof parsed.upgrades[u.id] === "number") {
+        state.upgrades[u.id] = parsed.upgrades[u.id];
+      }
+    });
+  }
+  if (parsed.treeNodes) {
+    PRESTIGE_TREE.forEach((n) => {
+      state.treeNodes[n.id] = !!parsed.treeNodes[n.id];
+    });
+  }
+}
+
 function load() {
   const saved = localStorage.getItem(SAVE_KEY);
   if (!saved) return;
   try {
-    const parsed = JSON.parse(saved);
-    state.score = typeof parsed.score === "number" ? parsed.score : 0;
-    state.prestigePoints = typeof parsed.prestigePoints === "number" ? parsed.prestigePoints : 0;
-    state.lastSaveTime = typeof parsed.lastSaveTime === "number" ? parsed.lastSaveTime : Date.now();
-    if (parsed.upgrades) {
-      UPGRADES.forEach((u) => {
-        if (typeof parsed.upgrades[u.id] === "number") {
-          state.upgrades[u.id] = parsed.upgrades[u.id];
-        }
-      });
-    }
-    if (parsed.treeNodes) {
-      PRESTIGE_TREE.forEach((n) => {
-        if (parsed.treeNodes[n.id]) state.treeNodes[n.id] = true;
-      });
-    }
+    applyLoadedState(JSON.parse(saved));
   } catch {
     // ignore corrupted save
   }
@@ -185,7 +189,44 @@ function load() {
 function save() {
   state.lastSaveTime = Date.now();
   localStorage.setItem(SAVE_KEY, JSON.stringify(state));
+  scheduleCloudSync();
 }
+
+// ---- cloud sync (account.js) ----
+let cloudSyncTimer = null;
+
+function scheduleCloudSync() {
+  if (cloudSyncTimer || typeof accountGetUser !== "function") return;
+  cloudSyncTimer = setTimeout(async () => {
+    cloudSyncTimer = null;
+    const user = await accountGetUser();
+    if (user) saveCloudField("clicker", state);
+  }, 5000);
+}
+
+// Only merges state - does NOT save/render itself, so callers can run
+// offline-progress calculation against the merged baseline before either
+// happens. Otherwise a stale cloud save can silently overwrite an
+// offline-progress bonus the instant it's granted.
+async function pullCloudSave() {
+  if (typeof loadCloudSave !== "function") return;
+  const cloudState = await loadCloudSave("clicker");
+  if (!cloudState) return; // no cloud save yet - local progress will be pushed up on next save()
+  const cloudTime = cloudState.lastSaveTime || 0;
+  const localTime = state.lastSaveTime || 0;
+  if (cloudTime >= localTime) {
+    applyLoadedState(cloudState);
+  }
+}
+
+async function syncAndApplyOffline() {
+  await pullCloudSave();
+  applyOfflineProgress();
+  render();
+  save();
+}
+
+window.addEventListener("account:login", syncAndApplyOffline);
 
 // Cost of the NEXT purchase of this upgrade.
 function nextCost(upg) {
@@ -642,6 +683,6 @@ load();
 buildUpgradeButtons();
 buildCollectionPanel();
 buildPrestigeTree();
-applyOfflineProgress();
-render();
+render(); // instant feedback from the local save, before any network round-trip
 setInterval(tick, 1000);
+syncAndApplyOffline();

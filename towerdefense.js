@@ -209,6 +209,82 @@ function updateStats() {
   overclockBtn.disabled = state.overclockCooldown > 0;
 }
 
+// ---------- Save / load (local + cloud) ----------
+// Only progress *between* sprints is persisted (gold, towers, wave count) -
+// a wave in flight (enemies/projectiles) is not resumable and simply isn't
+// saved, so reloading mid-sprint just resumes at "ready for next sprint".
+const TD_SAVE_KEY = "towerDefenseSave";
+
+function saveGame() {
+  state.lastSaveTime = Date.now();
+  const payload = {
+    gold: state.gold,
+    lives: state.lives,
+    wave: state.wave,
+    kills: state.kills,
+    towers: state.towers,
+    gameSpeed: state.gameSpeed,
+    lastSaveTime: state.lastSaveTime,
+  };
+  localStorage.setItem(TD_SAVE_KEY, JSON.stringify(payload));
+  scheduleCloudSync();
+}
+
+function applyLoadedState(parsed) {
+  if (!parsed) return;
+  if (typeof parsed.gold === "number") state.gold = parsed.gold;
+  if (typeof parsed.lives === "number") state.lives = parsed.lives;
+  if (typeof parsed.wave === "number") state.wave = parsed.wave;
+  if (typeof parsed.kills === "number") state.kills = parsed.kills;
+  state.gameSpeed = parsed.gameSpeed === 2 ? 2 : 1;
+  state.lastSaveTime = parsed.lastSaveTime || Date.now();
+  if (Array.isArray(parsed.towers)) state.towers = parsed.towers;
+}
+
+function loadGame() {
+  const saved = localStorage.getItem(TD_SAVE_KEY);
+  if (!saved) return;
+  try {
+    applyLoadedState(JSON.parse(saved));
+  } catch {
+    // ignore corrupted save
+  }
+}
+
+let cloudSyncTimer = null;
+
+function scheduleCloudSync() {
+  if (cloudSyncTimer || typeof accountGetUser !== "function") return;
+  cloudSyncTimer = setTimeout(async () => {
+    cloudSyncTimer = null;
+    const user = await accountGetUser();
+    if (!user) return;
+    const saved = localStorage.getItem(TD_SAVE_KEY);
+    if (saved) saveCloudField("towerdefense", JSON.parse(saved));
+  }, 5000);
+}
+
+function syncSpeedButton() {
+  speedBtn.textContent = `${state.gameSpeed}x`;
+  speedBtn.classList.toggle("active", state.gameSpeed === 2);
+}
+
+async function pullCloudSave() {
+  if (typeof loadCloudSave !== "function") return;
+  const cloudState = await loadCloudSave("towerdefense");
+  if (!cloudState) return; // no cloud save yet - local progress will be pushed up on next saveGame()
+  const cloudTime = cloudState.lastSaveTime || 0;
+  const localTime = state.lastSaveTime || 0;
+  if (cloudTime >= localTime) {
+    applyLoadedState(cloudState);
+    saveGame();
+    updateStats();
+    syncSpeedButton();
+  }
+}
+
+window.addEventListener("account:login", pullCloudSave);
+
 // ---------- Placement ----------
 function canvasPosFromEvent(evt) {
   const rect = canvas.getBoundingClientRect();
@@ -261,6 +337,7 @@ function handlePlacementOrSelection(pos) {
   recomputeTowerStats(tower);
   state.towers.push(tower);
   updateStats();
+  saveGame();
 }
 
 canvas.addEventListener("pointerdown", (evt) => {
@@ -330,6 +407,7 @@ function upgradeTower(t) {
   t.totalInvested += cost;
   recomputeTowerStats(t);
   updateStats();
+  saveGame();
 }
 
 function choosePath(t, pathId) {
@@ -341,6 +419,7 @@ function choosePath(t, pathId) {
   pathDef.apply(t);
   recomputeTowerStats(t);
   updateStats();
+  saveGame();
 }
 
 function sellTower(t) {
@@ -350,6 +429,7 @@ function sellTower(t) {
   state.towers.splice(idx, 1);
   hideTowerInfoPanel();
   updateStats();
+  saveGame();
 }
 
 function refreshTowerInfoPanel() {
@@ -449,8 +529,8 @@ overclockBtn.addEventListener("click", activateOverclock);
 
 speedBtn.addEventListener("click", () => {
   state.gameSpeed = state.gameSpeed === 1 ? 2 : 1;
-  speedBtn.textContent = `${state.gameSpeed}x`;
-  speedBtn.classList.toggle("active", state.gameSpeed === 2);
+  syncSpeedButton();
+  saveGame();
 });
 
 // ---------- Waves ----------
@@ -680,6 +760,7 @@ function triggerGameOver() {
   state.gameOver = true;
   gameOverText.textContent = `Uptime hit zero after sprint ${state.wave}. ${state.kills} bug${state.kills === 1 ? "" : "s"} fixed before the crash.`;
   gameOverOverlay.classList.add("visible");
+  saveGame();
 }
 
 // ---------- Rendering ----------
@@ -903,11 +984,16 @@ function resetGame() {
   autoRunBtn.classList.remove("active");
   hideTowerInfoPanel();
   updateStats();
+  saveGame();
 }
 
 restartBtn.addEventListener("click", resetGame);
 
 // ---------- Init ----------
 buildTowerButtons();
+loadGame();
+syncSpeedButton();
 updateStats();
 requestAnimationFrame(loop);
+setInterval(saveGame, 3000);
+pullCloudSave();
