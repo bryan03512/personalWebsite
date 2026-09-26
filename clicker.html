@@ -30,8 +30,14 @@
         <p class="stats" id="stats"></p>
 
         <div class="prestige-bar">
-          <span id="prestigeStat">prestige: 0 pts</span>
-          <button class="btn prestige-btn" id="prestigeBtn">refactor --prestige</button>
+          <div class="prestige-bar-top">
+            <span id="prestigeStat">prestige: 0 pts</span>
+            <button class="btn prestige-btn" id="prestigeBtn">refactor --prestige</button>
+          </div>
+          <div class="prestige-progress">
+            <div class="prestige-progress-fill" id="prestigeFill"></div>
+          </div>
+          <span class="prestige-progress-label" id="prestigeProgressLabel"></span>
         </div>
 
         <div id="offlineBanner" class="offline-banner" hidden></div>

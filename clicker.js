@@ -70,6 +70,8 @@ const collectionAutoList = document.getElementById("collectionAutoList");
 
 const prestigeStat = document.getElementById("prestigeStat");
 const prestigeBtn = document.getElementById("prestigeBtn");
+const prestigeFill = document.getElementById("prestigeFill");
+const prestigeProgressLabel = document.getElementById("prestigeProgressLabel");
 const offlineBanner = document.getElementById("offlineBanner");
 
 const treeTab = document.getElementById("treeTab");
@@ -427,6 +429,13 @@ function render() {
   prestigeStat.textContent = `prestige: ${state.prestigePoints} pts`;
   prestigeBtn.textContent = gain > 0 ? `refactor --prestige (+${gain})` : "refactor --prestige";
   prestigeBtn.disabled = gain < 1;
+
+  const floor = prestigeThreshold(gain);
+  const ceil = prestigeThreshold(gain + 1);
+  const pct = Math.min(100, ((state.runEarned - floor) / (ceil - floor)) * 100);
+  prestigeFill.style.width = `${pct}%`;
+  prestigeProgressLabel.textContent = `${state.runEarned.toLocaleString()} / ${ceil.toLocaleString()} commits to next point`;
+
   refreshPrestigeTree();
 }
 
@@ -460,6 +469,11 @@ function tick() {
 
 function getPrestigeGain() {
   return Math.floor(Math.sqrt(state.runEarned / 100000));
+}
+
+// Lifetime commits (this run) needed to reach a given prestige point count.
+function prestigeThreshold(points) {
+  return points * points * 100000;
 }
 
 function doPrestige() {
