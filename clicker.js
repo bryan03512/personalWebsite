@@ -107,7 +107,7 @@ function spawnFloatText(amount) {
   const el = document.createElement("span");
   el.className = "float-text";
   el.textContent = `+${amount}`;
-  el.style.marginLeft = `${(Math.random() - 0.5) * 40}px`;
+  el.style.setProperty("--drift", `${(Math.random() - 0.5) * 60}px`);
   clickZone.appendChild(el);
   el.addEventListener("animationend", () => el.remove());
 }

@@ -86,17 +86,26 @@
   font-size: 1.1rem;
   text-shadow: 0 0 6px currentColor;
   pointer-events: none;
-  animation: floatUp 0.7s ease-out forwards;
+  animation: fountain 0.9s cubic-bezier(0.33, 0, 0.7, 1) forwards;
 }
 
-@keyframes floatUp {
-  from {
+/* rises then falls back down and out, like a fountain droplet */
+@keyframes fountain {
+  0% {
     opacity: 1;
-    transform: translate(-50%, -50%);
+    transform: translate(-50%, -50%) scale(1);
   }
-  to {
+  30% {
+    opacity: 1;
+    transform: translate(calc(-50% + var(--drift, 0px)), -190%) scale(1.05);
+  }
+  70% {
+    opacity: 1;
+    transform: translate(calc(-50% + var(--drift, 0px) * 1.6), -30%) scale(1);
+  }
+  100% {
     opacity: 0;
-    transform: translate(-50%, -160%);
+    transform: translate(calc(-50% + var(--drift, 0px) * 2), 70%) scale(0.85);
   }
 }
 
