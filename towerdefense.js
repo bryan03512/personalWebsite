@@ -92,6 +92,8 @@ const state = {
   overclockActive: false,
   overclockTimer: 0,
   overclockCooldown: 0,
+  autoRun: false,
+  autoRunTimer: 0,
 };
 
 // ---------- Canvas / DOM ----------
@@ -109,6 +111,7 @@ const restartBtn = document.getElementById("restartBtn");
 
 const overclockBtn = document.getElementById("overclockBtn");
 const speedBtn = document.getElementById("speedBtn");
+const autoRunBtn = document.getElementById("autoRunBtn");
 const towerInfoPanel = document.getElementById("towerInfoPanel");
 const towerInfoName = document.getElementById("towerInfoName");
 const towerInfoLevel = document.getElementById("towerInfoLevel");
@@ -363,8 +366,9 @@ function buildWave(waveNum) {
   return queue;
 }
 
-waveBtn.addEventListener("click", () => {
+function startNextWave() {
   if (state.waveInProgress || state.gameOver) return;
+  state.autoRunTimer = 0;
   state.wave += 1;
   state.spawnQueue = buildWave(state.wave);
   state.spawnTimer = 0;
@@ -372,6 +376,17 @@ waveBtn.addEventListener("click", () => {
   waveBtn.disabled = true;
   waveBtn.textContent = `sprint ${state.wave} in progress...`;
   updateStats();
+}
+
+waveBtn.addEventListener("click", startNextWave);
+
+const AUTO_RUN_DELAY = 2;
+
+autoRunBtn.addEventListener("click", () => {
+  state.autoRun = !state.autoRun;
+  autoRunBtn.textContent = state.autoRun ? "auto: on" : "auto: off";
+  autoRunBtn.classList.toggle("active", state.autoRun);
+  if (state.autoRun) startNextWave();
 });
 
 function spawnEnemy(type) {
@@ -515,7 +530,13 @@ function updateExplosions(dt) {
 }
 
 function updateSpawning(dt) {
-  if (!state.waveInProgress) return;
+  if (!state.waveInProgress) {
+    if (state.autoRun && state.autoRunTimer > 0) {
+      state.autoRunTimer -= dt;
+      if (state.autoRunTimer <= 0) startNextWave();
+    }
+    return;
+  }
   state.spawnTimer -= dt;
   if (state.spawnTimer <= 0 && state.spawnQueue.length > 0) {
     spawnEnemy(state.spawnQueue.shift());
@@ -525,6 +546,7 @@ function updateSpawning(dt) {
     state.waveInProgress = false;
     waveBtn.disabled = false;
     waveBtn.textContent = `deploy sprint ${state.wave + 1}`;
+    if (state.autoRun) state.autoRunTimer = AUTO_RUN_DELAY;
   }
 }
 
@@ -736,11 +758,15 @@ function resetGame() {
   state.overclockActive = false;
   state.overclockTimer = 0;
   state.overclockCooldown = 0;
+  state.autoRun = false;
+  state.autoRunTimer = 0;
   gameOverOverlay.classList.remove("visible");
   waveBtn.disabled = false;
   waveBtn.textContent = "deploy sprint 1";
   speedBtn.textContent = "1x";
   speedBtn.classList.remove("active");
+  autoRunBtn.textContent = "auto: off";
+  autoRunBtn.classList.remove("active");
   hideTowerInfoPanel();
   updateStats();
 }

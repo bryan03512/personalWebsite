@@ -134,9 +134,26 @@ canvas {
   cursor: not-allowed;
 }
 
+.wave-row {
+  display: flex;
+  gap: 8px;
+}
+
 .wave-btn {
+  flex: 1;
   padding: 12px;
   font-size: 0.95rem;
+}
+
+.auto-btn {
+  flex: 0 0 66px;
+  font-size: 0.78rem;
+  padding: 8px;
+}
+
+.auto-btn.active {
+  background: var(--green);
+  color: #04150a;
 }
 
 .hint {
