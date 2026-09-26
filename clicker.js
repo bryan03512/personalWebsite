@@ -61,6 +61,10 @@ const clickUpgradeList = document.getElementById("clickUpgradeList");
 const autoUpgradeList = document.getElementById("autoUpgradeList");
 const resetBtn = document.getElementById("resetBtn");
 
+const buyMode1 = document.getElementById("buyMode1");
+const buyMode10 = document.getElementById("buyMode10");
+const buyModeMax = document.getElementById("buyModeMax");
+
 const collectionTab = document.getElementById("collectionTab");
 const collectionPanel = document.getElementById("collectionPanel");
 const collectionBackdrop = document.getElementById("collectionBackdrop");
@@ -162,6 +166,49 @@ function nextGain(upg) {
   return Math.round(upg.baseAmount * Math.pow(upg.amountGrowth, owned));
 }
 
+// ---- buy quantity (x1 / x10 / max) ----
+let buyQty = 1;
+
+// Total cost of buying `qty` copies of this upgrade starting from its current owned count.
+function costForQty(upg, qty) {
+  const owned = state.upgrades[upg.id];
+  let total = 0;
+  for (let i = 0; i < qty; i++) {
+    total += Math.round(upg.baseCost * Math.pow(upg.costGrowth, owned + i));
+  }
+  return total;
+}
+
+// Total gain from buying `qty` copies of this upgrade starting from its current owned count.
+function gainForQty(upg, qty) {
+  const owned = state.upgrades[upg.id];
+  let total = 0;
+  for (let i = 0; i < qty; i++) {
+    total += Math.round(upg.baseAmount * Math.pow(upg.amountGrowth, owned + i));
+  }
+  return total;
+}
+
+// How many copies of this upgrade the current commit balance can afford, back to back.
+function maxAffordableQty(upg) {
+  const owned = state.upgrades[upg.id];
+  let n = 0;
+  let spent = 0;
+  while (n < 10000) {
+    const cost = Math.round(upg.baseCost * Math.pow(upg.costGrowth, owned + n));
+    if (spent + cost > state.score) break;
+    spent += cost;
+    n += 1;
+  }
+  return n;
+}
+
+// The actual quantity a purchase of this upgrade resolves to, given the buy-mode switch.
+function resolvedQty(upg) {
+  if (buyQty === "max") return maxAffordableQty(upg);
+  return buyQty;
+}
+
 // Total current bonus this upgrade contributes, summed across all past purchases.
 function totalContribution(upg) {
   const owned = state.upgrades[upg.id];
@@ -210,13 +257,27 @@ function getAutoPower() {
 
 function buyUpgrade(id) {
   const upg = UPGRADES.find((u) => u.id === id);
-  const cost = nextCost(upg);
+  const qty = resolvedQty(upg);
+  if (qty < 1) return;
+  const cost = costForQty(upg, qty);
   if (state.score < cost) return;
   state.score -= cost;
-  state.upgrades[id] += 1;
+  state.upgrades[id] += qty;
   render();
   save();
 }
+
+function setBuyMode(qty) {
+  buyQty = qty;
+  [buyMode1, buyMode10, buyModeMax].forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.qty === String(qty));
+  });
+  render();
+}
+
+buyMode1.addEventListener("click", () => setBuyMode(1));
+buyMode10.addEventListener("click", () => setBuyMode(10));
+buyModeMax.addEventListener("click", () => setBuyMode("max"));
 
 function buildUpgradeButtons() {
   UPGRADES.forEach((upg) => {
@@ -240,14 +301,16 @@ function refreshUpgradeButtons() {
   UPGRADES.forEach((upg) => {
     const btn = document.querySelector(`.upgrade-btn[data-id="${upg.id}"]`);
     if (!btn) return;
-    const cost = nextCost(upg);
-    const gain = nextGain(upg);
+    const qty = resolvedQty(upg);
+    const cost = qty > 0 ? costForQty(upg, qty) : nextCost(upg);
+    const gain = qty > 0 ? gainForQty(upg, qty) : nextGain(upg);
     const owned = state.upgrades[upg.id];
     const unit = upg.type === "click" ? "lines/commit" : "commits/sec";
-    btn.querySelector('[data-role="gain"]').textContent = `next: +${gain} ${unit}`;
+    const qtyLabel = buyQty === "max" ? `max×${qty}` : `×${qty}`;
+    btn.querySelector('[data-role="gain"]').textContent = `buy ${qtyLabel}: +${gain} ${unit}`;
     btn.querySelector('[data-role="owned"]').textContent = `x${owned}`;
     btn.querySelector('[data-role="cost"]').textContent = `${cost}c`;
-    btn.disabled = state.score < cost;
+    btn.disabled = qty < 1 || state.score < cost;
   });
 }
 

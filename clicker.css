@@ -255,6 +255,28 @@
   line-height: 1;
 }
 
+.buy-mode-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.buy-mode-label {
+  color: var(--green-faint);
+  font-size: 0.8rem;
+}
+
+.buy-mode-btn {
+  padding: 6px 12px;
+  font-size: 0.8rem;
+}
+
+.buy-mode-btn.active {
+  background: var(--green);
+  color: #04150a;
+}
+
 .reset-btn {
   color: var(--red);
   border-color: #5a2323;
