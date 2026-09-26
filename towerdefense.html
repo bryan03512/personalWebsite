@@ -42,7 +42,24 @@
 
           <button class="btn wave-btn" id="waveBtn">deploy sprint 1</button>
 
-          <p class="hint">select a dev, then click an empty tile off the pipeline to deploy them.</p>
+          <div class="ability-row">
+            <button class="btn ability-btn" id="overclockBtn">overclock!</button>
+            <button class="btn speed-btn" id="speedBtn">1x</button>
+          </div>
+
+          <div class="tower-info-panel" id="towerInfoPanel" hidden>
+            <div class="tower-info-header">
+              <span id="towerInfoName"></span>
+              <button class="tower-info-close" id="towerInfoClose">&times;</button>
+            </div>
+            <p class="tower-info-stats" id="towerInfoLevel"></p>
+            <div class="tower-info-actions">
+              <button class="btn" id="towerUpgradeBtn">upgrade</button>
+              <button class="btn tower-sell-btn" id="towerSellBtn">sell</button>
+            </div>
+          </div>
+
+          <p class="hint">select a dev, then drag on the board to preview range and release on an empty tile to deploy. click a deployed dev to upgrade or sell.</p>
         </aside>
       </div>
     </div>
