@@ -234,7 +234,6 @@
 
 .offline-banner {
   width: 100%;
-  display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
@@ -244,6 +243,10 @@
   background: var(--bg-inset);
   color: var(--cyan);
   font-size: 0.8rem;
+}
+
+.offline-banner:not([hidden]) {
+  display: flex;
 }
 
 .offline-banner button {
