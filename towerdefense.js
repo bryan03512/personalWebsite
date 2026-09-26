@@ -51,8 +51,8 @@ const TOWER_TYPES = {
     cost: 100, damage: 35, range: 250, fireRate: 1.5, color: "#00e5ff", projectileSpeed: 700,
   },
   hacker: {
-    name: "Hacker", desc: "exploit hits a whole area", emoji: "👾",
-    cost: 150, damage: 20, range: 150, fireRate: 1.2, color: "#ff4fd8", projectileSpeed: 400, splashRadius: 55,
+    name: "Hacker", desc: "slow, heavy AoE exploit", emoji: "👾",
+    cost: 170, damage: 55, range: 150, fireRate: 2.2, color: "#ff4fd8", projectileSpeed: 400, splashRadius: 65,
   },
   manager: {
     name: "Manager", desc: "no damage - boosts nearby devs", emoji: "👔",
@@ -83,6 +83,7 @@ const state = {
   towers: [],
   enemies: [],
   projectiles: [],
+  explosions: [],
   waveInProgress: false,
   spawnQueue: [],
   spawnTimer: 0,
@@ -483,6 +484,7 @@ function updateProjectiles(dt) {
       if (p.splashRadius > 0) {
         const ix = p.target.x;
         const iy = p.target.y;
+        spawnExplosion(ix, iy, p.splashRadius, p.color);
         [...state.enemies].forEach((e) => {
           if (distance(ix, iy, e.x, e.y) <= p.splashRadius) {
             applyDamage(e, p.damage, p.sourceTower);
@@ -496,6 +498,19 @@ function updateProjectiles(dt) {
       p.x += ((p.target.x - p.x) / d) * step;
       p.y += ((p.target.y - p.y) / d) * step;
     }
+  }
+}
+
+// ---------- Explosions (visual only - AoE damage is applied where it lands) ----------
+function spawnExplosion(x, y, radius, color) {
+  state.explosions.push({ x, y, radius, color, age: 0, duration: 0.35 });
+}
+
+function updateExplosions(dt) {
+  for (let i = state.explosions.length - 1; i >= 0; i--) {
+    const ex = state.explosions[i];
+    ex.age += dt;
+    if (ex.age >= ex.duration) state.explosions.splice(i, 1);
   }
 }
 
@@ -662,6 +677,23 @@ function draw() {
     ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
     ctx.fill();
   }
+
+  // explosions: expanding, fading ring where an AoE hit landed
+  for (const ex of state.explosions) {
+    const t = ex.age / ex.duration;
+    const r = ex.radius * (0.35 + 0.65 * t);
+    const alpha = 1 - t;
+    ctx.fillStyle = ex.color;
+    ctx.globalAlpha = alpha * 0.3;
+    ctx.beginPath();
+    ctx.arc(ex.x, ex.y, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = ex.color;
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = alpha * 0.8;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
 }
 
 // ---------- Main loop ----------
@@ -676,6 +708,7 @@ function loop(now) {
     updateEnemies(dt);
     updateTowers(dt);
     updateProjectiles(dt);
+    updateExplosions(dt);
     updateOverclock(dt);
     updateStats();
   }
@@ -694,6 +727,7 @@ function resetGame() {
   state.towers = [];
   state.enemies = [];
   state.projectiles = [];
+  state.explosions = [];
   state.waveInProgress = false;
   state.spawnQueue = [];
   state.spawnTimer = 0;
