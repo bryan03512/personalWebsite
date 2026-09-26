@@ -108,11 +108,14 @@ function playClickSound() {
 }
 
 function spawnFloatText(amount) {
+  const rect = clickZone.getBoundingClientRect();
   const el = document.createElement("span");
   el.className = "float-text";
   el.textContent = `+${amount}`;
+  el.style.left = `${rect.left + rect.width / 2}px`;
+  el.style.top = `${rect.top + rect.height / 2}px`;
   el.style.setProperty("--drift", `${(Math.random() - 0.5) * 60}px`);
-  clickZone.appendChild(el);
+  document.body.appendChild(el);
   el.addEventListener("animationend", () => el.remove());
 }
 

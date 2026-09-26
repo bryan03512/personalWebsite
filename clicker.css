@@ -77,16 +77,17 @@
 }
 
 .float-text {
-  position: absolute;
-  left: 50%;
-  top: 50%;
+  position: fixed;
+  left: 0;
+  top: 0;
   transform: translate(-50%, -50%);
   color: var(--green);
   font-weight: bold;
   font-size: 1.1rem;
   text-shadow: 0 0 6px currentColor;
   pointer-events: none;
-  animation: fountain 0.9s cubic-bezier(0.33, 0, 0.7, 1) forwards;
+  z-index: 200;
+  animation: fountain 1.4s cubic-bezier(0.4, 0, 0.85, 1) forwards;
 }
 
 /* rises then falls back down and out, like a fountain droplet */
@@ -95,17 +96,21 @@
     opacity: 1;
     transform: translate(-50%, -50%) scale(1);
   }
-  30% {
+  20% {
     opacity: 1;
-    transform: translate(calc(-50% + var(--drift, 0px)), -190%) scale(1.05);
+    transform: translate(calc(-50% + var(--drift, 0px) * 0.4), -130px) scale(1.05);
   }
-  70% {
+  45% {
     opacity: 1;
-    transform: translate(calc(-50% + var(--drift, 0px) * 1.6), -30%) scale(1);
+    transform: translate(calc(-50% + var(--drift, 0px)), 10vh) scale(1);
+  }
+  75% {
+    opacity: 0.5;
+    transform: translate(calc(-50% + var(--drift, 0px) * 1.6), 55vh) scale(0.9);
   }
   100% {
     opacity: 0;
-    transform: translate(calc(-50% + var(--drift, 0px) * 2), 70%) scale(0.85);
+    transform: translate(calc(-50% + var(--drift, 0px) * 2), 100vh) scale(0.8);
   }
 }
 
