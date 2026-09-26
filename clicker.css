@@ -373,10 +373,6 @@
   margin-bottom: 6px;
 }
 
-.collection-icon {
-  font-size: 1rem;
-}
-
 .collection-name {
   flex: 1;
   color: var(--text);
@@ -389,8 +385,45 @@
 .collection-icons {
   display: flex;
   flex-wrap: wrap;
-  gap: 3px;
-  min-height: 1.3rem;
+  gap: 5px;
+  min-height: 1.7rem;
+}
+
+.icon-tile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: 1px solid;
+  font-size: 0.95rem;
+  line-height: 1;
+  flex-shrink: 0;
+  animation: tilePop 0.25s ease;
+  transition: transform 0.1s ease;
+}
+
+.icon-tile:hover {
+  transform: scale(1.15);
+}
+
+.collection-icon.icon-tile {
+  width: 22px;
+  height: 22px;
+  font-size: 0.82rem;
+  border-radius: 5px;
+}
+
+@keyframes tilePop {
+  from {
+    transform: scale(0.3);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 .collection-icons span {

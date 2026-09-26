@@ -6,28 +6,28 @@ const SAVE_KEY = "clickerGameSave";
 // replaced outright by later ones.
 const UPGRADES = [
   // ---- click power (typing upgrades) ----
-  { id: "keyboard", name: "Mechanical Keyboard", icon: "⌨️", type: "click", baseCost: 15, costGrowth: 1.15, baseAmount: 1, amountGrowth: 1.08 },
-  { id: "monitor2", name: "Second Monitor", icon: "🖥️", type: "click", baseCost: 60, costGrowth: 1.15, baseAmount: 2, amountGrowth: 1.08 },
-  { id: "duck", name: "Rubber Duck", icon: "🦆", type: "click", baseCost: 200, costGrowth: 1.15, baseAmount: 4, amountGrowth: 1.08 },
-  { id: "coffee", name: "Coffee IV Drip", icon: "☕", type: "click", baseCost: 600, costGrowth: 1.15, baseAmount: 8, amountGrowth: 1.08 },
-  { id: "standingdesk", name: "Standing Desk", icon: "🪑", type: "click", baseCost: 1800, costGrowth: 1.15, baseAmount: 15, amountGrowth: 1.08 },
-  { id: "headphones", name: "Noise-Cancelling Headphones", icon: "🎧", type: "click", baseCost: 5000, costGrowth: 1.15, baseAmount: 28, amountGrowth: 1.08 },
-  { id: "autocomplete", name: "AI Autocomplete", icon: "💡", type: "click", baseCost: 14000, costGrowth: 1.15, baseAmount: 50, amountGrowth: 1.08 },
-  { id: "vim", name: "Vim Motions Mastery", icon: "🥷", type: "click", baseCost: 40000, costGrowth: 1.15, baseAmount: 90, amountGrowth: 1.08 },
-  { id: "battlestation", name: "4-Monitor Battlestation", icon: "🎛️", type: "click", baseCost: 110000, costGrowth: 1.15, baseAmount: 160, amountGrowth: 1.08 },
-  { id: "neuralkeyboard", name: "Neural Keyboard Interface", icon: "🧠", type: "click", baseCost: 300000, costGrowth: 1.15, baseAmount: 300, amountGrowth: 1.08 },
+  { id: "keyboard", name: "Mechanical Keyboard", icon: "⌨️", color: "107,143,255", type: "click", baseCost: 15, costGrowth: 1.15, baseAmount: 1, amountGrowth: 1.08 },
+  { id: "monitor2", name: "Second Monitor", icon: "🖥️", color: "0,229,255", type: "click", baseCost: 60, costGrowth: 1.15, baseAmount: 2, amountGrowth: 1.08 },
+  { id: "duck", name: "Rubber Duck", icon: "🦆", color: "255,217,61", type: "click", baseCost: 200, costGrowth: 1.15, baseAmount: 4, amountGrowth: 1.08 },
+  { id: "coffee", name: "Coffee IV Drip", icon: "☕", color: "193,122,61", type: "click", baseCost: 600, costGrowth: 1.15, baseAmount: 8, amountGrowth: 1.08 },
+  { id: "standingdesk", name: "Standing Desk", icon: "🪑", color: "184,134,90", type: "click", baseCost: 1800, costGrowth: 1.15, baseAmount: 15, amountGrowth: 1.08 },
+  { id: "headphones", name: "Noise-Cancelling Headphones", icon: "🎧", color: "168,107,255", type: "click", baseCost: 5000, costGrowth: 1.15, baseAmount: 28, amountGrowth: 1.08 },
+  { id: "autocomplete", name: "AI Autocomplete", icon: "💡", color: "255,224,102", type: "click", baseCost: 14000, costGrowth: 1.15, baseAmount: 50, amountGrowth: 1.08 },
+  { id: "vim", name: "Vim Motions Mastery", icon: "🥷", color: "108,60,224", type: "click", baseCost: 40000, costGrowth: 1.15, baseAmount: 90, amountGrowth: 1.08 },
+  { id: "battlestation", name: "4-Monitor Battlestation", icon: "🎛️", color: "255,159,67", type: "click", baseCost: 110000, costGrowth: 1.15, baseAmount: 160, amountGrowth: 1.08 },
+  { id: "neuralkeyboard", name: "Neural Keyboard Interface", icon: "🧠", color: "255,79,216", type: "click", baseCost: 300000, costGrowth: 1.15, baseAmount: 300, amountGrowth: 1.08 },
 
   // ---- CPS (ci/cd upgrades) ----
-  { id: "intern", name: "Intern", icon: "🧑", type: "auto", baseCost: 25, costGrowth: 1.15, baseAmount: 1, amountGrowth: 1.08 },
-  { id: "juniorbot", name: "Junior Dev Bot", icon: "🤖", type: "auto", baseCost: 100, costGrowth: 1.15, baseAmount: 2, amountGrowth: 1.08 },
-  { id: "reviewbot", name: "Code Review Bot", icon: "🔍", type: "auto", baseCost: 350, costGrowth: 1.15, baseAmount: 4, amountGrowth: 1.08 },
-  { id: "cipipeline", name: "CI Pipeline", icon: "🔄", type: "auto", baseCost: 1000, costGrowth: 1.15, baseAmount: 8, amountGrowth: 1.08 },
-  { id: "automerge", name: "Auto-merge Bot", icon: "🔀", type: "auto", baseCost: 3000, costGrowth: 1.15, baseAmount: 15, amountGrowth: 1.08 },
-  { id: "devops", name: "DevOps Engineer", icon: "🛠️", type: "auto", baseCost: 8500, costGrowth: 1.15, baseAmount: 28, amountGrowth: 1.08 },
-  { id: "kubernetes", name: "Kubernetes Cluster", icon: "⚙️", type: "auto", baseCost: 24000, costGrowth: 1.15, baseAmount: 50, amountGrowth: 1.08 },
-  { id: "autoscaler", name: "Cloud Auto-scaler", icon: "📈", type: "auto", baseCost: 65000, costGrowth: 1.15, baseAmount: 90, amountGrowth: 1.08 },
-  { id: "aipair", name: "AI Pair Programmer", icon: "👥", type: "auto", baseCost: 180000, costGrowth: 1.15, baseAmount: 160, amountGrowth: 1.08 },
-  { id: "agi", name: "Self-Improving AGI", icon: "🌐", type: "auto", baseCost: 500000, costGrowth: 1.15, baseAmount: 300, amountGrowth: 1.08 },
+  { id: "intern", name: "Intern", icon: "🧑", color: "126,231,135", type: "auto", baseCost: 25, costGrowth: 1.15, baseAmount: 1, amountGrowth: 1.08 },
+  { id: "juniorbot", name: "Junior Dev Bot", icon: "🤖", color: "77,157,224", type: "auto", baseCost: 100, costGrowth: 1.15, baseAmount: 2, amountGrowth: 1.08 },
+  { id: "reviewbot", name: "Code Review Bot", icon: "🔍", color: "46,196,182", type: "auto", baseCost: 350, costGrowth: 1.15, baseAmount: 4, amountGrowth: 1.08 },
+  { id: "cipipeline", name: "CI Pipeline", icon: "🔄", color: "163,230,53", type: "auto", baseCost: 1000, costGrowth: 1.15, baseAmount: 8, amountGrowth: 1.08 },
+  { id: "automerge", name: "Auto-merge Bot", icon: "🔀", color: "56,189,248", type: "auto", baseCost: 3000, costGrowth: 1.15, baseAmount: 15, amountGrowth: 1.08 },
+  { id: "devops", name: "DevOps Engineer", icon: "🛠️", color: "244,116,59", type: "auto", baseCost: 8500, costGrowth: 1.15, baseAmount: 28, amountGrowth: 1.08 },
+  { id: "kubernetes", name: "Kubernetes Cluster", icon: "⚙️", color: "50,108,229", type: "auto", baseCost: 24000, costGrowth: 1.15, baseAmount: 50, amountGrowth: 1.08 },
+  { id: "autoscaler", name: "Cloud Auto-scaler", icon: "📈", color: "52,211,153", type: "auto", baseCost: 65000, costGrowth: 1.15, baseAmount: 90, amountGrowth: 1.08 },
+  { id: "aipair", name: "AI Pair Programmer", icon: "👥", color: "139,92,246", type: "auto", baseCost: 180000, costGrowth: 1.15, baseAmount: 160, amountGrowth: 1.08 },
+  { id: "agi", name: "Self-Improving AGI", icon: "🌐", color: "57,255,20", type: "auto", baseCost: 500000, costGrowth: 1.15, baseAmount: 300, amountGrowth: 1.08 },
 ];
 
 // Prestige tree: a root node splitting into a "typing" branch and an "ops"
@@ -48,7 +48,7 @@ function defaultState() {
   UPGRADES.forEach((u) => (upgrades[u.id] = 0));
   const treeNodes = {};
   PRESTIGE_TREE.forEach((n) => (treeNodes[n.id] = false));
-  return { score: 0, upgrades, runEarned: 0, prestigePoints: 0, treeNodes, lastSaveTime: Date.now() };
+  return { score: 0, upgrades, prestigePoints: 0, treeNodes, lastSaveTime: Date.now() };
 }
 
 let state = defaultState();
@@ -126,7 +126,6 @@ function load() {
   try {
     const parsed = JSON.parse(saved);
     state.score = typeof parsed.score === "number" ? parsed.score : 0;
-    state.runEarned = typeof parsed.runEarned === "number" ? parsed.runEarned : 0;
     state.prestigePoints = typeof parsed.prestigePoints === "number" ? parsed.prestigePoints : 0;
     state.lastSaveTime = typeof parsed.lastSaveTime === "number" ? parsed.lastSaveTime : Date.now();
     if (parsed.upgrades) {
@@ -252,6 +251,11 @@ function refreshUpgradeButtons() {
   });
 }
 
+function tileStyle(upg) {
+  const c = upg.color;
+  return `background: linear-gradient(135deg, rgba(${c},0.4), rgba(${c},0.12)); border-color: rgba(${c},0.9); box-shadow: 0 0 6px rgba(${c},0.5); color: rgb(${c});`;
+}
+
 function buildCollectionPanel() {
   UPGRADES.forEach((upg) => {
     const row = document.createElement("div");
@@ -259,7 +263,7 @@ function buildCollectionPanel() {
     row.dataset.id = upg.id;
     row.innerHTML = `
       <div class="collection-row-header">
-        <span class="collection-icon">${upg.icon}</span>
+        <span class="collection-icon icon-tile" style="${tileStyle(upg)}">${upg.icon}</span>
         <span class="collection-name">${upg.name}</span>
         <span class="collection-count" data-role="count">x0</span>
       </div>
@@ -277,7 +281,7 @@ function refreshCollectionPanel() {
     row.querySelector('[data-role="count"]').textContent = `x${owned}`;
     const iconsEl = row.querySelector('[data-role="icons"]');
     if (iconsEl.childElementCount !== owned) {
-      iconsEl.innerHTML = `<span>${upg.icon}</span>`.repeat(owned);
+      iconsEl.innerHTML = `<span class="icon-tile" style="${tileStyle(upg)}">${upg.icon}</span>`.repeat(owned);
     }
   });
 }
@@ -408,7 +412,6 @@ function applyOfflineProgress() {
   const earned = Math.floor(auto * cappedSec);
   if (earned < 1) return;
   state.score += earned;
-  state.runEarned += earned;
   const hours = Math.floor(cappedSec / 3600);
   const mins = Math.floor((cappedSec % 3600) / 60);
   offlineBanner.textContent = `welcome back — CI bots earned +${earned} commits while you were away (${hours}h ${mins}m)`;
@@ -432,9 +435,9 @@ function render() {
 
   const floor = prestigeThreshold(gain);
   const ceil = prestigeThreshold(gain + 1);
-  const pct = Math.min(100, ((state.runEarned - floor) / (ceil - floor)) * 100);
+  const pct = Math.min(100, ((state.score - floor) / (ceil - floor)) * 100);
   prestigeFill.style.width = `${pct}%`;
-  prestigeProgressLabel.textContent = `${state.runEarned.toLocaleString()} / ${ceil.toLocaleString()} commits to next point`;
+  prestigeProgressLabel.textContent = `${state.score.toLocaleString()} / ${ceil.toLocaleString()} commits to next point`;
 
   refreshPrestigeTree();
 }
@@ -442,7 +445,6 @@ function render() {
 function onClick() {
   const power = getClickPower();
   state.score += power;
-  state.runEarned += power;
   playClickEffect(power);
   render();
   save();
@@ -459,7 +461,6 @@ function tick() {
   const auto = getAutoPower();
   if (auto > 0) {
     state.score += auto;
-    state.runEarned += auto;
     render();
     save();
   }
@@ -468,7 +469,7 @@ function tick() {
 // ---- prestige ----
 
 function getPrestigeGain() {
-  return Math.floor(Math.sqrt(state.runEarned / 100000));
+  return Math.floor(Math.sqrt(state.score / 100000));
 }
 
 // Lifetime commits (this run) needed to reach a given prestige point count.
@@ -485,7 +486,6 @@ function doPrestige() {
   if (!ok) return;
   state.prestigePoints += gain;
   state.score = 0;
-  state.runEarned = 0;
   UPGRADES.forEach((u) => (state.upgrades[u.id] = 0));
   render();
   save();
