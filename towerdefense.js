@@ -125,6 +125,7 @@ const state = {
   gold: 150,
   lives: 20,
   wave: 0,
+  bestWave: 0,
   kills: 0,
   selectedTowerType: null,
   selectedTower: null,
@@ -150,6 +151,7 @@ const ctx = canvas.getContext("2d");
 const goldStat = document.getElementById("goldStat");
 const livesStat = document.getElementById("livesStat");
 const waveStat = document.getElementById("waveStat");
+const bestWaveStat = document.getElementById("bestWaveStat");
 const killsStat = document.getElementById("killsStat");
 const towerListEl = document.getElementById("towerList");
 const waveBtn = document.getElementById("waveBtn");
@@ -195,6 +197,7 @@ function updateStats() {
   goldStat.textContent = state.gold;
   livesStat.textContent = state.lives;
   waveStat.textContent = state.wave;
+  bestWaveStat.textContent = state.bestWave;
   killsStat.textContent = state.kills;
   refreshTowerButtons();
   refreshTowerInfoPanel();
@@ -221,6 +224,7 @@ function saveGame() {
     gold: state.gold,
     lives: state.lives,
     wave: state.wave,
+    bestWave: state.bestWave,
     kills: state.kills,
     towers: state.towers,
     gameSpeed: state.gameSpeed,
@@ -235,6 +239,7 @@ function applyLoadedState(parsed) {
   if (typeof parsed.gold === "number") state.gold = parsed.gold;
   if (typeof parsed.lives === "number") state.lives = parsed.lives;
   if (typeof parsed.wave === "number") state.wave = parsed.wave;
+  if (typeof parsed.bestWave === "number") state.bestWave = parsed.bestWave;
   if (typeof parsed.kills === "number") state.kills = parsed.kills;
   state.gameSpeed = parsed.gameSpeed === 2 ? 2 : 1;
   state.lastSaveTime = parsed.lastSaveTime || Date.now();
@@ -554,6 +559,7 @@ function startNextWave() {
   if (state.waveInProgress || state.gameOver) return;
   state.autoRunTimer = 0;
   state.wave += 1;
+  if (state.wave > state.bestWave) state.bestWave = state.wave;
   state.spawnQueue = buildWave(state.wave);
   state.spawnTimer = 0;
   state.waveInProgress = true;

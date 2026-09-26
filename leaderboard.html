@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Leaderboard</title>
+<link rel="stylesheet" href="theme.css">
+<link rel="stylesheet" href="leaderboard.css">
+<link rel="stylesheet" href="account.css">
+</head>
+<body>
+  <div class="page-wrap">
+    <a class="back-link" href="index.html">&larr; menu</a>
+
+    <div class="window lb-window">
+      <div class="window-titlebar">
+        <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+        <span class="title-text">leaderboard.sh</span>
+      </div>
+
+      <div class="lb-body">
+        <div class="lb-section">
+          <h3># clicker &mdash; top prestige</h3>
+          <div class="lb-list" id="clickerBoard"><p class="lb-loading">loading...</p></div>
+        </div>
+
+        <div class="lb-section">
+          <h3># tower defense &mdash; best sprint reached</h3>
+          <div class="lb-list" id="towerBoard"><p class="lb-loading">loading...</p></div>
+        </div>
+
+        <p class="lb-hint"># log in to appear here &mdash; ranked by your best-ever save, not your current run.</p>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="account.js"></script>
+  <script src="leaderboard.js"></script>
+</body>
+</html>
