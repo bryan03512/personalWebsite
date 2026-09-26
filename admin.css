@@ -1,0 +1,45 @@
+.page-wrap {
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.admin-window {
+  overflow: visible;
+}
+
+.admin-body {
+  padding: 20px;
+}
+
+.admin-msg {
+  margin: 0;
+  color: var(--green-faint);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.admin-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.admin-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-inset);
+  font-size: 0.85rem;
+}
+
+.admin-row span {
+  color: var(--green-faint);
+}
+
+.admin-row strong {
+  color: var(--cyan);
+  font-size: 1rem;
+}

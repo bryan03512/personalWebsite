@@ -1,5 +1,7 @@
 const clickerBoard = document.getElementById("clickerBoard");
 const towerBoard = document.getElementById("towerBoard");
+const lbVisibility = document.getElementById("lbVisibility");
+const lbVisibleCheckbox = document.getElementById("lbVisibleCheckbox");
 
 function renderBoard(container, rows, scoreKey, scoreLabel) {
   if (!rows || rows.length === 0) {
@@ -47,5 +49,25 @@ async function loadLeaderboards() {
   }
 }
 
+async function refreshVisibilityToggle() {
+  const user = await accountGetUser();
+  if (!user) {
+    lbVisibility.hidden = true;
+    return;
+  }
+  lbVisibility.hidden = false;
+  lbVisibleCheckbox.checked = await getLeaderboardVisibility();
+}
+
+lbVisibleCheckbox.addEventListener("change", async () => {
+  await setLeaderboardVisibility(lbVisibleCheckbox.checked);
+  loadLeaderboards();
+});
+
 loadLeaderboards();
-window.addEventListener("account:login", loadLeaderboards);
+refreshVisibilityToggle();
+window.addEventListener("account:login", () => {
+  loadLeaderboards();
+  refreshVisibilityToggle();
+});
+window.addEventListener("account:logout", refreshVisibilityToggle);

@@ -47,6 +47,26 @@ async function saveCloudField(field, value) {
   if (error) console.error("saveCloudField failed:", error);
 }
 
+// ---- leaderboard visibility ----
+async function getLeaderboardVisibility() {
+  const user = await accountGetUser();
+  if (!user) return null;
+  const { data, error } = await sb.from("saves").select("leaderboard_visible").eq("user_id", user.id).maybeSingle();
+  if (error) {
+    console.error("getLeaderboardVisibility failed:", error);
+    return true;
+  }
+  return data ? data.leaderboard_visible !== false : true;
+}
+
+async function setLeaderboardVisibility(visible) {
+  const user = await accountGetUser();
+  if (!user) return;
+  const payload = { user_id: user.id, leaderboard_visible: visible, updated_at: new Date().toISOString() };
+  const { error } = await sb.from("saves").upsert(payload, { onConflict: "user_id" });
+  if (error) console.error("setLeaderboardVisibility failed:", error);
+}
+
 // ---- widget UI ----
 function buildAccountWidget() {
   const el = document.createElement("div");

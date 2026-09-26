@@ -83,3 +83,21 @@
   font-size: 0.75rem;
   color: var(--green-faint);
 }
+
+.lb-visibility {
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.lb-visibility:not([hidden]) {
+  display: flex;
+}
+
+.lb-visibility input {
+  accent-color: var(--green);
+  width: 16px;
+  height: 16px;
+}

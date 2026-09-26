@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Admin</title>
+<link rel="stylesheet" href="theme.css">
+<link rel="stylesheet" href="admin.css">
+<link rel="stylesheet" href="account.css">
+</head>
+<body>
+  <div class="page-wrap">
+    <a class="back-link" href="index.html">&larr; menu</a>
+
+    <div class="window admin-window">
+      <div class="window-titlebar">
+        <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+        <span class="title-text">admin.sh</span>
+      </div>
+
+      <div class="admin-body" id="adminBody">
+        <p class="admin-msg">log in as the site owner to view stats.</p>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="account.js"></script>
+  <script src="admin.js"></script>
+</body>
+</html>
