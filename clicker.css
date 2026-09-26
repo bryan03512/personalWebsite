@@ -112,22 +112,59 @@
   pointer-events: none;
   z-index: 199;
   will-change: transform, opacity;
-  animation: fountain 1.9s cubic-bezier(0.3, 0, 0.7, 1) forwards;
+  /* linear: the easing is baked into the keyframe positions themselves below,
+     via real projectile-motion math, so an extra timing curve would fight it */
+  animation: fountain 2.1s linear forwards;
 }
 
-/* sprays outward and up like shower droplets, then falls slowly partway down and fades */
+/* Traces true projectile motion: decelerating rise to a peak at 22% of the
+   duration (matches h = v0*t - 0.5*g*t^2), then accelerating fall from that
+   peak down to the resting depth (matches h = 0.5*g*t^2) - a real parabola
+   on the way up and another on the way down, not a straight-line V shape. */
 @keyframes fountain {
   0% {
     opacity: 1;
     transform: translate(-50%, -50%) scale(1);
   }
-  18% {
+  10% {
     opacity: 1;
-    transform: translate(calc(-50% + var(--drift, 0px) * 0.7), var(--rise, -110px)) scale(1.05);
+    transform: translate(calc(-50% + var(--drift, 0px) * 0.2), calc(var(--rise, -110px) * 0.7025)) scale(1.02);
   }
-  45% {
-    opacity: 0.7;
-    transform: translate(calc(-50% + var(--drift, 0px) * 1.3), 18vh) scale(1);
+  20% {
+    opacity: 1;
+    transform: translate(calc(-50% + var(--drift, 0px) * 0.4), calc(var(--rise, -110px) * 0.9917)) scale(1.05);
+  }
+  22% {
+    opacity: 1;
+    transform: translate(calc(-50% + var(--drift, 0px) * 0.44), var(--rise, -110px)) scale(1.05);
+  }
+  30% {
+    opacity: 0.95;
+    transform: translate(calc(-50% + var(--drift, 0px) * 0.6), calc(var(--rise, -110px) * 0.98947 + 48vh * 0.01053)) scale(1.03);
+  }
+  40% {
+    opacity: 0.82;
+    transform: translate(calc(-50% + var(--drift, 0px) * 0.8), calc(var(--rise, -110px) * 0.9468 + 48vh * 0.0532)) scale(1);
+  }
+  50% {
+    opacity: 0.68;
+    transform: translate(calc(-50% + var(--drift, 0px)), calc(var(--rise, -110px) * 0.8711 + 48vh * 0.1289)) scale(0.98);
+  }
+  60% {
+    opacity: 0.53;
+    transform: translate(calc(-50% + var(--drift, 0px) * 1.2), calc(var(--rise, -110px) * 0.7626 + 48vh * 0.2374)) scale(0.95);
+  }
+  70% {
+    opacity: 0.38;
+    transform: translate(calc(-50% + var(--drift, 0px) * 1.4), calc(var(--rise, -110px) * 0.6213 + 48vh * 0.3787)) scale(0.92);
+  }
+  80% {
+    opacity: 0.24;
+    transform: translate(calc(-50% + var(--drift, 0px) * 1.6), calc(var(--rise, -110px) * 0.447 + 48vh * 0.553)) scale(0.9);
+  }
+  90% {
+    opacity: 0.1;
+    transform: translate(calc(-50% + var(--drift, 0px) * 1.8), calc(var(--rise, -110px) * 0.24 + 48vh * 0.76)) scale(0.87);
   }
   100% {
     opacity: 0;
