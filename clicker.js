@@ -107,14 +107,28 @@ function playClickSound() {
   osc.stop(audioCtx.currentTime + 0.1);
 }
 
-function spawnFloatText(amount) {
+// Cached so we don't force a synchronous layout read on every single click -
+// only recompute when the button could have actually moved.
+let clickZoneOrigin = null;
+function updateClickZoneOrigin() {
   const rect = clickZone.getBoundingClientRect();
+  clickZoneOrigin = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+}
+window.addEventListener("resize", updateClickZoneOrigin);
+
+const MAX_FLOAT_TEXTS = 30;
+
+function spawnFloatText(amount) {
+  if (!clickZoneOrigin) updateClickZoneOrigin();
+  if (document.querySelectorAll(".float-text").length >= MAX_FLOAT_TEXTS) return;
+
   const el = document.createElement("span");
   el.className = "float-text";
   el.textContent = `+${amount}`;
-  el.style.left = `${rect.left + rect.width / 2}px`;
-  el.style.top = `${rect.top + rect.height / 2}px`;
-  el.style.setProperty("--drift", `${(Math.random() - 0.5) * 60}px`);
+  el.style.left = `${clickZoneOrigin.x}px`;
+  el.style.top = `${clickZoneOrigin.y}px`;
+  el.style.setProperty("--drift", `${(Math.random() - 0.5) * 320}px`);
+  el.style.setProperty("--rise", `${-90 - Math.random() * 70}px`);
   document.body.appendChild(el);
   el.addEventListener("animationend", () => el.remove());
 }
