@@ -8,7 +8,10 @@ const SUPABASE_ANON_KEY = "sb_publishable_QZ1Jkd_6ojbhF-QKTRnIUQ_-TT-W_5F";
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // Fire-and-forget page-view counter, works whether or not anyone's logged in.
-sb.rpc("record_visit");
+// Supabase's query builder is a lazy "thenable" - the request is only sent
+// once something calls .then()/await on it, so this needs an explicit
+// .then() even though we don't care about the result.
+sb.rpc("record_visit").then(() => {}, () => {});
 
 // ---- auth helpers ----
 async function accountSignUp(email, password) {

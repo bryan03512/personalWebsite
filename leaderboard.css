@@ -95,6 +95,19 @@
   display: flex;
 }
 
+.lb-account-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.lb-account-list .admin-row {
+  padding: 6px 10px;
+  font-size: 0.8rem;
+}
+
 .admin-row {
   display: flex;
   justify-content: space-between;

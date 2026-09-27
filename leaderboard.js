@@ -7,6 +7,7 @@ const lbVisibleCheckbox = document.getElementById("lbVisibleCheckbox");
 const lbOwnerPanel = document.getElementById("lbOwnerPanel");
 const lbTotalAccounts = document.getElementById("lbTotalAccounts");
 const lbTotalVisits = document.getElementById("lbTotalVisits");
+const lbAccountList = document.getElementById("lbAccountList");
 
 function renderBoard(container, rows, scoreKey, scoreLabel) {
   if (!rows || rows.length === 0) {
@@ -36,6 +37,7 @@ async function loadLeaderboards() {
     .limit(15);
 
   if (clickerError) {
+    console.error("clickerBoard load failed:", clickerError);
     clickerBoard.innerHTML = `<p class="lb-loading">couldn't load leaderboard.</p>`;
   } else {
     renderBoard(clickerBoard, clickerRows.filter((r) => r.clicker_prestige > 0), "clicker_prestige", "pts");
@@ -48,6 +50,7 @@ async function loadLeaderboards() {
     .limit(15);
 
   if (peakError) {
+    console.error("peakBoard load failed:", peakError);
     peakBoard.innerHTML = `<p class="lb-loading">couldn't load leaderboard.</p>`;
   } else {
     renderBoard(peakBoard, peakRows.filter((r) => r.clicker_peak > 0), "clicker_peak", "commits");
@@ -60,6 +63,7 @@ async function loadLeaderboards() {
     .limit(15);
 
   if (towerError) {
+    console.error("towerBoard load failed:", towerError);
     towerBoard.innerHTML = `<p class="lb-loading">couldn't load leaderboard.</p>`;
   } else {
     renderBoard(towerBoard, towerRows.filter((r) => r.td_best_wave > 0), "td_best_wave", "sprint");
@@ -72,6 +76,7 @@ async function loadLeaderboards() {
     .limit(15);
 
   if (goldError) {
+    console.error("goldBoard load failed:", goldError);
     goldBoard.innerHTML = `<p class="lb-loading">couldn't load leaderboard.</p>`;
   } else {
     renderBoard(goldBoard, goldRows.filter((r) => r.td_best_gold > 0), "td_best_gold", "credits");
@@ -103,11 +108,18 @@ async function refreshOwnerPanel() {
   }
   const { data, error } = await sb.rpc("get_site_overview");
   if (error || !data) {
+    if (error) console.error("get_site_overview failed:", error);
     lbOwnerPanel.hidden = true;
     return;
   }
   lbTotalAccounts.textContent = data.total_accounts ?? 0;
   lbTotalVisits.textContent = data.total_visits ?? 0;
+  if (lbAccountList) {
+    const accounts = data.accounts || [];
+    lbAccountList.innerHTML = accounts
+      .map((a) => `<div class="admin-row"><span>${a.email}</span><span>${new Date(a.created_at).toLocaleDateString()}</span></div>`)
+      .join("");
+  }
   lbOwnerPanel.hidden = false;
 }
 

@@ -692,12 +692,40 @@ function refreshTowerInfoPanel() {
   refreshTowerPathSection(t);
 }
 
+// refreshTowerInfoPanel runs every frame (60x/sec), so this must NOT tear
+// down and recreate button elements on every call - a mouse click needs
+// mousedown and mouseup to land on the SAME element, and swapping the
+// button out mid-click silently drops the click. Touch taps resolve more
+// atomically, which is why this only ever broke on desktop. Fix: only
+// rebuild the DOM when the actual structure changes (tower/path/tier/level-
+// gate), and just update disabled state on the existing button otherwise.
+let lastPathSectionTower = null;
+let lastPathSectionKey = null;
+
 function refreshTowerPathSection(t) {
   const paths = TOWER_PATHS[t.type];
-  towerPathSection.innerHTML = "";
-  if (!paths) return;
+  if (!paths) {
+    towerPathSection.innerHTML = "";
+    lastPathSectionTower = null;
+    lastPathSectionKey = null;
+    return;
+  }
 
   const tierIndex = t.pathTier || 0;
+  const requiredLevel = t.path ? PATH_TIER_LEVELS[tierIndex] : PATH_UNLOCK_LEVEL;
+  const levelMet = t.level >= requiredLevel;
+  const key = `${t.path || ""}:${tierIndex}:${levelMet ? 1 : 0}`;
+
+  if (t !== lastPathSectionTower || key !== lastPathSectionKey) {
+    lastPathSectionTower = t;
+    lastPathSectionKey = key;
+    buildPathSectionDOM(t, paths, tierIndex, levelMet);
+  }
+  updatePathSectionDynamicBits(t, paths, tierIndex);
+}
+
+function buildPathSectionDOM(t, paths, tierIndex, levelMet) {
+  towerPathSection.innerHTML = "";
 
   if (t.path) {
     const chosen = paths[t.path];
@@ -709,8 +737,8 @@ function refreshTowerPathSection(t) {
     }
     const nextTier = chosen.tiers[tierIndex];
     if (nextTier) {
-      const requiredLevel = PATH_TIER_LEVELS[tierIndex];
-      if (t.level < requiredLevel) {
+      if (!levelMet) {
+        const requiredLevel = PATH_TIER_LEVELS[tierIndex];
         const hint = document.createElement("p");
         hint.className = "tower-path-hint";
         hint.textContent = `reach level ${requiredLevel} for ${chosen.name} T${tierIndex + 1}: ${nextTier.desc}`;
@@ -718,8 +746,8 @@ function refreshTowerPathSection(t) {
       } else {
         const btn = document.createElement("button");
         btn.className = "btn path-btn";
+        btn.dataset.pathId = t.path;
         btn.innerHTML = `<span class="path-name">${chosen.name} T${tierIndex + 1}</span><span class="path-desc">${nextTier.desc}</span><span class="path-cost">${nextTier.cost}c</span>`;
-        btn.disabled = state.gold < nextTier.cost;
         btn.addEventListener("click", () => buyPathTier(t, t.path));
         towerPathSection.appendChild(btn);
       }
@@ -739,10 +767,21 @@ function refreshTowerPathSection(t) {
     const tier1 = pathDef.tiers[0];
     const btn = document.createElement("button");
     btn.className = "btn path-btn";
+    btn.dataset.pathId = pathId;
     btn.innerHTML = `<span class="path-name">${pathDef.name}</span><span class="path-desc">${tier1.desc}</span><span class="path-cost">${tier1.cost}c</span>`;
-    btn.disabled = state.gold < tier1.cost;
     btn.addEventListener("click", () => buyPathTier(t, pathId));
     towerPathSection.appendChild(btn);
+  });
+}
+
+function updatePathSectionDynamicBits(t, paths) {
+  const tierIndex = t.pathTier || 0;
+  towerPathSection.querySelectorAll(".path-btn").forEach((btn) => {
+    const pathId = btn.dataset.pathId;
+    const pathDef = paths[pathId];
+    if (!pathDef) return;
+    const tier = t.path === pathId ? pathDef.tiers[tierIndex] : pathDef.tiers[0];
+    if (tier) btn.disabled = state.gold < tier.cost;
   });
 }
 
