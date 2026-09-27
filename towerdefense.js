@@ -96,7 +96,18 @@ const TOWER_TYPES = {
     cost: 220, damage: 0.018, range: 140, fireRate: 1.8, color: "#a78bfa", projectileSpeed: 550,
     damageType: "magic", percentDamage: true,
   },
+  // Secret capstone tower - excluded from buildTowerButtons (and therefore
+  // invisible/unknown) until state.bestWave clears TOWER100_UNLOCK_WAVE on
+  // the current map. How many may be placed at once is capped and grows
+  // with further milestones - see tenxMaxCopies().
+  tenx: {
+    name: "10x Engineer", desc: "legendary - unlocked past sprint 100, capped copies grow past 140/200", emoji: "🦸",
+    cost: 4000, damage: 140, range: 220, fireRate: 0.55, color: "#fbbf24", projectileSpeed: 900,
+    isLegendary: true, unique: true,
+  },
 };
+
+const TOWER100_UNLOCK_WAVE = 100;
 
 const OVERCLOCK_DURATION = 8;
 const OVERCLOCK_COOLDOWN = 30;
@@ -111,7 +122,10 @@ const SPEED_STEPS = [1, 2, 5];
 // scaling, and each tier adds its own new effect rather than just bigger
 // numbers on the same one.
 const PATH_UNLOCK_LEVEL = 3;
-const PATH_TIER_LEVELS = [3, 6, 10];
+// 10x Engineer's 3 paths run 5 tiers deep instead of 3 - every other tower's
+// paths only ever define 3 tiers, so indices 3/4 simply don't exist for them
+// and buyPathTier's "already maxed" check stops them exactly as before.
+const PATH_TIER_LEVELS = [3, 6, 10, 14, 18];
 
 const TOWER_PATHS = {
   gamer: {
@@ -338,6 +352,80 @@ const TOWER_PATHS = {
       ],
     },
   },
+  tenx: {
+    fullstack: {
+      name: "Full Stack",
+      accentColor: "#22d3ee",
+      tiers: [
+        { desc: "hits 3 targets at once", cost: 350, apply: (t) => { t.multiShot = 3; t.pathRangeMult = 1.2; } },
+        {
+          desc: "hits 4 targets, bigger hits, chance to crit 1.5x", cost: 600,
+          apply: (t) => { t.multiShot = 4; t.pathDamageMult = 1.3; t.critChance = 0.15; t.critMult = 1.5; },
+        },
+        {
+          desc: "hits 5 targets, bigger crits, bonus gold per kill", cost: 950,
+          apply: (t) => { t.multiShot = 5; t.pathDamageMult = 1.6; t.critChance = 0.2; t.critMult = 1.8; t.bonusGoldPerKill = 2; },
+        },
+        {
+          desc: "hits 6 targets, even bigger hits and crits", cost: 1400,
+          apply: (t) => { t.multiShot = 6; t.pathDamageMult = 2.0; t.critChance = 0.25; t.critMult = 2.2; },
+        },
+        {
+          desc: "hits 8 targets at once - a one-person army", cost: 2000,
+          apply: (t) => { t.multiShot = 8; t.pathDamageMult = 2.6; t.critChance = 0.3; t.critMult = 2.5; t.bossDamageMult = 1.5; },
+        },
+      ],
+    },
+    velocity: {
+      name: "10x Velocity",
+      accentColor: "#f43f5e",
+      tiers: [
+        { desc: "much faster fire rate, chance to crit 2x", cost: 350, apply: (t) => { t.pathRateMult = 1.8; t.critChance = 0.2; t.critMult = 2.0; } },
+        {
+          desc: "even faster, bigger crits, bigger hits", cost: 600,
+          apply: (t) => { t.pathRateMult = 2.4; t.critChance = 0.28; t.critMult = 2.4; t.pathDamageMult = 1.3; },
+        },
+        {
+          desc: "blistering fire rate, extra dmg vs bosses", cost: 950,
+          apply: (t) => { t.pathRateMult = 3.0; t.critChance = 0.35; t.critMult = 2.8; t.bossDamageMult = 1.8; },
+        },
+        {
+          desc: "even more dmg vs bosses, huge crit chance", cost: 1400,
+          apply: (t) => { t.pathRateMult = 3.6; t.critChance = 0.42; t.critMult = 3.2; t.bossDamageMult = 2.3; },
+        },
+        {
+          desc: "a blur of commits - nothing survives close range", cost: 2000,
+          apply: (t) => { t.pathRateMult = 4.5; t.critChance = 0.5; t.critMult = 4.0; t.bossDamageMult = 3.0; t.tankDamageMult = 2.5; },
+        },
+      ],
+    },
+    distributed: {
+      name: "Distributed Systems",
+      accentColor: "#a78bfa",
+      tiers: [
+        {
+          desc: "explosive splash damage to nearby targets", cost: 350,
+          apply: (t) => { t.damageType = "explosive"; t.splashRadius = 60; t.pathDamageMult = 1.2; },
+        },
+        {
+          desc: "bigger blast, slows everything it hits", cost: 600,
+          apply: (t) => { t.splashRadius = 90; t.auraSlowPct = 0.15; },
+        },
+        {
+          desc: "even bigger blast, stronger slow, bonus gold per kill", cost: 950,
+          apply: (t) => { t.splashRadius = 120; t.auraSlowPct = 0.25; t.bonusGoldPerKill = 2; },
+        },
+        {
+          desc: "the system transcends physical limits - now deals true damage, ignoring all resistances", cost: 1400,
+          apply: (t) => { t.damageType = "magic"; t.splashRadius = 140; t.auraSlowPct = 0.35; t.pathDamageMult = 1.6; },
+        },
+        {
+          desc: "omniscient - massive true-damage blast, reaches every service at once", cost: 2000,
+          apply: (t) => { t.splashRadius = 170; t.auraSlowPct = 0.45; t.pathDamageMult = 2.2; },
+        },
+      ],
+    },
+  },
 };
 
 const ENEMY_TYPES = {
@@ -442,11 +530,35 @@ function buildTowerButtons() {
   });
 }
 
+// 10x Engineer's placement cap grows with how far this map has gotten - 1
+// copy once unlocked past sprint 100, 2 past sprint 140, 4 past sprint 200
+// (the same milestone waves the megaboss spawns on).
+function tenxMaxCopies() {
+  if (state.bestWave > 200) return 4;
+  if (state.bestWave > 140) return 2;
+  return 1;
+}
+
+function countPlacedOfType(type) {
+  return state.towers.filter((t) => t.type === type).length;
+}
+
 function refreshTowerButtons() {
   [...towerListEl.children].forEach((btn) => {
     const key = btn.dataset.type;
+    const def = TOWER_TYPES[key];
+    // The 10x Engineer stays fully hidden (not just disabled) until beaten
+    // on this map, so its existence is a surprise.
+    if (def.isLegendary) {
+      // bestWave reaches 100 the moment sprint 100 STARTS, not once it's
+      // beaten - require > 100 (i.e. sprint 101 was reached) so it only
+      // unlocks after sprint 100 is actually survived.
+      btn.hidden = state.bestWave <= TOWER100_UNLOCK_WAVE;
+      if (btn.hidden) return;
+    }
+    const atCap = def.unique && countPlacedOfType(key) >= tenxMaxCopies();
     btn.classList.toggle("selected", state.selectedTowerType === key);
-    btn.disabled = state.gold < TOWER_TYPES[key].cost;
+    btn.disabled = state.gold < def.cost || atCap;
   });
 }
 
@@ -751,6 +863,8 @@ function handlePlacementOrSelection(pos) {
   if (state.towers.some((t) => t.col === col && t.row === row)) return;
 
   const def = TOWER_TYPES[state.selectedTowerType];
+  if (def.isLegendary && state.bestWave <= TOWER100_UNLOCK_WAVE) return;
+  if (def.unique && countPlacedOfType(state.selectedTowerType) >= tenxMaxCopies()) return;
   const cost = Math.round(def.cost * (1 - getCostDiscount()));
   if (state.gold < cost) return;
 
@@ -1660,7 +1774,8 @@ function draw() {
       const valid =
         !pathCells.has(`${col},${row}`) &&
         !state.towers.some((t) => t.col === col && t.row === row) &&
-        state.gold >= def.cost;
+        state.gold >= def.cost &&
+        !(def.unique && countPlacedOfType(state.selectedTowerType) >= tenxMaxCopies());
       const center = cellCenter([col, row]);
       const previewColor = valid ? def.color : "#ff4444";
 

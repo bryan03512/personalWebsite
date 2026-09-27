@@ -82,8 +82,11 @@ canvas {
   gap: 8px;
 }
 
-.tower-btn {
+.tower-btn:not([hidden]) {
   display: flex;
+}
+
+.tower-btn {
   align-items: center;
   gap: 10px;
   padding: 10px;
