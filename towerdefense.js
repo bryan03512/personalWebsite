@@ -127,6 +127,14 @@ const PATH_UNLOCK_LEVEL = 3;
 // and buyPathTier's "already maxed" check stops it exactly as before.
 const PATH_TIER_LEVELS = [3, 6, 10, 14, 18, 23, 28, 34, 40, 47];
 
+// Applied on top of every path tier's listed cost - a single knob to make
+// path specializations pricier relative to plain leveling, rather than
+// editing every tier's cost individually.
+const PATH_TIER_COST_MULT = 1.4;
+function pathTierCost(tier) {
+  return Math.round(tier.cost * PATH_TIER_COST_MULT);
+}
+
 const TOWER_PATHS = {
   gamer: {
     speedrunner: {
@@ -1188,7 +1196,7 @@ function getCostDiscount() {
 
 function towerUpgradeCost(t) {
   const baseCost = TOWER_TYPES[t.type].cost;
-  const raw = baseCost * 0.6 * Math.pow(1.6, t.level - 1);
+  const raw = baseCost * 0.5 * Math.pow(1.6, t.level - 1);
   return Math.round(raw * (1 - getCostDiscount()));
 }
 
@@ -1256,9 +1264,10 @@ function buyPathTier(t, pathId) {
   const nextTierIndex = t.pathTier || 0;
   const tier = pathDef.tiers[nextTierIndex];
   if (!tier) return; // already maxed
-  if (t.level < PATH_TIER_LEVELS[nextTierIndex] || state.gold < tier.cost) return;
+  const cost = pathTierCost(tier);
+  if (t.level < PATH_TIER_LEVELS[nextTierIndex] || state.gold < cost) return;
 
-  state.gold -= tier.cost;
+  state.gold -= cost;
   t.path = pathId;
   t.pathTier = nextTierIndex + 1;
   tier.apply(t);
@@ -1366,7 +1375,7 @@ function buildPathSectionDOM(t, paths, tierIndex, levelMet) {
         const btn = document.createElement("button");
         btn.className = "btn path-btn";
         btn.dataset.pathId = t.path;
-        btn.innerHTML = `<span class="path-name">${chosen.name} T${tierIndex + 1}</span><span class="path-desc">${nextTier.desc}</span><span class="path-cost">${nextTier.cost}c</span>`;
+        btn.innerHTML = `<span class="path-name">${chosen.name} T${tierIndex + 1}</span><span class="path-desc">${nextTier.desc}</span><span class="path-cost">${pathTierCost(nextTier)}c</span>`;
         btn.addEventListener("click", () => buyPathTier(t, t.path));
         towerPathSection.appendChild(btn);
       }
@@ -1387,7 +1396,7 @@ function buildPathSectionDOM(t, paths, tierIndex, levelMet) {
     const btn = document.createElement("button");
     btn.className = "btn path-btn";
     btn.dataset.pathId = pathId;
-    btn.innerHTML = `<span class="path-name">${pathDef.name}</span><span class="path-desc">${tier1.desc}</span><span class="path-cost">${tier1.cost}c</span>`;
+    btn.innerHTML = `<span class="path-name">${pathDef.name}</span><span class="path-desc">${tier1.desc}</span><span class="path-cost">${pathTierCost(tier1)}c</span>`;
     btn.addEventListener("click", () => buyPathTier(t, pathId));
     towerPathSection.appendChild(btn);
   });
@@ -1400,7 +1409,7 @@ function updatePathSectionDynamicBits(t, paths) {
     const pathDef = paths[pathId];
     if (!pathDef) return;
     const tier = t.path === pathId ? pathDef.tiers[tierIndex] : pathDef.tiers[0];
-    if (tier) btn.disabled = state.gold < tier.cost;
+    if (tier) btn.disabled = state.gold < pathTierCost(tier);
   });
 }
 
