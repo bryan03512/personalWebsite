@@ -334,3 +334,61 @@ canvas {
   color: var(--text);
   font-size: 0.9rem;
 }
+
+.change-map-btn {
+  margin-left: 10px;
+  padding: 4px 10px;
+  font-size: 0.8rem;
+}
+
+.map-picker-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  background: rgba(0, 0, 0, 0.8);
+  align-items: center;
+  justify-content: center;
+}
+
+.map-picker-overlay:not([hidden]) {
+  display: flex;
+}
+
+.map-picker-box {
+  width: min(420px, 92vw);
+  background: var(--bg-panel);
+  border: 1px solid var(--green-dim);
+  border-radius: 6px;
+  padding: 20px;
+  text-align: center;
+}
+
+.map-picker-box h2 {
+  margin: 0 0 16px;
+  color: var(--green);
+  font-size: 1.2rem;
+}
+
+.map-picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.map-picker-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+  text-align: left;
+}
+
+.map-picker-name {
+  font-size: 1rem;
+}
+
+.map-picker-meta {
+  font-size: 0.75rem;
+  color: var(--green-faint);
+}

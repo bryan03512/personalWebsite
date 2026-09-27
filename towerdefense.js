@@ -3,39 +3,60 @@ const CELL = 60;
 const COLS = 13;
 const ROWS = 10;
 
-// Waypoints in grid coordinates (col, row). First/last are off-canvas so
-// enemies spawn/exit smoothly at the edges.
-const GRID_WAYPOINTS = [
-  [-1, 1],
-  [3, 1],
-  [3, 8],
-  [6, 8],
-  [6, 1],
-  [9, 1],
-  [9, 8],
-  [13, 8],
-];
-
 function cellCenter([col, row]) {
   return { x: col * CELL + CELL / 2, y: row * CELL + CELL / 2 };
 }
 
-const PATH_POINTS = GRID_WAYPOINTS.map(cellCenter);
+// Three maps, each just a different path shape on the same grid - same
+// towers, enemies, and rules everywhere. map1's waypoints are the original
+// (only) layout, unchanged, so every existing save keeps working exactly as
+// before, now labeled "Main Branch".
+const MAP_DEFS = {
+  map1: {
+    name: "Main Branch",
+    waypoints: [
+      [-1, 1], [3, 1], [3, 8], [6, 8], [6, 1], [9, 1], [9, 8], [13, 8],
+    ],
+  },
+  map2: {
+    name: "CI Pipeline",
+    waypoints: [
+      [-1, 1], [11, 1], [11, 3], [1, 3], [1, 5], [11, 5], [11, 7], [1, 7], [1, 9], [13, 9],
+    ],
+  },
+  map3: {
+    name: "The Monolith",
+    waypoints: [
+      [-1, 4], [4, 4], [4, 0], [8, 0], [8, 6], [2, 6], [2, 9], [12, 9], [12, 2], [13, 2],
+    ],
+  },
+};
 
-// Mark every grid cell the path passes through as non-buildable.
-const pathCells = new Set();
-for (let i = 0; i < GRID_WAYPOINTS.length - 1; i++) {
-  let [c1, r1] = GRID_WAYPOINTS[i];
-  let [c2, r2] = GRID_WAYPOINTS[i + 1];
-  if (r1 === r2) {
-    const [lo, hi] = [Math.min(c1, c2), Math.max(c1, c2)];
-    for (let c = lo; c <= hi; c++) {
-      if (c >= 0 && c < COLS) pathCells.add(`${c},${r1}`);
-    }
-  } else {
-    const [lo, hi] = [Math.min(r1, r2), Math.max(r1, r2)];
-    for (let r = lo; r <= hi; r++) {
-      if (c1 >= 0 && c1 < COLS) pathCells.add(`${c1},${r}`);
+// Waypoints in grid coordinates (col, row). First/last are off-canvas so
+// enemies spawn/exit smoothly at the edges. Reassigned by applyMapLayout()
+// whenever the active map changes - every reference elsewhere in the file
+// reads these bindings live, so no other code needs to change.
+let GRID_WAYPOINTS = MAP_DEFS.map1.waypoints;
+let PATH_POINTS = GRID_WAYPOINTS.map(cellCenter);
+let pathCells = new Set();
+
+function applyMapLayout(mapId) {
+  GRID_WAYPOINTS = MAP_DEFS[mapId].waypoints;
+  PATH_POINTS = GRID_WAYPOINTS.map(cellCenter);
+  pathCells = new Set();
+  for (let i = 0; i < GRID_WAYPOINTS.length - 1; i++) {
+    let [c1, r1] = GRID_WAYPOINTS[i];
+    let [c2, r2] = GRID_WAYPOINTS[i + 1];
+    if (r1 === r2) {
+      const [lo, hi] = [Math.min(c1, c2), Math.max(c1, c2)];
+      for (let c = lo; c <= hi; c++) {
+        if (c >= 0 && c < COLS) pathCells.add(`${c},${r1}`);
+      }
+    } else {
+      const [lo, hi] = [Math.min(r1, r2), Math.max(r1, r2)];
+      for (let r = lo; r <= hi; r++) {
+        if (c1 >= 0 && c1 < COLS) pathCells.add(`${c1},${r}`);
+      }
     }
   }
 }
@@ -350,6 +371,7 @@ const RESISTANCES = {
 
 // ---------- Game state ----------
 const state = {
+  mapId: "map1",
   gold: 150,
   bestGold: 150,
   lives: 20,
@@ -390,6 +412,9 @@ const waveBtn = document.getElementById("waveBtn");
 const gameOverOverlay = document.getElementById("gameOverOverlay");
 const gameOverText = document.getElementById("gameOverText");
 const restartBtn = document.getElementById("restartBtn");
+const changeMapBtn = document.getElementById("changeMapBtn");
+const mapPickerOverlay = document.getElementById("mapPickerOverlay");
+const mapPickerList = document.getElementById("mapPickerList");
 
 const overclockBtn = document.getElementById("overclockBtn");
 const speedBtn = document.getElementById("speedBtn");
@@ -450,11 +475,17 @@ function updateStats() {
 // Only progress *between* sprints is persisted (gold, towers, wave count) -
 // a wave in flight (enemies/projectiles) is not resumable and simply isn't
 // saved, so reloading mid-sprint just resumes at "ready for next sprint".
+//
+// Each of the 3 maps keeps its own independent gold/towers/wave/etc, nested
+// under maps.<mapId>. The stored blob also carries a top-level bestWave and
+// bestGold that mirror the MAX across all 3 maps - the public leaderboard
+// reads those two keys directly from this same JSON, so keeping them at the
+// top level means the leaderboard needs zero schema/query changes to show
+// "your best across any map".
 const TD_SAVE_KEY = "towerDefenseSave";
 
-function saveGame() {
-  state.lastSaveTime = Date.now();
-  const payload = {
+function currentMapSlot() {
+  return {
     gold: state.gold,
     bestGold: state.bestGold,
     lives: state.lives,
@@ -462,44 +493,137 @@ function saveGame() {
     bestWave: state.bestWave,
     kills: state.kills,
     towers: state.towers,
-    gameSpeed: state.gameSpeed,
-    lastSaveTime: state.lastSaveTime,
-    ownerId: state.ownerId,
   };
-  localStorage.setItem(TD_SAVE_KEY, JSON.stringify(payload));
-  scheduleCloudSync();
 }
 
-function applyLoadedState(parsed) {
-  if (!parsed) return;
-  if (typeof parsed.gold === "number") state.gold = parsed.gold;
-  if (typeof parsed.lives === "number") state.lives = parsed.lives;
-  if (typeof parsed.wave === "number") state.wave = parsed.wave;
-  if (typeof parsed.bestWave === "number") state.bestWave = parsed.bestWave;
-  if (typeof parsed.kills === "number") state.kills = parsed.kills;
-  state.gameSpeed = SPEED_STEPS.includes(parsed.gameSpeed) ? parsed.gameSpeed : 1;
-  state.lastSaveTime = parsed.lastSaveTime || Date.now();
-  state.ownerId = typeof parsed.ownerId === "string" ? parsed.ownerId : null;
-  if (typeof parsed.bestGold === "number") state.bestGold = parsed.bestGold;
+// Accepts either the new nested shape or an old flat single-map save (from
+// before maps existed) and always returns the nested shape - an old save's
+// data becomes map1's data, so nothing already played is lost.
+function normalizePayload(parsed) {
+  if (!parsed) return { activeMap: "map1", maps: {} };
+  if (parsed.maps && typeof parsed.maps === "object") {
+    return {
+      activeMap: MAP_DEFS[parsed.activeMap] ? parsed.activeMap : "map1",
+      maps: parsed.maps,
+      gameSpeed: parsed.gameSpeed,
+      lastSaveTime: parsed.lastSaveTime,
+      ownerId: parsed.ownerId,
+    };
+  }
+  return {
+    activeMap: "map1",
+    maps: {
+      map1: {
+        gold: parsed.gold, bestGold: parsed.bestGold, lives: parsed.lives, wave: parsed.wave,
+        bestWave: parsed.bestWave, kills: parsed.kills, towers: parsed.towers,
+      },
+    },
+    gameSpeed: parsed.gameSpeed,
+    lastSaveTime: parsed.lastSaveTime,
+    ownerId: parsed.ownerId,
+  };
+}
+
+function readStoredPayload() {
+  const raw = localStorage.getItem(TD_SAVE_KEY);
+  if (!raw) return { activeMap: "map1", maps: {} };
+  try {
+    return normalizePayload(JSON.parse(raw));
+  } catch {
+    return { activeMap: "map1", maps: {} };
+  }
+}
+
+// Applies one map's saved slot onto the live (currently active) state -
+// used both on ordinary load and after switching maps.
+function applyMapDataToState(mapData) {
+  if (!mapData) return;
+  if (typeof mapData.gold === "number") state.gold = mapData.gold;
+  if (typeof mapData.lives === "number") state.lives = mapData.lives;
+  if (typeof mapData.wave === "number") state.wave = mapData.wave;
+  if (typeof mapData.bestWave === "number") state.bestWave = mapData.bestWave;
+  if (typeof mapData.kills === "number") state.kills = mapData.kills;
+  if (typeof mapData.bestGold === "number") state.bestGold = mapData.bestGold;
   // Guard against a stale/incomplete snapshot (e.g. a cloud push that lost a
   // race with navigating away mid-round) silently deleting placed towers -
   // never adopt an incoming towers list that's smaller than what's already here.
-  if (Array.isArray(parsed.towers) && parsed.towers.length >= state.towers.length) {
+  if (Array.isArray(mapData.towers) && mapData.towers.length >= state.towers.length) {
     // flashUntil is a performance.now() timestamp from whatever session saved
     // this - meaningless (and potentially crash-inducing, see draw()) now.
-    state.towers = parsed.towers.map((t) => ({ ...t, flashUntil: 0 }));
+    state.towers = mapData.towers.map((t) => ({ ...t, flashUntil: 0 }));
   }
 }
 
-function loadGame() {
-  const saved = localStorage.getItem(TD_SAVE_KEY);
-  if (!saved) return;
-  try {
-    applyLoadedState(JSON.parse(saved));
-  } catch {
-    // ignore corrupted save
-  }
+function saveGame() {
+  state.lastSaveTime = Date.now();
+  const stored = readStoredPayload();
+  stored.maps[state.mapId] = currentMapSlot();
+  stored.activeMap = state.mapId;
+  stored.gameSpeed = state.gameSpeed;
+  stored.lastSaveTime = state.lastSaveTime;
+  stored.ownerId = state.ownerId;
+  const allMaps = Object.values(stored.maps);
+  stored.bestWave = Math.max(0, ...allMaps.map((m) => m.bestWave || 0));
+  stored.bestGold = Math.max(0, ...allMaps.map((m) => m.bestGold || 0));
+  localStorage.setItem(TD_SAVE_KEY, JSON.stringify(stored));
+  scheduleCloudSync();
 }
+
+function loadGame() {
+  const stored = readStoredPayload();
+  state.mapId = MAP_DEFS[stored.activeMap] ? stored.activeMap : "map1";
+  applyMapLayout(state.mapId);
+  state.gameSpeed = SPEED_STEPS.includes(stored.gameSpeed) ? stored.gameSpeed : 1;
+  state.lastSaveTime = stored.lastSaveTime || Date.now();
+  state.ownerId = typeof stored.ownerId === "string" ? stored.ownerId : null;
+  applyMapDataToState(stored.maps[state.mapId]);
+}
+
+// Switches the active map: saves the map being left, then loads (or starts
+// fresh on) the target map. Always saves first even when re-selecting the
+// current map, so the picker never discards up-to-3-seconds of unsaved
+// progress by reading a stale snapshot.
+function switchMap(newMapId) {
+  if (!MAP_DEFS[newMapId]) return;
+  saveGame();
+  const stored = readStoredPayload();
+  const preservedGameSpeed = state.gameSpeed; // gameSpeed is a global preference, not per-map
+  state.mapId = newMapId;
+  applyMapLayout(newMapId);
+  resetTransientState();
+  state.gameSpeed = preservedGameSpeed;
+  syncSpeedButton();
+  state.bestWave = 0;
+  state.bestGold = 150;
+  applyMapDataToState(stored.maps[newMapId]);
+  updateStats();
+  saveGame();
+}
+
+// ---------- Map picker ----------
+function renderMapPicker() {
+  const stored = readStoredPayload();
+  mapPickerList.innerHTML = "";
+  Object.entries(MAP_DEFS).forEach(([id, def]) => {
+    const mapData = stored.maps[id];
+    const meta = mapData
+      ? `best sprint ${mapData.bestWave || 0} | best credits ${Math.floor(mapData.bestGold || 0)}`
+      : "not started yet";
+    const btn = document.createElement("button");
+    btn.className = "btn map-picker-btn";
+    btn.innerHTML = `<span class="map-picker-name">${def.name}</span><span class="map-picker-meta">${meta}</span>`;
+    btn.addEventListener("click", () => {
+      switchMap(id);
+      mapPickerOverlay.hidden = true;
+    });
+    mapPickerList.appendChild(btn);
+  });
+}
+
+changeMapBtn.addEventListener("click", () => {
+  renderMapPicker();
+  mapPickerOverlay.hidden = false;
+});
 
 // Cloud push happens on a flat 20s heartbeat instead of a cancellable
 // debounce - a single-shot setTimeout gets destroyed outright by navigating
@@ -541,20 +665,37 @@ function syncSpeedButton() {
 // brand-new account with no cloud save yet, in which case current (guest)
 // progress is kept and gets claimed as that account's save on the next
 // saveGame() - so "play as guest, then sign up" doesn't lose progress.
+// This whole-payload decision (local snapshot vs cloud snapshot) now covers
+// all 3 maps at once rather than a single map's fields.
 async function pullCloudSave() {
   if (typeof accountGetUser !== "function") return;
   const user = await accountGetUser();
   if (!user) return;
 
-  const cloudState = await loadCloudSave("towerdefense");
+  const localStored = readStoredPayload();
+  const cloudRaw = await loadCloudSave("towerdefense");
+  const cloudStored = cloudRaw ? normalizePayload(cloudRaw) : null;
+
+  let winner = localStored;
   if (state.ownerId === user.id) {
-    if (cloudState && (cloudState.lastSaveTime || 0) >= (state.lastSaveTime || 0)) {
-      applyLoadedState(cloudState);
+    if (cloudStored && (cloudStored.lastSaveTime || 0) >= (localStored.lastSaveTime || 0)) {
+      winner = cloudStored;
     }
-  } else if (cloudState) {
-    applyLoadedState(cloudState);
+  } else if (cloudStored) {
+    winner = cloudStored;
   }
+
   state.ownerId = user.id;
+  winner.ownerId = user.id;
+  localStorage.setItem(TD_SAVE_KEY, JSON.stringify(winner));
+
+  state.mapId = MAP_DEFS[winner.activeMap] ? winner.activeMap : "map1";
+  applyMapLayout(state.mapId);
+  state.gameSpeed = SPEED_STEPS.includes(winner.gameSpeed) ? winner.gameSpeed : 1;
+  state.lastSaveTime = winner.lastSaveTime || Date.now();
+  state.towers = [];
+  applyMapDataToState(winner.maps[state.mapId]);
+
   saveGame();
   updateStats();
   syncSpeedButton();
@@ -564,8 +705,11 @@ window.addEventListener("account:login", pullCloudSave);
 
 // Logging out should never leave the previous account's data on screen (or
 // in localStorage, on a shared device) - snap straight back to a blank
-// guest state, including bestWave, which is tied to that account's identity.
+// guest state on map1, wiping every map's progress (bestWave/bestGold are
+// tied to account identity).
 window.addEventListener("account:logout", () => {
+  state.mapId = "map1";
+  applyMapLayout("map1");
   resetTransientState();
   state.bestWave = 0;
   state.bestGold = 150;
@@ -899,9 +1043,9 @@ towerUpgradeBtn.addEventListener("click", () => state.selectedTower && upgradeTo
 towerSellBtn.addEventListener("click", () => state.selectedTower && sellTower(state.selectedTower));
 
 // Keyboard shortcuts for the selected tower's info panel: 1/2 pick a path
-// option (or advance the chosen path's next tier), 3 upgrades. Ignored
-// while typing in any input (e.g. the cheat box), since "MONEY123 123"
-// contains these same digits.
+// option (or advance the chosen path's next tier), 3 upgrades, Delete sells.
+// Ignored while typing in any input (e.g. the cheat box), since
+// "MONEY123 123" contains these same digits.
 document.addEventListener("keydown", (e) => {
   const tag = document.activeElement?.tagName;
   if (tag === "INPUT" || tag === "TEXTAREA") return;
@@ -912,6 +1056,8 @@ document.addEventListener("keydown", (e) => {
   } else if (e.key === "1" || e.key === "2") {
     const btn = towerPathSection.querySelectorAll(".path-btn")[e.key === "1" ? 0 : 1];
     if (btn && !btn.disabled) btn.click();
+  } else if (e.key === "Delete" || e.key === "Backspace") {
+    sellTower(state.selectedTower);
   }
 });
 
@@ -1486,7 +1632,7 @@ function draw() {
     // sends ctx.arc() a negative radius and throws, silently freezing the
     // whole render loop for the rest of the session. Clamped here as a
     // guardrail regardless of cause; stale values are also cleared on load
-    // (see applyLoadedState) so this branch shouldn't normally even trigger.
+    // (see applyMapDataToState) so this branch shouldn't normally even trigger.
     if (t.flashUntil && t.flashUntil > performance.now()) {
       const remaining = t.flashUntil - performance.now();
       const p = Math.min(1, Math.max(0, 1 - remaining / 400));
@@ -1696,6 +1842,8 @@ buildTowerButtons();
 loadGame();
 syncSpeedButton();
 updateStats();
+renderMapPicker();
+mapPickerOverlay.hidden = false;
 requestAnimationFrame(loop);
 setInterval(saveGame, 3000);
 pullCloudSave();

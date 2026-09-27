@@ -12,6 +12,7 @@
 <body>
   <div class="td-wrap">
     <a class="back-link" href="index.html">&larr; menu</a>
+    <button class="btn change-map-btn" id="changeMapBtn">change map</button>
 
     <div class="window td-window">
       <div class="window-titlebar">
@@ -74,6 +75,13 @@
   </div>
 
   <input type="text" id="cheatBox" class="cheat-box" placeholder="code" autocomplete="off" spellcheck="false" />
+
+  <div class="map-picker-overlay" id="mapPickerOverlay" hidden>
+    <div class="map-picker-box">
+      <h2 class="glow">choose a map</h2>
+      <div class="map-picker-list" id="mapPickerList"></div>
+    </div>
+  </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script src="account.js"></script>
