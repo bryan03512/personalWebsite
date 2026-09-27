@@ -11,7 +11,34 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Supabase's query builder is a lazy "thenable" - the request is only sent
 // once something calls .then()/await on it, so this needs an explicit
 // .then() even though we don't care about the result.
-sb.rpc("record_visit").then(() => {}, () => {});
+//
+// The owner's own visits (testing, previewing changes, etc.) shouldn't
+// inflate this - once this browser has ever logged in as bryan@gmail.com,
+// it's flagged in localStorage to stop counting visits from it, even after
+// logging out again.
+const VISIT_EXCLUDE_KEY = "siteVisitExclude";
+
+async function maybeRecordVisit() {
+  try {
+    if (localStorage.getItem(VISIT_EXCLUDE_KEY) === "1") return;
+  } catch {
+    // ignore blocked storage - falls through to counting the visit
+  }
+
+  const user = await accountGetUser();
+  if (user && String(user.email || "").toLowerCase() === "bryan@gmail.com") {
+    try {
+      localStorage.setItem(VISIT_EXCLUDE_KEY, "1");
+    } catch {
+      // ignore
+    }
+    return;
+  }
+
+  sb.rpc("record_visit").then(() => {}, () => {});
+}
+
+maybeRecordVisit();
 
 // ---- auth helpers ----
 async function accountSignUp(email, password) {
