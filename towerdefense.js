@@ -1432,6 +1432,7 @@ function updateAuras(dt) {
 // these are lightweight, separate from state.towers (no placement, no
 // selection/upgrade UI), and expire on their own after allyDuration.
 function updateRecruiters(dt) {
+  if (!state.waveInProgress) return; // warriors only deploy during an active sprint
   for (const t of state.towers) {
     if (!t.isRecruiter) continue;
     t.deployCooldown = (t.deployCooldown ?? 0) - dt;
