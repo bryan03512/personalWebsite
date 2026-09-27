@@ -41,12 +41,18 @@ canvas {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  /* Matches the canvas's native height so the board stays fully visible
-     while the (now much longer, with up to 10-tier paths) sidebar content
-     scrolls independently instead of pushing the page down. */
+  /* Matches the canvas's native height so the board stays fully visible. */
   max-height: 600px;
+}
+
+.panel-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .stats {
@@ -213,6 +219,13 @@ canvas {
   padding: 10px;
   flex-direction: column;
   gap: 8px;
+  /* Kept separate from .panel-scroll and never squeezed by it, so the
+     upgrade/path box for the tower you're looking at stays put while you
+     scroll the tower list above - it gets its own scrollbar if a deep
+     path's history makes it taller than the space left over. */
+  flex-shrink: 0;
+  max-height: 260px;
+  overflow-y: auto;
 }
 
 .tower-info-panel:not([hidden]) {

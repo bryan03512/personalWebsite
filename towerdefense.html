@@ -35,26 +35,30 @@
         </div>
 
         <aside class="panel">
-          <div class="stats">
-            <div class="stat"><span>credits</span><strong id="goldStat">0</strong></div>
-            <div class="stat"><span>uptime</span><strong id="livesStat">0</strong></div>
-            <div class="stat"><span>sprint</span><strong id="waveStat">0</strong></div>
-            <div class="stat"><span>best sprint</span><strong id="bestWaveStat">0</strong></div>
-            <div class="stat"><span>bugs fixed</span><strong id="killsStat">0</strong></div>
-            <div class="stat"><span>best credits</span><strong id="bestGoldStat">0</strong></div>
-          </div>
+          <div class="panel-scroll">
+            <div class="stats">
+              <div class="stat"><span>credits</span><strong id="goldStat">0</strong></div>
+              <div class="stat"><span>uptime</span><strong id="livesStat">0</strong></div>
+              <div class="stat"><span>sprint</span><strong id="waveStat">0</strong></div>
+              <div class="stat"><span>best sprint</span><strong id="bestWaveStat">0</strong></div>
+              <div class="stat"><span>bugs fixed</span><strong id="killsStat">0</strong></div>
+              <div class="stat"><span>best credits</span><strong id="bestGoldStat">0</strong></div>
+            </div>
 
-          <h3># deploy a dev</h3>
-          <div class="tower-list" id="towerList"></div>
+            <h3># deploy a dev</h3>
+            <div class="tower-list" id="towerList"></div>
 
-          <div class="wave-row">
-            <button class="btn wave-btn" id="waveBtn">deploy sprint 1</button>
-            <button class="btn auto-btn" id="autoRunBtn">auto: off</button>
-          </div>
+            <div class="wave-row">
+              <button class="btn wave-btn" id="waveBtn">deploy sprint 1</button>
+              <button class="btn auto-btn" id="autoRunBtn">auto: off</button>
+            </div>
 
-          <div class="ability-row">
-            <button class="btn ability-btn" id="overclockBtn">overclock!</button>
-            <button class="btn speed-btn" id="speedBtn">1x</button>
+            <div class="ability-row">
+              <button class="btn ability-btn" id="overclockBtn">overclock!</button>
+              <button class="btn speed-btn" id="speedBtn">1x</button>
+            </div>
+
+            <p class="hint">select a dev, then drag on the board to preview range and release on an empty tile to deploy. click a deployed dev to upgrade or sell.</p>
           </div>
 
           <div class="tower-info-panel" id="towerInfoPanel" hidden>
@@ -69,8 +73,6 @@
               <button class="btn tower-sell-btn" id="towerSellBtn">sell</button>
             </div>
           </div>
-
-          <p class="hint">select a dev, then drag on the board to preview range and release on an empty tile to deploy. click a deployed dev to upgrade or sell.</p>
         </aside>
       </div>
     </div>
