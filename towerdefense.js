@@ -898,6 +898,23 @@ towerInfoClose.addEventListener("click", hideTowerInfoPanel);
 towerUpgradeBtn.addEventListener("click", () => state.selectedTower && upgradeTower(state.selectedTower));
 towerSellBtn.addEventListener("click", () => state.selectedTower && sellTower(state.selectedTower));
 
+// Keyboard shortcuts for the selected tower's info panel: 1/2 pick a path
+// option (or advance the chosen path's next tier), 3 upgrades. Ignored
+// while typing in any input (e.g. the cheat box), since "MONEY123 123"
+// contains these same digits.
+document.addEventListener("keydown", (e) => {
+  const tag = document.activeElement?.tagName;
+  if (tag === "INPUT" || tag === "TEXTAREA") return;
+  if (!state.selectedTower) return;
+
+  if (e.key === "3") {
+    if (!towerUpgradeBtn.disabled) upgradeTower(state.selectedTower);
+  } else if (e.key === "1" || e.key === "2") {
+    const btn = towerPathSection.querySelectorAll(".path-btn")[e.key === "1" ? 0 : 1];
+    if (btn && !btn.disabled) btn.click();
+  }
+});
+
 // A combat tower's damage/fire-rate multipliers from nearby Manager towers and Overclock.
 // Also reports whether a Manager is currently supporting this tower right
 // now - that's live/positional camo detection: leave the Manager's range
@@ -1108,7 +1125,7 @@ const BOSS_TYPES = new Set(["boss", "bossCamo", "bossTank", "megaboss"]);
 // milestone spawn) is bigger again on top of that.
 function bossHpMultiplier(type, waveNum) {
   let mult = 1;
-  if (waveNum >= 90) mult *= 3;
+  if (waveNum >= 90) mult *= 2;
   if (type === "megaboss") mult *= 4;
   return mult;
 }
@@ -1124,7 +1141,7 @@ function spawnEnemy(type) {
   // so builds strong enough to reach wave 90+ still meet real resistance
   // instead of one-shotting everything before it's visible on screen.
   const lateWaves = Math.max(0, state.wave - 50);
-  let hp = Math.round(def.hp * (1 + state.wave * 0.18) * Math.pow(1.15, lateWaves));
+  let hp = Math.round(def.hp * (1 + state.wave * 0.18) * Math.pow(1.11, lateWaves));
   if (isBossType) hp = Math.round(hp * bossHpMultiplier(type, state.wave));
   const reward = Math.round(def.reward + state.wave * (isBossType ? 4 : 1));
   // Every enemy gets a little faster each wave, on top of any type-specific
