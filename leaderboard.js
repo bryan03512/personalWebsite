@@ -8,6 +8,13 @@ const lbOwnerPanel = document.getElementById("lbOwnerPanel");
 const lbTotalAccounts = document.getElementById("lbTotalAccounts");
 const lbTotalVisits = document.getElementById("lbTotalVisits");
 const lbAccountList = document.getElementById("lbAccountList");
+const lbAccountsToggle = document.getElementById("lbAccountsToggle");
+const lbAccountsCaret = document.getElementById("lbAccountsCaret");
+
+lbAccountsToggle.addEventListener("click", () => {
+  lbAccountList.hidden = !lbAccountList.hidden;
+  lbAccountsCaret.innerHTML = lbAccountList.hidden ? "&#9656;" : "&#9662;";
+});
 
 function renderBoard(container, rows, scoreKey, scoreLabel) {
   if (!rows || rows.length === 0) {

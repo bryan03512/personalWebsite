@@ -95,6 +95,21 @@
   display: flex;
 }
 
+.admin-row-toggle {
+  cursor: pointer;
+  user-select: none;
+}
+
+.admin-row-toggle:hover {
+  border-color: var(--cyan);
+}
+
+.lb-caret {
+  display: inline-block;
+  font-size: 0.7rem;
+  margin-left: 4px;
+}
+
 .lb-account-list {
   display: flex;
   flex-direction: column;
