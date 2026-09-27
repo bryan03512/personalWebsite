@@ -324,6 +324,9 @@ const ENEMY_TYPES = {
   fast: { label: "Glitch", emoji: "⚡", hp: 25, speed: 130, reward: 5, lifeDamage: 1, color: "#ffee58", radius: 12 },
   tank: { label: "Merge Conflict", emoji: "💀", hp: 160, speed: 35, reward: 12, lifeDamage: 2, color: "#8a4a2b", radius: 17 },
   boss: { label: "Production Outage", emoji: "🔥", hp: 400, speed: 30, reward: 60, lifeDamage: 5, color: "#ff3b3b", radius: 24 },
+  bossCamo: { label: "Ghost Process", emoji: "👻", hp: 350, speed: 70, reward: 70, lifeDamage: 5, color: "#7c3aed", radius: 23, camo: true },
+  bossTank: { label: "Cascading Failure", emoji: "🌋", hp: 900, speed: 16, reward: 90, lifeDamage: 8, color: "#7f1d1d", radius: 27 },
+  megaboss: { label: "Total System Failure", emoji: "☠️", hp: 3000, speed: 26, reward: 250, lifeDamage: 10, color: "#000000", radius: 32 },
   // Late-wave specialists, each resistant to one damage type (see
   // RESISTANCES) so no single tower archetype trivializes everything.
   legacy: { label: "Legacy Code", emoji: "💾", hp: 90, speed: 45, reward: 10, lifeDamage: 2, color: "#a1887f", radius: 15 },
@@ -1056,9 +1059,22 @@ function buildWave(waveNum) {
   }
   if (waveNum % bossIntervalFor(waveNum) === 0) {
     const bossCount = bossCountFor(waveNum);
-    for (let i = 0; i < bossCount; i++) queue.push("boss"); // arrive last, as the wave's finale
+    for (let i = 0; i < bossCount; i++) queue.push(pickBossType(waveNum)); // arrive last, as the wave's finale
+  }
+  // Milestone super-bosses, on top of whatever regular bosses that wave already has.
+  if (waveNum === 100 || waveNum === 140 || waveNum === 200) {
+    queue.push("megaboss");
   }
   return queue;
+}
+
+// Which boss variety to spawn - camo+fast and slow+huge-hp bosses join the
+// pool at their own wave thresholds instead of being available from wave 5.
+function pickBossType(waveNum) {
+  const pool = ["boss"];
+  if (waveNum >= 40) pool.push("bossCamo");
+  if (waveNum >= 60) pool.push("bossTank");
+  return pool[Math.floor(Math.random() * pool.length)];
 }
 
 function startNextWave() {
@@ -1085,8 +1101,21 @@ autoRunBtn.addEventListener("click", () => {
   if (state.autoRun) startNextWave();
 });
 
+const BOSS_TYPES = new Set(["boss", "bossCamo", "bossTank", "megaboss"]);
+
+// Bosses get an extra hp multiplier on top of the shared formula below -
+// a much bigger jump starting wave 90, and megaboss (the wave 100/140/200
+// milestone spawn) is bigger again on top of that.
+function bossHpMultiplier(type, waveNum) {
+  let mult = 1;
+  if (waveNum >= 90) mult *= 3;
+  if (type === "megaboss") mult *= 4;
+  return mult;
+}
+
 function spawnEnemy(type) {
   const def = ENEMY_TYPES[type];
+  const isBossType = BOSS_TYPES.has(type);
   // Previously only bosses scaled with wave - every other enemy stayed at
   // its wave-1 hp forever, so a snowballing tower build made mid-to-late
   // waves trivial once it outgrew that fixed baseline. Scale everyone now.
@@ -1095,21 +1124,25 @@ function spawnEnemy(type) {
   // so builds strong enough to reach wave 90+ still meet real resistance
   // instead of one-shotting everything before it's visible on screen.
   const lateWaves = Math.max(0, state.wave - 50);
-  const hp = Math.round(def.hp * (1 + state.wave * 0.18) * Math.pow(1.15, lateWaves));
-  const reward = Math.round(def.reward + state.wave * (type === "boss" ? 4 : 1));
+  let hp = Math.round(def.hp * (1 + state.wave * 0.18) * Math.pow(1.15, lateWaves));
+  if (isBossType) hp = Math.round(hp * bossHpMultiplier(type, state.wave));
+  const reward = Math.round(def.reward + state.wave * (isBossType ? 4 : 1));
+  // Every enemy gets a little faster each wave, on top of any type-specific
+  // base speed (bossTank stays slow, bossCamo stays fast, relative to each other).
+  const speed = def.speed * (1 + state.wave * 0.004);
   state.enemies.push({
     type,
     x: PATH_POINTS[0].x,
     y: PATH_POINTS[0].y,
     hp,
     maxHp: hp,
-    speed: def.speed,
+    speed,
     reward,
     lifeDamage: def.lifeDamage,
     color: def.color,
     radius: def.radius,
     emoji: def.emoji,
-    isBoss: type === "boss",
+    isBoss: isBossType,
     camo: !!def.camo,
     segment: 1,
   });
