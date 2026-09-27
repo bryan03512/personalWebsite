@@ -1069,6 +1069,10 @@ const state = {
   autoRun: false,
   autoRunTimer: 0,
   ownerId: null,
+  // Lifetime/account-wide, not per-map - never touched by resetTransientState
+  // or switchMap, only by account:logout (tied to account identity).
+  achievements: {},
+  totalBossKills: 0,
 };
 
 // ---------- Canvas / DOM ----------
@@ -1097,6 +1101,10 @@ const codexBtn = document.getElementById("codexBtn");
 const codexOverlay = document.getElementById("codexOverlay");
 const codexContent = document.getElementById("codexContent");
 const codexClose = document.getElementById("codexClose");
+const achievementsBtn = document.getElementById("achievementsBtn");
+const achievementsOverlay = document.getElementById("achievementsOverlay");
+const achievementsContent = document.getElementById("achievementsContent");
+const achievementsClose = document.getElementById("achievementsClose");
 
 const overclockBtn = document.getElementById("overclockBtn");
 const speedBtn = document.getElementById("speedBtn");
@@ -1161,6 +1169,7 @@ function updateStats() {
   waveStat.textContent = state.wave;
   bestWaveStat.textContent = state.bestWave;
   killsStat.textContent = state.kills;
+  checkThresholdAchievements();
   refreshTowerButtons();
   refreshTowerInfoPanel();
 
@@ -1203,7 +1212,7 @@ function currentMapSlot() {
 // before maps existed) and always returns the nested shape - an old save's
 // data becomes map1's data, so nothing already played is lost.
 function normalizePayload(parsed) {
-  if (!parsed) return { activeMap: "map1", maps: {} };
+  if (!parsed) return { activeMap: "map1", maps: {}, achievements: {}, totalBossKills: 0 };
   if (parsed.maps && typeof parsed.maps === "object") {
     return {
       activeMap: MAP_DEFS[parsed.activeMap] ? parsed.activeMap : "map1",
@@ -1211,6 +1220,8 @@ function normalizePayload(parsed) {
       gameSpeed: parsed.gameSpeed,
       lastSaveTime: parsed.lastSaveTime,
       ownerId: parsed.ownerId,
+      achievements: parsed.achievements || {},
+      totalBossKills: parsed.totalBossKills || 0,
     };
   }
   return {
@@ -1224,16 +1235,18 @@ function normalizePayload(parsed) {
     gameSpeed: parsed.gameSpeed,
     lastSaveTime: parsed.lastSaveTime,
     ownerId: parsed.ownerId,
+    achievements: {},
+    totalBossKills: 0,
   };
 }
 
 function readStoredPayload() {
   const raw = localStorage.getItem(TD_SAVE_KEY);
-  if (!raw) return { activeMap: "map1", maps: {} };
+  if (!raw) return { activeMap: "map1", maps: {}, achievements: {}, totalBossKills: 0 };
   try {
     return normalizePayload(JSON.parse(raw));
   } catch {
-    return { activeMap: "map1", maps: {} };
+    return { activeMap: "map1", maps: {}, achievements: {}, totalBossKills: 0 };
   }
 }
 
@@ -1242,6 +1255,54 @@ function readStoredPayload() {
 function hasBeatenAllMaps() {
   const stored = readStoredPayload();
   return Object.keys(MAP_DEFS).every((id) => (stored.maps[id]?.bestWave || 0) > TOWER100_UNLOCK_WAVE);
+}
+
+// ---------- Achievements ----------
+// Lifetime/account-wide (state.achievements, synced like everything else in
+// the towerdefense save). "threshold" ones are re-checked cheaply every
+// frame from updateStats(); "placed a tower"/"maxed a path" ones fire once,
+// right at the moment they happen, since there's no ongoing state that
+// reflects tower-placement history once a tower's sold.
+const ACHIEVEMENTS = [
+  { id: "first_tower", name: "Hello World", desc: "place your first tower", kind: "event" },
+  { id: "sprint10", name: "Warming Up", desc: "reach sprint 10 on any map", kind: "threshold" },
+  { id: "sprint50", name: "Halfway There", desc: "reach sprint 50 on any map", kind: "threshold" },
+  { id: "sprint100", name: "Centurion", desc: "reach sprint 100 on any map", kind: "threshold" },
+  { id: "sprint200", name: "Beyond the Limit", desc: "reach sprint 200 on any map", kind: "threshold" },
+  { id: "tenx_placed", name: "10x Engineer", desc: "place a 10x Engineer", kind: "event" },
+  { id: "singularity_placed", name: "Beyond Legendary", desc: "place a Singularity", kind: "event" },
+  { id: "conqueror", name: "Conqueror", desc: "beat all 3 maps", kind: "threshold" },
+  { id: "maxed_path", name: "Specialist", desc: "max out any tower's path all the way", kind: "event" },
+  { id: "big_spender", name: "Big Spender", desc: "accumulate 10,000 credits at once", kind: "threshold" },
+  { id: "boss_slayer", name: "Boss Slayer", desc: "defeat 50 bosses", kind: "threshold" },
+];
+
+const achievementToast = document.createElement("div");
+achievementToast.className = "achievement-toast";
+document.body.appendChild(achievementToast);
+let achievementToastTimer = null;
+
+function unlockAchievement(id) {
+  if (state.achievements[id]) return;
+  state.achievements[id] = true;
+  const def = ACHIEVEMENTS.find((a) => a.id === id);
+  if (def) {
+    achievementToast.textContent = `achievement unlocked: ${def.name}`;
+    achievementToast.classList.add("visible");
+    clearTimeout(achievementToastTimer);
+    achievementToastTimer = setTimeout(() => achievementToast.classList.remove("visible"), 3500);
+  }
+  saveGame();
+}
+
+function checkThresholdAchievements() {
+  if (state.bestWave >= 10) unlockAchievement("sprint10");
+  if (state.bestWave >= 50) unlockAchievement("sprint50");
+  if (state.bestWave >= 100) unlockAchievement("sprint100");
+  if (state.bestWave >= 200) unlockAchievement("sprint200");
+  if (state.bestGold >= 10000) unlockAchievement("big_spender");
+  if (state.totalBossKills >= 50) unlockAchievement("boss_slayer");
+  if (!state.achievements.conqueror && hasBeatenAllMaps()) unlockAchievement("conqueror");
 }
 
 // Applies one map's saved slot onto the live (currently active) state -
@@ -1281,6 +1342,10 @@ function saveGame() {
   const allMaps = Object.values(stored.maps);
   stored.bestWave = Math.max(0, ...allMaps.map((m) => m.bestWave || 0));
   stored.bestGold = Math.max(0, ...allMaps.map((m) => m.bestGold || 0));
+  // Achievements are lifetime/account-wide, not per-map - union with
+  // whatever's already stored (never un-unlock one) rather than overwrite.
+  stored.achievements = { ...(stored.achievements || {}), ...state.achievements };
+  stored.totalBossKills = Math.max(stored.totalBossKills || 0, state.totalBossKills || 0);
   localStorage.setItem(TD_SAVE_KEY, JSON.stringify(stored));
   scheduleCloudSync();
 }
@@ -1292,6 +1357,8 @@ function loadGame() {
   state.gameSpeed = SPEED_STEPS.includes(stored.gameSpeed) ? stored.gameSpeed : 1;
   state.lastSaveTime = stored.lastSaveTime || Date.now();
   state.ownerId = typeof stored.ownerId === "string" ? stored.ownerId : null;
+  state.achievements = { ...stored.achievements };
+  state.totalBossKills = stored.totalBossKills || 0;
   applyMapDataToState(stored.maps[state.mapId]);
 }
 
@@ -1443,6 +1510,26 @@ codexClose.addEventListener("click", () => {
   codexOverlay.hidden = true;
 });
 
+function renderAchievements() {
+  achievementsContent.innerHTML = ACHIEVEMENTS.map((a) => {
+    const unlocked = !!state.achievements[a.id];
+    return `
+      <div class="codex-row">
+        <span class="codex-emoji">${unlocked ? "✅" : "🔒"}</span>
+        <span><span class="codex-row-name">${unlocked ? a.name : "???"}</span><span class="codex-row-desc">${unlocked ? a.desc : "locked"}</span></span>
+      </div>`;
+  }).join("");
+}
+
+achievementsBtn.addEventListener("click", () => {
+  renderAchievements();
+  achievementsOverlay.hidden = false;
+});
+
+achievementsClose.addEventListener("click", () => {
+  achievementsOverlay.hidden = true;
+});
+
 // Cloud push happens on a flat 20s heartbeat instead of a cancellable
 // debounce - a single-shot setTimeout gets destroyed outright by navigating
 // to another page before it fires, which could leave the cloud save stale
@@ -1511,6 +1598,8 @@ async function pullCloudSave() {
   applyMapLayout(state.mapId);
   state.gameSpeed = SPEED_STEPS.includes(winner.gameSpeed) ? winner.gameSpeed : 1;
   state.lastSaveTime = winner.lastSaveTime || Date.now();
+  state.achievements = { ...winner.achievements };
+  state.totalBossKills = winner.totalBossKills || 0;
   state.towers = [];
   applyMapDataToState(winner.maps[state.mapId]);
 
@@ -1532,6 +1621,8 @@ window.addEventListener("account:logout", () => {
   state.bestWave = 0;
   state.bestGold = 150;
   state.ownerId = null;
+  state.achievements = {};
+  state.totalBossKills = 0;
   localStorage.removeItem(TD_SAVE_KEY);
   syncSpeedButton();
   updateStats();
@@ -1594,6 +1685,9 @@ function handlePlacementOrSelection(pos) {
   };
   recomputeTowerStats(tower);
   state.towers.push(tower);
+  unlockAchievement("first_tower");
+  if (tower.type === "tenx") unlockAchievement("tenx_placed");
+  if (tower.type === "singularity") unlockAchievement("singularity_placed");
   updateStats();
   saveGame();
 }
@@ -1721,6 +1815,7 @@ function buyPathTier(t, pathId) {
   recomputeTowerStats(t);
   if (nextTierIndex === 0) markVisualMilestone(t, 3);
   else t.flashUntil = performance.now() + 400;
+  if (t.pathTier >= pathDef.tiers.length) unlockAchievement("maxed_path");
   updateStats();
   saveGame();
 }
@@ -2409,6 +2504,7 @@ function applyDamage(enemy, amount, sourceTower) {
       state.gold += enemy.reward;
       if (sourceTower?.bonusGoldPerKill) state.gold += sourceTower.bonusGoldPerKill;
       state.kills += 1;
+      if (enemy.isBoss) state.totalBossKills = (state.totalBossKills || 0) + 1;
 
       // Splitter enemies leave weaker copies behind on death - hasSplit
       // stops the copies from splitting again themselves.
