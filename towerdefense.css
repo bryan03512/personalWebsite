@@ -450,6 +450,28 @@ canvas {
   color: var(--green-faint);
 }
 
+.map-picker-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.map-picker-diff-row {
+  display: flex;
+  gap: 6px;
+}
+
+.map-picker-diff-btn {
+  flex: 1;
+  padding: 4px 6px;
+  font-size: 0.7rem;
+}
+
+.map-picker-diff-btn.active {
+  background: var(--green);
+  color: #04150a;
+}
+
 .codex-overlay {
   position: fixed;
   inset: 0;

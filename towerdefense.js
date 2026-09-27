@@ -124,6 +124,16 @@ const TOWER_TYPES = {
 
 const TOWER100_UNLOCK_WAVE = 100;
 
+// Chosen per-map (state.difficulty, persisted in each map's save slot).
+// Multiplies onto the wave-scaling formula in spawnEnemy - hpMult/speedMult
+// make enemies tougher/faster, rewardMult compensates the economy so a
+// harder difficulty still feels worth playing rather than just punishing.
+const DIFFICULTY_SETTINGS = {
+  easy: { label: "Easy", hpMult: 0.65, rewardMult: 0.85, speedMult: 0.9 },
+  normal: { label: "Normal", hpMult: 1.0, rewardMult: 1.0, speedMult: 1.0 },
+  hard: { label: "Hard", hpMult: 1.6, rewardMult: 1.25, speedMult: 1.15 },
+};
+
 const OVERCLOCK_DURATION = 8;
 const OVERCLOCK_COOLDOWN = 30;
 const SPEED_STEPS = [1, 2, 5];
@@ -1044,6 +1054,7 @@ const RESISTANCES = {
 // ---------- Game state ----------
 const state = {
   mapId: "map1",
+  difficulty: "normal",
   gold: 150,
   bestGold: 150,
   lives: 20,
@@ -1083,6 +1094,7 @@ const livesStat = document.getElementById("livesStat");
 const waveStat = document.getElementById("waveStat");
 const bestWaveStat = document.getElementById("bestWaveStat");
 const bestGoldStat = document.getElementById("bestGoldStat");
+const difficultyStat = document.getElementById("difficultyStat");
 const killsStat = document.getElementById("killsStat");
 const towerListEl = document.getElementById("towerList");
 const waveBtn = document.getElementById("waveBtn");
@@ -1169,6 +1181,7 @@ function updateStats() {
   waveStat.textContent = state.wave;
   bestWaveStat.textContent = state.bestWave;
   killsStat.textContent = state.kills;
+  difficultyStat.textContent = (DIFFICULTY_SETTINGS[state.difficulty] || DIFFICULTY_SETTINGS.normal).label;
   checkThresholdAchievements();
   refreshTowerButtons();
   refreshTowerInfoPanel();
@@ -1205,6 +1218,7 @@ function currentMapSlot() {
     bestWave: state.bestWave,
     kills: state.kills,
     towers: state.towers,
+    difficulty: state.difficulty,
   };
 }
 
@@ -1315,6 +1329,9 @@ function applyMapDataToState(mapData) {
   if (typeof mapData.bestWave === "number") state.bestWave = mapData.bestWave;
   if (typeof mapData.kills === "number") state.kills = mapData.kills;
   if (typeof mapData.bestGold === "number") state.bestGold = mapData.bestGold;
+  if (typeof mapData.difficulty === "string" && DIFFICULTY_SETTINGS[mapData.difficulty]) {
+    state.difficulty = mapData.difficulty;
+  }
   // Guard against a stale/incomplete snapshot (e.g. a cloud push that lost a
   // race with navigating away mid-round) silently deleting placed towers -
   // never adopt an incoming towers list that's smaller than what's already here.
@@ -1378,9 +1395,25 @@ function switchMap(newMapId) {
   syncSpeedButton();
   state.bestWave = 0;
   state.bestGold = 150;
+  state.difficulty = "normal";
   applyMapDataToState(stored.maps[newMapId]);
   updateStats();
   saveGame();
+}
+
+// Sets a map's difficulty directly in storage, without needing to switch to
+// it first - used by the picker's per-map difficulty buttons. Keeps live
+// state in sync if that happens to be the currently active map.
+function setMapDifficulty(mapId, diffId) {
+  if (!DIFFICULTY_SETTINGS[diffId]) return;
+  const stored = readStoredPayload();
+  if (!stored.maps[mapId]) {
+    stored.maps[mapId] = { gold: 150, bestGold: 150, lives: 20, wave: 0, bestWave: 0, kills: 0, towers: [] };
+  }
+  stored.maps[mapId].difficulty = diffId;
+  localStorage.setItem(TD_SAVE_KEY, JSON.stringify(stored));
+  scheduleCloudSync();
+  if (state.mapId === mapId) state.difficulty = diffId;
 }
 
 // ---------- Map picker ----------
@@ -1392,6 +1425,11 @@ function renderMapPicker() {
     const meta = mapData
       ? `best sprint ${mapData.bestWave || 0} | best credits ${Math.floor(mapData.bestGold || 0)}`
       : "not started yet";
+    const currentDiff = mapData?.difficulty && DIFFICULTY_SETTINGS[mapData.difficulty] ? mapData.difficulty : "normal";
+
+    const card = document.createElement("div");
+    card.className = "map-picker-card";
+
     const btn = document.createElement("button");
     btn.className = "btn map-picker-btn";
     btn.innerHTML = `<span class="map-picker-name">${def.name}</span><span class="map-picker-meta">${meta}</span>`;
@@ -1399,7 +1437,24 @@ function renderMapPicker() {
       switchMap(id);
       mapPickerOverlay.hidden = true;
     });
-    mapPickerList.appendChild(btn);
+    card.appendChild(btn);
+
+    const diffRow = document.createElement("div");
+    diffRow.className = "map-picker-diff-row";
+    Object.entries(DIFFICULTY_SETTINGS).forEach(([diffId, diffDef]) => {
+      const diffBtn = document.createElement("button");
+      diffBtn.className = "btn map-picker-diff-btn" + (diffId === currentDiff ? " active" : "");
+      diffBtn.textContent = diffDef.label;
+      diffBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        setMapDifficulty(id, diffId);
+        renderMapPicker();
+      });
+      diffRow.appendChild(diffBtn);
+    });
+    card.appendChild(diffRow);
+
+    mapPickerList.appendChild(card);
   });
 }
 
@@ -2306,13 +2361,14 @@ function spawnEnemy(type) {
   // forever, so waves past 50 get extra compounding growth on top - tuned
   // so builds strong enough to reach wave 90+ still meet real resistance
   // instead of one-shotting everything before it's visible on screen.
+  const diff = DIFFICULTY_SETTINGS[state.difficulty] || DIFFICULTY_SETTINGS.normal;
   const lateWaves = Math.max(0, state.wave - 50);
-  let hp = Math.round(def.hp * (1 + state.wave * 0.18) * Math.pow(1.11, lateWaves));
+  let hp = Math.round(def.hp * (1 + state.wave * 0.18) * Math.pow(1.11, lateWaves) * diff.hpMult);
   if (isBossType) hp = Math.round(hp * bossHpMultiplier(type, state.wave));
-  const reward = Math.round(def.reward + state.wave * (isBossType ? 4 : 1));
+  const reward = Math.round((def.reward + state.wave * (isBossType ? 4 : 1)) * diff.rewardMult);
   // Every enemy gets a little faster each wave, on top of any type-specific
   // base speed (bossTank stays slow, bossCamo stays fast, relative to each other).
-  const speed = def.speed * (1 + state.wave * 0.004);
+  const speed = def.speed * (1 + state.wave * 0.004) * diff.speedMult;
   const maxShield = def.shieldFrac ? Math.round(hp * def.shieldFrac) : 0;
   state.enemies.push({
     type,
