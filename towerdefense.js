@@ -53,6 +53,7 @@ const TOWER_TYPES = {
   hacker: {
     name: "Hacker", desc: "slow, heavy AoE exploit", emoji: "👾",
     cost: 170, damage: 55, range: 150, fireRate: 2.2, color: "#ff4fd8", projectileSpeed: 400, splashRadius: 65,
+    damageType: "explosive",
   },
   manager: {
     name: "Manager", desc: "no damage - boosts nearby devs", emoji: "👔",
@@ -63,6 +64,16 @@ const TOWER_TYPES = {
     name: "Consultant", desc: "no combat - earns credits during sprints", emoji: "💼",
     cost: 100, damage: 0, range: 0, fireRate: Infinity, color: "#34d399", projectileSpeed: 0,
     isEconomy: true, incomePerSec: 3,
+  },
+  recruiter: {
+    name: "Recruiter", desc: "deploys temporary allies to fight for you", emoji: "🧑‍💼",
+    cost: 150, damage: 0, range: 0, fireRate: Infinity, color: "#f97316", projectileSpeed: 0,
+    isRecruiter: true, deployInterval: 6, allyDamage: 14, allyRange: 110, allyFireRate: 0.8, allyDuration: 6, allyCount: 1,
+  },
+  quant: {
+    name: "Quant", desc: "arcane exploits - true damage, ignores all resistances", emoji: "🔮",
+    cost: 220, damage: 0.018, range: 140, fireRate: 1.8, color: "#a78bfa", projectileSpeed: 550,
+    damageType: "magic", percentDamage: true,
   },
 };
 
@@ -242,6 +253,70 @@ const TOWER_PATHS = {
       ],
     },
   },
+  recruiter: {
+    scrum: {
+      name: "Scrum Sprint",
+      accentColor: "#fb923c",
+      tiers: [
+        { desc: "deploys 2 allies at once, longer duration", cost: 130, apply: (t) => { t.pathAllyCountBonus = 1; t.pathAllyDurationMult = 1.3; } },
+        {
+          desc: "deploys 3 allies, stronger allies", cost: 240,
+          apply: (t) => { t.pathAllyCountBonus = 2; t.pathAllyDurationMult = 1.6; t.pathAllyDamageMult = 1.4; },
+        },
+        {
+          desc: "deploys 4 allies, much stronger & longer-lived", cost: 400,
+          apply: (t) => { t.pathAllyCountBonus = 3; t.pathAllyDurationMult = 2.0; t.pathAllyDamageMult = 1.8; },
+        },
+      ],
+    },
+    freelance: {
+      name: "Freelance Network",
+      accentColor: "#facc15",
+      tiers: [
+        { desc: "allies deploy much more often", cost: 130, apply: (t) => { t.pathDeployRateMult = 1.6; } },
+        {
+          desc: "even faster deploys, allies pay a bonus on kill", cost: 240,
+          apply: (t) => { t.pathDeployRateMult = 2.2; t.pathAllyBonusGold = 1; },
+        },
+        {
+          desc: "rapid deploys, allies hit explosively", cost: 400,
+          apply: (t) => { t.pathDeployRateMult = 3.0; t.pathAllyBonusGold = 2; t.pathAllyExplosive = true; },
+        },
+      ],
+    },
+  },
+  quant: {
+    overflow: {
+      name: "Overflow",
+      accentColor: "#c084fc",
+      tiers: [
+        { desc: "much bigger % damage per hit", cost: 180, apply: (t) => { t.pathDamageMult = 1.8; } },
+        {
+          desc: "even bigger % damage, chance to crit 2x", cost: 320,
+          apply: (t) => { t.pathDamageMult = 2.6; t.critChance = 0.2; t.critMult = 2.0; },
+        },
+        {
+          desc: "massive % damage, huge crits, extra vs bosses", cost: 520,
+          apply: (t) => { t.pathDamageMult = 3.6; t.critChance = 0.3; t.critMult = 2.5; t.bossDamageMult = 1.6; },
+        },
+      ],
+    },
+    recursive: {
+      name: "Recursive",
+      accentColor: "#818cf8",
+      tiers: [
+        { desc: "hits leave a damaging exploit that ticks for 3s", cost: 180, apply: (t) => { t.pathDotPct = 0.01; t.pathDotDuration = 3; } },
+        {
+          desc: "stronger exploit, longer duration", cost: 320,
+          apply: (t) => { t.pathDotPct = 0.018; t.pathDotDuration = 4; },
+        },
+        {
+          desc: "devastating exploit, also hits 2 targets", cost: 520,
+          apply: (t) => { t.pathDotPct = 0.03; t.pathDotDuration = 5; t.multiShot = 2; },
+        },
+      ],
+    },
+  },
 };
 
 const ENEMY_TYPES = {
@@ -249,6 +324,25 @@ const ENEMY_TYPES = {
   fast: { label: "Glitch", emoji: "⚡", hp: 25, speed: 130, reward: 5, lifeDamage: 1, color: "#ffee58", radius: 12 },
   tank: { label: "Merge Conflict", emoji: "💀", hp: 160, speed: 35, reward: 12, lifeDamage: 2, color: "#8a4a2b", radius: 17 },
   boss: { label: "Production Outage", emoji: "🔥", hp: 400, speed: 30, reward: 60, lifeDamage: 5, color: "#ff3b3b", radius: 24 },
+  // Late-wave specialists, each resistant to one damage type (see
+  // RESISTANCES) so no single tower archetype trivializes everything.
+  legacy: { label: "Legacy Code", emoji: "💾", hp: 90, speed: 45, reward: 10, lifeDamage: 2, color: "#a1887f", radius: 15 },
+  firewalled: { label: "Firewalled", emoji: "🧱", hp: 70, speed: 55, reward: 10, lifeDamage: 1, color: "#5b7fd6", radius: 15 },
+  encrypted: { label: "Encrypted", emoji: "🔒", hp: 60, speed: 50, reward: 14, lifeDamage: 2, color: "#a855f7", radius: 15 },
+  // Untargetable by any tower unless that tower is currently in an active
+  // Manager's buff range (see getTowerBuffs/findTargets) - still visible so
+  // the player can see them coming, just can't be shot without support.
+  obfuscated: { label: "Obfuscated", emoji: "🌫️", hp: 55, speed: 65, reward: 12, lifeDamage: 1, color: "#94a3b8", radius: 14, camo: true },
+};
+
+// Damage-type resistance: a multiplier applied when that enemy type takes
+// that damage type. Missing entries mean "no resistance" (full damage).
+// Magic damage (the Quant tower) is never listed here, so it always bypasses
+// every resistance - that's its whole purpose against these three.
+const RESISTANCES = {
+  legacy: { normal: 0.3 },
+  firewalled: { explosive: 0.3 },
+  encrypted: { normal: 0.3, explosive: 0.3 },
 };
 
 // ---------- Game state ----------
@@ -265,6 +359,7 @@ const state = {
   enemies: [],
   projectiles: [],
   explosions: [],
+  allies: [],
   waveInProgress: false,
   spawnQueue: [],
   spawnTimer: 0,
@@ -600,6 +695,13 @@ function recomputeTowerStats(t) {
     t.buffRatePct = def.buffRatePct * levelFactor * (t.pathBuffRateMult || 1);
   } else if (t.isEconomy) {
     t.incomePerSec = def.incomePerSec * levelFactor * (t.pathIncomeMult || 1);
+  } else if (t.isRecruiter) {
+    t.deployInterval = def.deployInterval / (t.pathDeployRateMult || 1);
+    t.allyDamage = def.allyDamage * levelFactor * (t.pathAllyDamageMult || 1);
+    t.allyRange = def.allyRange;
+    t.allyFireRate = def.allyFireRate;
+    t.allyDuration = def.allyDuration * (t.pathAllyDurationMult || 1);
+    t.allyCount = def.allyCount + (t.pathAllyCountBonus || 0);
   } else {
     t.damage = def.damage * levelFactor * (t.pathDamageMult || 1);
     t.fireRate = def.fireRate / (t.pathRateMult || 1);
@@ -679,6 +781,10 @@ function refreshTowerInfoPanel() {
     statsLine = `+${Math.round(t.buffDamagePct * 100)}% dmg, +${Math.round(t.buffRatePct * 100)}% rate to devs in range`;
   } else if (t.isEconomy) {
     statsLine = `+${t.incomePerSec.toFixed(1)} credits/sec during sprints`;
+  } else if (t.isRecruiter) {
+    statsLine = `deploys ${t.allyCount} for ${t.allyDuration.toFixed(1)}s every ${t.deployInterval.toFixed(1)}s`;
+  } else if (t.percentDamage) {
+    statsLine = `dmg ${(t.damage * 100).toFixed(1)}% max hp | range ${Math.round(t.range)}`;
   } else {
     statsLine = `dmg ${Math.round(t.damage)} | range ${Math.round(t.range)}`;
   }
@@ -790,18 +896,23 @@ towerUpgradeBtn.addEventListener("click", () => state.selectedTower && upgradeTo
 towerSellBtn.addEventListener("click", () => state.selectedTower && sellTower(state.selectedTower));
 
 // A combat tower's damage/fire-rate multipliers from nearby Manager towers and Overclock.
+// Also reports whether a Manager is currently supporting this tower right
+// now - that's live/positional camo detection: leave the Manager's range
+// (or sell it) and detection is lost immediately, same frame.
 function getTowerBuffs(tower) {
   let damageMult = 1;
   let rateMult = 1;
+  let supported = false;
   for (const other of state.towers) {
     if (!other.isSupport) continue;
     if (distance(tower.x, tower.y, other.x, other.y) <= other.range) {
       damageMult += other.buffDamagePct;
       rateMult += other.buffRatePct;
+      supported = true;
     }
   }
   if (state.overclockActive) rateMult += 0.75;
-  return { damageMult, rateMult };
+  return { damageMult, rateMult, supported };
 }
 
 // Passive income from Consultant towers, and passive slow auras from
@@ -821,6 +932,64 @@ function updateAuras(dt) {
         e.slowPct = Math.max(e.slowPct || 0, t.auraSlowPct);
         e.slowTimer = Math.max(e.slowTimer || 0, 0.4);
       }
+    }
+  }
+}
+
+// Recruiters periodically deploy temporary ally units near themselves -
+// these are lightweight, separate from state.towers (no placement, no
+// selection/upgrade UI), and expire on their own after allyDuration.
+function updateRecruiters(dt) {
+  for (const t of state.towers) {
+    if (!t.isRecruiter) continue;
+    t.deployCooldown = (t.deployCooldown ?? 0) - dt;
+    if (t.deployCooldown > 0) continue;
+    t.deployCooldown = t.deployInterval;
+    for (let i = 0; i < t.allyCount; i++) {
+      const angle = (Math.PI * 2 * i) / t.allyCount;
+      state.allies.push({
+        x: t.x + Math.cos(angle) * 18,
+        y: t.y + Math.sin(angle) * 18,
+        damage: t.allyDamage,
+        range: t.allyRange,
+        fireRate: t.allyFireRate,
+        cooldown: 0,
+        color: t.color,
+        emoji: "🧑‍💻",
+        damageType: t.pathAllyExplosive ? "explosive" : "normal",
+        splashRadius: t.pathAllyExplosive ? 40 : 0,
+        bonusGoldPerKill: t.pathAllyBonusGold || 0,
+        expiresAt: performance.now() + t.allyDuration * 1000,
+      });
+    }
+  }
+}
+
+// Allies never see camo (only real towers can, via Manager support).
+function updateAllies(dt) {
+  const now = performance.now();
+  for (let i = state.allies.length - 1; i >= 0; i--) {
+    const a = state.allies[i];
+    if (now >= a.expiresAt) {
+      state.allies.splice(i, 1);
+      continue;
+    }
+    a.cooldown -= dt;
+    if (a.cooldown > 0) continue;
+    const targets = findTargets(a, 1, false);
+    if (targets.length > 0) {
+      state.projectiles.push({
+        x: a.x,
+        y: a.y,
+        target: targets[0],
+        speed: 480,
+        damage: a.damage,
+        isCrit: false,
+        splashRadius: a.splashRadius || 0,
+        color: a.color,
+        sourceTower: a,
+      });
+      a.cooldown = a.fireRate;
     }
   }
 }
@@ -854,18 +1023,40 @@ speedBtn.addEventListener("click", () => {
 });
 
 // ---------- Waves ----------
+// Boss waves come more often the further you get, and past wave 70 a boss
+// wave can bring more than one boss - both keep escalating indefinitely
+// rather than capping, so no wave count eventually becomes a permanent breather.
+function bossIntervalFor(waveNum) {
+  if (waveNum >= 90) return 2;
+  if (waveNum >= 70) return 3;
+  if (waveNum >= 50) return 4;
+  return 5;
+}
+
+function bossCountFor(waveNum) {
+  if (waveNum < 70) return 1;
+  return 2 + Math.floor((waveNum - 70) / 20);
+}
+
 function buildWave(waveNum) {
   const count = 6 + waveNum * 2;
   const queue = [];
   for (let i = 0; i < count; i++) {
     let type = "basic";
     const roll = Math.random();
-    if (waveNum >= 5 && roll < 0.25) type = "tank";
-    else if (waveNum >= 2 && roll < 0.5) type = "fast";
+    // Each resistant/camo type is gated to later waves, per roll ranges
+    // that widen as the wave number climbs.
+    if (waveNum >= 25 && roll < 0.1) type = "encrypted";
+    else if (waveNum >= 18 && roll < 0.2) type = "firewalled";
+    else if (waveNum >= 14 && roll < 0.32) type = "obfuscated";
+    else if (waveNum >= 10 && roll < 0.44) type = "legacy";
+    else if (waveNum >= 5 && roll < 0.64) type = "tank";
+    else if (waveNum >= 2 && roll < 0.84) type = "fast";
     queue.push(type);
   }
-  if (waveNum % 5 === 0) {
-    queue.push("boss"); // arrives last, as the wave's finale
+  if (waveNum % bossIntervalFor(waveNum) === 0) {
+    const bossCount = bossCountFor(waveNum);
+    for (let i = 0; i < bossCount; i++) queue.push("boss"); // arrive last, as the wave's finale
   }
   return queue;
 }
@@ -919,6 +1110,7 @@ function spawnEnemy(type) {
     radius: def.radius,
     emoji: def.emoji,
     isBoss: type === "boss",
+    camo: !!def.camo,
     segment: 1,
   });
 }
@@ -931,6 +1123,11 @@ function distance(ax, ay, bx, by) {
 function updateEnemies(dt) {
   for (let i = state.enemies.length - 1; i >= 0; i--) {
     const e = state.enemies[i];
+    if (e.dotTimer > 0) {
+      e.dotTimer -= dt;
+      applyDamage(e, e.dotPerSec * dt, null);
+      if (!state.enemies.includes(e)) continue; // the dot tick killed it
+    }
     const target = PATH_POINTS[e.segment];
     if (!target) {
       state.lives -= e.lifeDamage;
@@ -957,10 +1154,12 @@ function updateEnemies(dt) {
   }
 }
 
-// Returns up to `count` enemies within range, nearest first.
-function findTargets(t, count) {
+// Returns up to `count` enemies within range, nearest first. Camo enemies
+// are skipped entirely unless canSeeCamo is true for this attacker.
+function findTargets(t, count, canSeeCamo) {
   const inRange = [];
   for (const e of state.enemies) {
+    if (e.camo && !canSeeCamo) continue;
     const d = distance(t.x, t.y, e.x, e.y);
     if (d <= t.range) inRange.push({ e, d });
   }
@@ -970,15 +1169,20 @@ function findTargets(t, count) {
 
 function updateTowers(dt) {
   for (const t of state.towers) {
-    if (t.isSupport || t.isEconomy) continue; // managers/consultants don't attack
+    if (t.isSupport || t.isEconomy || t.isRecruiter) continue; // don't attack
     t.cooldown -= dt;
     if (t.cooldown > 0) continue;
 
-    const targets = findTargets(t, t.multiShot || 1);
+    const buffs = getTowerBuffs(t);
+    const targets = findTargets(t, t.multiShot || 1, buffs.supported);
     if (targets.length > 0) {
-      const buffs = getTowerBuffs(t);
       for (const target of targets) {
-        let dmg = t.damage * buffs.damageMult;
+        // Quant's damage is a fraction of the target's own max hp (true
+        // damage - resistances are bypassed entirely in applyDamage), so it
+        // scales itself with the compounding late-wave hp growth instead of
+        // falling behind it like a flat number would.
+        const baseDmg = t.percentDamage ? target.maxHp * t.damage : t.damage;
+        let dmg = baseDmg * buffs.damageMult;
         const isCrit = t.critChance && Math.random() < t.critChance;
         if (isCrit) dmg *= t.critMult || 2;
         state.projectiles.push({
@@ -998,7 +1202,14 @@ function updateTowers(dt) {
   }
 }
 
+// A lingering hit (the Quant tower's Recursive path) has no live sourceTower
+// by the time it ticks, so it's always treated as magic damage - the only
+// tower that ever sets a dot is Quant itself, so this is a safe default.
 function applyDamage(enemy, amount, sourceTower) {
+  const damageType = sourceTower ? sourceTower.damageType || "normal" : "magic";
+  const resist = RESISTANCES[enemy.type]?.[damageType];
+  if (resist) amount *= resist;
+
   if (sourceTower) {
     if (sourceTower.bossDamageMult && enemy.isBoss) amount *= sourceTower.bossDamageMult;
     else if (sourceTower.tankDamageMult && enemy.type === "tank") amount *= sourceTower.tankDamageMult;
@@ -1006,6 +1217,10 @@ function applyDamage(enemy, amount, sourceTower) {
     if (sourceTower.slowOnHit) {
       enemy.slowPct = sourceTower.slowOnHit.pct;
       enemy.slowTimer = sourceTower.slowOnHit.duration;
+    }
+    if (sourceTower.pathDotPct) {
+      enemy.dotPerSec = enemy.maxHp * sourceTower.pathDotPct;
+      enemy.dotTimer = sourceTower.pathDotDuration;
     }
   }
 
@@ -1288,14 +1503,27 @@ function draw() {
       ctx.stroke();
     }
 
+    // Camo enemies stay visible (dashed ring + a bit more transparent) but
+    // are untargetable without an actively-supporting Manager nearby.
+    if (e.camo) {
+      ctx.setLineDash([3, 3]);
+      ctx.strokeStyle = "#cbd5e1";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, e.radius + 3, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
     ctx.fillStyle = e.color;
-    ctx.globalAlpha = 0.3;
+    ctx.globalAlpha = e.camo ? 0.18 : 0.3;
     ctx.beginPath();
     ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
     ctx.fill();
-    ctx.globalAlpha = 1;
+    ctx.globalAlpha = e.camo ? 0.7 : 1;
     ctx.font = `${e.radius * 1.6}px sans-serif`;
     ctx.fillText(e.emoji, e.x, e.y + 1);
+    ctx.globalAlpha = 1;
 
     const barW = e.radius * 2;
     const pct = Math.max(0, e.hp / e.maxHp);
@@ -1303,6 +1531,21 @@ function draw() {
     ctx.fillRect(e.x - barW / 2, e.y - e.radius - 10, barW, 4);
     ctx.fillStyle = "#39ff14";
     ctx.fillRect(e.x - barW / 2, e.y - e.radius - 10, barW * pct, 4);
+  }
+
+  // allies (temporary units deployed by Recruiter towers) - fade out
+  // just before they expire so their disappearance doesn't feel abrupt
+  for (const a of state.allies) {
+    const remaining = a.expiresAt - performance.now();
+    const fade = Math.max(0, Math.min(1, remaining / 800));
+    ctx.globalAlpha = 0.4 + 0.6 * fade;
+    ctx.fillStyle = a.color;
+    ctx.beginPath();
+    ctx.arc(a.x, a.y, CELL * 0.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.font = `${CELL * 0.24}px sans-serif`;
+    ctx.fillText(a.emoji, a.x, a.y + 1);
+    ctx.globalAlpha = 1;
   }
 
   // projectiles
@@ -1342,6 +1585,8 @@ function loop(now) {
     updateSpawning(dt);
     updateEnemies(dt);
     updateTowers(dt);
+    updateRecruiters(dt);
+    updateAllies(dt);
     updateEconomy(dt);
     updateAuras(dt);
     updateProjectiles(dt);
@@ -1367,6 +1612,7 @@ function resetTransientState() {
   state.enemies = [];
   state.projectiles = [];
   state.explosions = [];
+  state.allies = [];
   state.waveInProgress = false;
   state.spawnQueue = [];
   state.spawnTimer = 0;
