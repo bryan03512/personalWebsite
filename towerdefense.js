@@ -96,14 +96,29 @@ const TOWER_TYPES = {
     cost: 220, damage: 0.018, range: 140, fireRate: 1.8, color: "#a78bfa", projectileSpeed: 550,
     damageType: "magic", percentDamage: true,
   },
-  // Secret capstone tower - excluded from buildTowerButtons (and therefore
-  // invisible/unknown) until state.bestWave clears TOWER100_UNLOCK_WAVE on
-  // the current map. How many may be placed at once is capped and grows
-  // with further milestones - see tenxMaxCopies().
+  freeze: {
+    name: "Freeze", desc: "chills on every hit - a full stop instead of a slow", emoji: "🧊",
+    cost: 140, damage: 8, range: 130, fireRate: 1.0, color: "#7dd3fc", projectileSpeed: 550,
+    slowOnHit: { pct: 1.0, duration: 1.2 },
+  },
+  turret: {
+    name: "Sentry", desc: "no path - auto-levels for free over time, low maintenance", emoji: "🗼",
+    cost: 90, damage: 12, range: 140, fireRate: 1.3, color: "#94a3b8", projectileSpeed: 480,
+    isSentry: true, autoLevelInterval: 20,
+  },
+  // Secret capstone towers - excluded from buildTowerButtons (and therefore
+  // invisible/unknown) until each one's unlockCheck() passes. How many may
+  // be placed at once is capped and grows with further milestones - see
+  // tenxMaxCopies().
   tenx: {
     name: "10x Engineer", desc: "legendary - unlocked past sprint 100, capped copies grow past 140/200", emoji: "🦸",
     cost: 4000, damage: 140, range: 220, fireRate: 0.55, color: "#fbbf24", projectileSpeed: 900,
-    isLegendary: true, unique: true,
+    isLegendary: true, unique: true, unlockCheck: () => state.bestWave > TOWER100_UNLOCK_WAVE,
+  },
+  singularity: {
+    name: "Singularity", desc: "beyond legendary - unlocked by beating all 3 maps", emoji: "🌌",
+    cost: 6000, damage: 180, range: 220, fireRate: 0.5, color: "#f0abfc", projectileSpeed: 950,
+    isLegendary: true, unique: true, unlockCheck: () => hasBeatenAllMaps(),
   },
 };
 
@@ -648,6 +663,95 @@ const TOWER_PATHS = {
         },
       ],
     },
+    mentorship: {
+      name: "Mentorship",
+      accentColor: "#34d399",
+      tiers: [
+        { desc: "also buffs nearby devs' damage/rate, wider range", cost: 350, apply: (t) => { t.grantsAura = true; t.buffDamagePct = 0.15; t.buffRatePct = 0.15; t.pathRangeMult = 1.2; } },
+        {
+          desc: "bigger buff to allies, bigger own hits", cost: 600,
+          apply: (t) => { t.buffDamagePct = 0.22; t.buffRatePct = 0.22; t.pathDamageMult = 1.3; },
+        },
+        {
+          desc: "even bigger buff, wider range, bigger hits", cost: 950,
+          apply: (t) => { t.buffDamagePct = 0.3; t.buffRatePct = 0.3; t.pathDamageMult = 1.6; t.pathRangeMult = 1.4; },
+        },
+        {
+          desc: "huge buff to the whole team", cost: 1400,
+          apply: (t) => { t.buffDamagePct = 0.4; t.buffRatePct = 0.4; t.pathDamageMult = 2.0; },
+        },
+        {
+          desc: "massive buff, even wider range", cost: 2000,
+          apply: (t) => { t.buffDamagePct = 0.5; t.buffRatePct = 0.5; t.pathDamageMult = 2.5; t.pathRangeMult = 1.6; },
+        },
+        {
+          desc: "the whole team levels up alongside you", cost: 2800,
+          apply: (t) => { t.buffDamagePct = 0.65; t.buffRatePct = 0.65; t.pathDamageMult = 3.0; },
+        },
+        {
+          desc: "even bigger team buff", cost: 3800,
+          apply: (t) => { t.buffDamagePct = 0.8; t.buffRatePct = 0.8; t.pathDamageMult = 3.6; },
+        },
+        {
+          desc: "the whole team doubles their output, wider range still", cost: 5200,
+          apply: (t) => { t.buffDamagePct = 1.0; t.buffRatePct = 1.0; t.pathDamageMult = 4.3; t.pathRangeMult = 1.8; },
+        },
+        {
+          desc: "staggering team buff", cost: 7000,
+          apply: (t) => { t.buffDamagePct = 1.2; t.buffRatePct = 1.2; t.pathDamageMult = 5.0; },
+        },
+        {
+          desc: "every tower on the map fights like a 10x engineer", cost: 9500,
+          apply: (t) => { t.buffDamagePct = 1.5; t.buffRatePct = 1.5; t.pathDamageMult = 6.0; t.pathRangeMult = 2.0; },
+        },
+      ],
+    },
+  },
+  singularity: {
+    omniscience: {
+      name: "Omniscience",
+      accentColor: "#e0f2fe",
+      tiers: [
+        { desc: "sees everything - always detects camo, always crits", cost: 500, apply: (t) => { t.alwaysSeeCamo = true; t.critChance = 1.0; t.critMult = 1.6; } },
+        { desc: "much bigger crits, bigger range", cost: 850, apply: (t) => { t.critMult = 2.2; t.pathRangeMult = 1.3; } },
+        { desc: "even bigger crits and range", cost: 1300, apply: (t) => { t.critMult = 2.8; t.pathRangeMult = 1.6; t.pathDamageMult = 1.3; } },
+        { desc: "massive crits, extra dmg vs bosses", cost: 1900, apply: (t) => { t.critMult = 3.6; t.pathDamageMult = 1.7; t.bossDamageMult = 1.8; } },
+        { desc: "nothing on the board is hidden, nothing survives a hit", cost: 2700, apply: (t) => { t.critMult = 4.5; t.pathDamageMult = 2.2; t.bossDamageMult = 2.4; } },
+      ],
+    },
+    dilation: {
+      name: "Time Dilation",
+      accentColor: "#fde68a",
+      tiers: [
+        { desc: "buffs nearby devs' damage/rate too, wider range", cost: 500, apply: (t) => { t.grantsAura = true; t.buffDamagePct = 0.2; t.buffRatePct = 0.2; t.pathRangeMult = 1.3; } },
+        { desc: "bigger team buff, bigger own hits", cost: 850, apply: (t) => { t.buffDamagePct = 0.3; t.buffRatePct = 0.3; t.pathDamageMult = 1.3; } },
+        { desc: "even bigger team buff and hits", cost: 1300, apply: (t) => { t.buffDamagePct = 0.45; t.buffRatePct = 0.45; t.pathDamageMult = 1.7; } },
+        { desc: "huge team buff, wider range", cost: 1900, apply: (t) => { t.buffDamagePct = 0.6; t.buffRatePct = 0.6; t.pathDamageMult = 2.2; t.pathRangeMult = 1.6; } },
+        { desc: "time itself slows for everyone but your team", cost: 2700, apply: (t) => { t.buffDamagePct = 0.85; t.buffRatePct = 0.85; t.pathDamageMult = 2.8; } },
+      ],
+    },
+    entropy: {
+      name: "Entropy",
+      accentColor: "#818cf8",
+      tiers: [
+        { desc: "true damage as a % of max hp, ignores all resistances", cost: 500, apply: (t) => { t.damageType = "magic"; t.percentDamage = true; t.damage = 0.02; } },
+        { desc: "bigger % damage, leaves a damaging exploit", cost: 850, apply: (t) => { t.damage = 0.032; t.pathDotPct = 0.015; t.pathDotDuration = 4; } },
+        { desc: "even bigger % damage, stronger exploit", cost: 1300, apply: (t) => { t.damage = 0.045; t.pathDotPct = 0.025; t.pathDotDuration = 5; } },
+        { desc: "massive % damage, hits 2 targets", cost: 1900, apply: (t) => { t.damage = 0.06; t.pathDotPct = 0.035; t.pathDotDuration = 6; t.multiShot = 2; } },
+        { desc: "entropy always wins - hp itself decays around it", cost: 2700, apply: (t) => { t.damage = 0.08; t.pathDotPct = 0.05; t.pathDotDuration = 7; t.multiShot = 3; } },
+      ],
+    },
+    genesis: {
+      name: "Genesis",
+      accentColor: "#fbbf24",
+      tiers: [
+        { desc: "towers/upgrades cost 15% less, seed funding", cost: 500, apply: (t) => { t.costDiscountPct = 0.15; state.gold += 500; } },
+        { desc: "towers/upgrades cost 22% less, another round", cost: 850, apply: (t) => { t.costDiscountPct = 0.22; state.gold += 900; } },
+        { desc: "towers/upgrades cost 28% less, big payout", cost: 1300, apply: (t) => { t.costDiscountPct = 0.28; state.gold += 1500; } },
+        { desc: "towers/upgrades cost 35% less, huge payout", cost: 1900, apply: (t) => { t.costDiscountPct = 0.35; state.gold += 2400; } },
+        { desc: "a new economy, built from nothing", cost: 2700, apply: (t) => { t.costDiscountPct = 0.4; state.gold += 3800; } },
+      ],
+    },
   },
 };
 
@@ -780,13 +884,10 @@ function refreshTowerButtons() {
   [...towerListEl.children].forEach((btn) => {
     const key = btn.dataset.type;
     const def = TOWER_TYPES[key];
-    // The 10x Engineer stays fully hidden (not just disabled) until beaten
-    // on this map, so its existence is a surprise.
+    // Legendary towers stay fully hidden (not just disabled) until their
+    // own unlockCheck() passes, so their existence is a surprise.
     if (def.isLegendary) {
-      // bestWave reaches 100 the moment sprint 100 STARTS, not once it's
-      // beaten - require > 100 (i.e. sprint 101 was reached) so it only
-      // unlocks after sprint 100 is actually survived.
-      btn.hidden = state.bestWave <= TOWER100_UNLOCK_WAVE;
+      btn.hidden = !def.unlockCheck();
       if (btn.hidden) return;
     }
     const atCap = def.unique && countPlacedOfType(key) >= tenxMaxCopies();
@@ -877,6 +978,13 @@ function readStoredPayload() {
   } catch {
     return { activeMap: "map1", maps: {} };
   }
+}
+
+// Singularity's unlock condition - every map's own bestWave (not just the
+// currently active one) has to clear sprint 100.
+function hasBeatenAllMaps() {
+  const stored = readStoredPayload();
+  return Object.keys(MAP_DEFS).every((id) => (stored.maps[id]?.bestWave || 0) > TOWER100_UNLOCK_WAVE);
 }
 
 // Applies one map's saved slot onto the live (currently active) state -
@@ -1044,7 +1152,7 @@ function renderCodex() {
     .join("");
 
   const towerSection = Object.entries(TOWER_TYPES)
-    .filter(([, def]) => !def.isLegendary || state.bestWave > TOWER100_UNLOCK_WAVE)
+    .filter(([, def]) => !def.isLegendary || def.unlockCheck())
     .map(([, def]) => {
       let typeNote;
       if (def.isSupport) typeNote = "support - no damage";
@@ -1201,7 +1309,7 @@ function handlePlacementOrSelection(pos) {
   if (state.towers.some((t) => t.col === col && t.row === row)) return;
 
   const def = TOWER_TYPES[state.selectedTowerType];
-  if (def.isLegendary && state.bestWave <= TOWER100_UNLOCK_WAVE) return;
+  if (def.isLegendary && !def.unlockCheck()) return;
   if (def.unique && countPlacedOfType(state.selectedTowerType) >= tenxMaxCopies()) return;
   const cost = Math.round(def.cost * (1 - getCostDiscount()));
   if (state.gold < cost) return;
@@ -1389,6 +1497,9 @@ function refreshTowerInfoPanel() {
   } else {
     statsLine = `dmg ${Math.round(t.damage)} | range ${Math.round(t.range)}`;
   }
+  if (t.isSentry) {
+    statsLine += ` | auto-levels in ${Math.ceil(t.autoLevelCooldown ?? t.autoLevelInterval)}s`;
+  }
   towerInfoLevel.textContent = `${statsLine} | dealt: ${Math.round(t.totalDamageDealt || 0).toLocaleString()}`;
 
   const cost = towerUpgradeCost(t);
@@ -1496,19 +1607,37 @@ towerInfoClose.addEventListener("click", hideTowerInfoPanel);
 towerUpgradeBtn.addEventListener("click", () => state.selectedTower && upgradeTower(state.selectedTower));
 towerSellBtn.addEventListener("click", () => state.selectedTower && sellTower(state.selectedTower));
 
-// Keyboard shortcuts for the selected tower's info panel: 1/2 pick a path
-// option (or advance the chosen path's next tier), 3 upgrades, Delete sells.
-// Ignored while typing in any input (e.g. the cheat box), since
-// "MONEY123 123" contains these same digits.
+// q-w-e-r-t-y-u-i-o-p-a selects which tower to place, one letter per
+// TOWER_TYPES entry in definition order - works even with nothing selected,
+// same as clicking its button in the list. Legendary towers stay unusable
+// via hotkey too until their own unlockCheck() passes.
+const TOWER_HOTKEYS = {
+  q: "gamer", w: "coder", e: "hacker", r: "manager", t: "farmer",
+  y: "recruiter", u: "quant", i: "freeze", o: "turret", p: "tenx", a: "singularity",
+};
+
+// With a tower selected: 1-4 pick a path option (or advance the chosen
+// path's next tier - up to 4 since some towers now offer that many), 5
+// upgrades, Delete/Backspace sells. Ignored while typing in any input (e.g.
+// the cheat box), since "MONEY123 123" contains these same digits.
 document.addEventListener("keydown", (e) => {
   const tag = document.activeElement?.tagName;
   if (tag === "INPUT" || tag === "TEXTAREA") return;
-  if (!state.selectedTower) return;
 
-  if (e.key === "3") {
+  const hotkeyType = TOWER_HOTKEYS[e.key.toLowerCase()];
+  if (hotkeyType) {
+    const def = TOWER_TYPES[hotkeyType];
+    if (def.isLegendary && !def.unlockCheck()) return;
+    state.selectedTowerType = state.selectedTowerType === hotkeyType ? null : hotkeyType;
+    refreshTowerButtons();
+    return;
+  }
+
+  if (!state.selectedTower) return;
+  if (e.key === "5") {
     if (!towerUpgradeBtn.disabled) upgradeTower(state.selectedTower);
-  } else if (e.key === "1" || e.key === "2") {
-    const btn = towerPathSection.querySelectorAll(".path-btn")[e.key === "1" ? 0 : 1];
+  } else if (["1", "2", "3", "4"].includes(e.key)) {
+    const btn = towerPathSection.querySelectorAll(".path-btn")[Number(e.key) - 1];
     if (btn && !btn.disabled) btn.click();
   } else if (e.key === "Delete" || e.key === "Backspace") {
     sellTower(state.selectedTower);
@@ -1524,7 +1653,10 @@ function getTowerBuffs(tower) {
   let rateMult = 1;
   let supported = false;
   for (const other of state.towers) {
-    if (!other.isSupport) continue;
+    // grantsAura lets a tower buff nearby allies while also attacking on
+    // its own (unlike isSupport towers, which only ever buff) - used by
+    // 10x Engineer's Mentorship path and Singularity's Time Dilation path.
+    if (!other.isSupport && !other.grantsAura) continue;
     if (distance(tower.x, tower.y, other.x, other.y) <= other.range) {
       damageMult += other.buffDamagePct;
       rateMult += other.buffRatePct;
@@ -1578,6 +1710,21 @@ function closestPointOnPath(x, y) {
     if (!best || dist < best.dist) best = { x: px, y: py, segment: i, dist };
   }
   return best;
+}
+
+// Sentries have no path system - instead they auto-level for free on a
+// timer, reusing the normal level-scaling formula in recomputeTowerStats.
+// Paying for a manual upgrade still works too and doesn't reset this timer.
+function updateSentries(dt) {
+  for (const t of state.towers) {
+    if (!t.isSentry) continue;
+    t.autoLevelCooldown = (t.autoLevelCooldown ?? t.autoLevelInterval) - dt;
+    if (t.autoLevelCooldown <= 0) {
+      t.autoLevelCooldown = t.autoLevelInterval;
+      t.level += 1;
+      recomputeTowerStats(t);
+    }
+  }
 }
 
 function updateRecruiters(dt) {
@@ -1871,7 +2018,7 @@ function updateTowers(dt) {
     if (t.cooldown > 0) continue;
 
     const buffs = getTowerBuffs(t);
-    const targets = findTargets(t, t.multiShot || 1, buffs.supported);
+    const targets = findTargets(t, t.multiShot || 1, buffs.supported || t.alwaysSeeCamo);
     if (targets.length > 0) {
       for (const target of targets) {
         // Quant's damage is a fraction of the target's own max hp (true
@@ -2286,6 +2433,7 @@ function loop(now) {
     updateSpawning(dt);
     updateEnemies(dt);
     updateTowers(dt);
+    updateSentries(dt);
     updateRecruiters(dt);
     updateAllies(dt);
     updateEconomy(dt);
