@@ -1021,6 +1021,14 @@ const ENEMY_TYPES = {
   // Manager's buff range (see getTowerBuffs/findTargets) - still visible so
   // the player can see them coming, just can't be shot without support.
   obfuscated: { label: "Obfuscated", emoji: "🌫️", hp: 55, speed: 65, reward: 12, lifeDamage: 1, color: "#94a3b8", radius: 14, camo: true },
+  // On death, splits into splitCount weaker copies (splitHpFrac of its own
+  // max hp) unless it's already a split itself - see applyDamage.
+  splitter: { label: "Forked Process", emoji: "🍴", hp: 70, speed: 55, reward: 8, lifeDamage: 1, color: "#fb7185", radius: 15, splitCount: 2, splitHpFrac: 0.4 },
+  // Passively heals nearby enemies each second - see updateHealers.
+  healer: { label: "QA Tester", emoji: "🩹", hp: 80, speed: 45, reward: 14, lifeDamage: 1, color: "#34d399", radius: 15, healRange: 90, healPerSecPct: 0.02 },
+  // Has a separate regenerating shield on top of its hp - see the shield
+  // handling in spawnEnemy/applyDamage/updateShields.
+  shielded: { label: "Hardened Build", emoji: "🛡️", hp: 60, speed: 50, reward: 14, lifeDamage: 1, color: "#60a5fa", radius: 15, shieldFrac: 1.0, shieldRegenDelay: 3, shieldRegenPerSec: 0.3 },
 };
 
 // Damage-type resistance: a multiplier applied when that enemy type takes
@@ -1391,6 +1399,9 @@ function renderCodex() {
       const resText = resistanceText(key);
       if (resText) parts.push(resText);
       if (def.camo) parts.push("camo - untargetable unless the shooting tower is currently inside an active Manager's buff range");
+      if (def.splitCount) parts.push(`splits into ${def.splitCount} weaker copies on death`);
+      if (def.healPerSecPct) parts.push(`heals nearby enemies ${Math.round(def.healPerSecPct * 100)}%/sec of their own max hp`);
+      if (def.shieldFrac) parts.push("has a separate regenerating shield on top of its hp");
       const desc = parts.length ? parts.join(" | ") : "no resistances";
       return `
       <div class="codex-row">
@@ -1866,9 +1877,9 @@ const TOWER_HOTKEYS = {
 };
 
 // With a tower selected: 1-4 pick a path option (or advance the chosen
-// path's next tier - up to 4 since some towers now offer that many), 5
-// upgrades, Delete/Backspace sells. Ignored while typing in any input (e.g.
-// the cheat box), since "MONEY123 123" contains these same digits.
+// path's next tier - up to 4 since some towers now offer that many), `
+// (backtick) upgrades, Delete/Backspace sells. Ignored while typing in any
+// input (e.g. the cheat box), since "MONEY123 123" contains these same digits.
 document.addEventListener("keydown", (e) => {
   const tag = document.activeElement?.tagName;
   if (tag === "INPUT" || tag === "TEXTAREA") return;
@@ -1883,7 +1894,7 @@ document.addEventListener("keydown", (e) => {
   }
 
   if (!state.selectedTower) return;
-  if (e.key === "5") {
+  if (e.key === "`") {
     if (!towerUpgradeBtn.disabled) upgradeTower(state.selectedTower);
   } else if (["1", "2", "3", "4"].includes(e.key)) {
     const btn = towerPathSection.querySelectorAll(".path-btn")[Number(e.key) - 1];
@@ -2103,20 +2114,35 @@ function bossCountFor(waveNum) {
   return 2 + Math.floor((waveNum - 70) / 20);
 }
 
+// Every 7th wave from 7 onward is an all-Glitch swarm - many fast, low-hp
+// enemies instead of the usual mix (double count, since Glitches alone are
+// individually much weaker than a normal mixed wave).
+function isSwarmWave(waveNum) {
+  return waveNum >= 7 && waveNum % 7 === 0;
+}
+
 function buildWave(waveNum) {
-  const count = 6 + waveNum * 2;
+  const swarm = isSwarmWave(waveNum);
+  const count = swarm ? (6 + waveNum * 2) * 2 : 6 + waveNum * 2;
   const queue = [];
   for (let i = 0; i < count; i++) {
+    if (swarm) {
+      queue.push("fast");
+      continue;
+    }
     let type = "basic";
     const roll = Math.random();
-    // Each resistant/camo type is gated to later waves, per roll ranges
-    // that widen as the wave number climbs.
-    if (waveNum >= 25 && roll < 0.1) type = "encrypted";
-    else if (waveNum >= 18 && roll < 0.2) type = "firewalled";
-    else if (waveNum >= 14 && roll < 0.32) type = "obfuscated";
-    else if (waveNum >= 10 && roll < 0.44) type = "legacy";
-    else if (waveNum >= 5 && roll < 0.64) type = "tank";
-    else if (waveNum >= 2 && roll < 0.84) type = "fast";
+    // Each resistant/camo/special type is gated to later waves, per roll
+    // ranges that widen as the wave number climbs.
+    if (waveNum >= 25 && roll < 0.08) type = "encrypted";
+    else if (waveNum >= 20 && roll < 0.16) type = "shielded";
+    else if (waveNum >= 18 && roll < 0.24) type = "firewalled";
+    else if (waveNum >= 16 && roll < 0.32) type = "healer";
+    else if (waveNum >= 14 && roll < 0.42) type = "obfuscated";
+    else if (waveNum >= 10 && roll < 0.52) type = "legacy";
+    else if (waveNum >= 6 && roll < 0.62) type = "splitter";
+    else if (waveNum >= 5 && roll < 0.72) type = "tank";
+    else if (waveNum >= 2 && roll < 0.88) type = "fast";
     queue.push(type);
   }
   if (waveNum % bossIntervalFor(waveNum) === 0) {
@@ -2192,6 +2218,7 @@ function spawnEnemy(type) {
   // Every enemy gets a little faster each wave, on top of any type-specific
   // base speed (bossTank stays slow, bossCamo stays fast, relative to each other).
   const speed = def.speed * (1 + state.wave * 0.004);
+  const maxShield = def.shieldFrac ? Math.round(hp * def.shieldFrac) : 0;
   state.enemies.push({
     type,
     x: PATH_POINTS[0].x,
@@ -2207,12 +2234,47 @@ function spawnEnemy(type) {
     isBoss: isBossType,
     camo: !!def.camo,
     segment: 1,
+    maxShield,
+    shield: maxShield,
+    shieldRegenTimer: 0,
   });
 }
 
 // ---------- Update loop ----------
 function distance(ax, ay, bx, by) {
   return Math.hypot(ax - bx, ay - by);
+}
+
+// QA Testers passively heal any other enemy within range, as a % of that
+// target's own max hp - scales naturally with wave-scaled hp instead of
+// needing its own separate scaling curve.
+function updateHealers(dt) {
+  const def = ENEMY_TYPES.healer;
+  for (const e of state.enemies) {
+    if (e.type !== "healer") continue;
+    for (const other of state.enemies) {
+      if (other === e || other.hp <= 0) continue;
+      if (distance(e.x, e.y, other.x, other.y) <= def.healRange) {
+        other.hp = Math.min(other.maxHp, other.hp + other.maxHp * def.healPerSecPct * dt);
+      }
+    }
+  }
+}
+
+// Shielded enemies regenerate their shield pool once shieldRegenTimer (reset
+// on every hit, see applyDamage) counts down to 0.
+function updateShields(dt) {
+  for (const e of state.enemies) {
+    if (!e.maxShield) continue;
+    if (e.shieldRegenTimer > 0) {
+      e.shieldRegenTimer -= dt;
+      continue;
+    }
+    if (e.shield < e.maxShield) {
+      const def = ENEMY_TYPES[e.type];
+      e.shield = Math.min(e.maxShield, e.shield + e.maxShield * def.shieldRegenPerSec * dt);
+    }
+  }
 }
 
 function updateEnemies(dt) {
@@ -2325,6 +2387,19 @@ function applyDamage(enemy, amount, sourceTower) {
     }
   }
 
+  // Shielded enemies eat damage from a separate regenerating pool first -
+  // any overflow past the shield's current value spills into real hp.
+  if (enemy.shield > 0) {
+    enemy.shieldRegenTimer = ENEMY_TYPES[enemy.type].shieldRegenDelay;
+    if (amount <= enemy.shield) {
+      enemy.shield -= amount;
+      amount = 0;
+    } else {
+      amount -= enemy.shield;
+      enemy.shield = 0;
+    }
+  }
+
   enemy.hp -= amount;
   if (sourceTower) sourceTower.totalDamageDealt = (sourceTower.totalDamageDealt || 0) + amount;
   if (enemy.hp <= 0) {
@@ -2334,6 +2409,24 @@ function applyDamage(enemy, amount, sourceTower) {
       state.gold += enemy.reward;
       if (sourceTower?.bonusGoldPerKill) state.gold += sourceTower.bonusGoldPerKill;
       state.kills += 1;
+
+      // Splitter enemies leave weaker copies behind on death - hasSplit
+      // stops the copies from splitting again themselves.
+      const dyingDef = ENEMY_TYPES[enemy.type];
+      if (dyingDef?.splitCount && !enemy.hasSplit) {
+        const childHp = Math.max(1, Math.round(enemy.maxHp * dyingDef.splitHpFrac));
+        for (let i = 0; i < dyingDef.splitCount; i++) {
+          state.enemies.push({
+            ...enemy,
+            hp: childHp,
+            maxHp: childHp,
+            hasSplit: true,
+            reward: Math.round(enemy.reward * 0.4),
+            x: enemy.x + (Math.random() - 0.5) * 12,
+            y: enemy.y + (Math.random() - 0.5) * 12,
+          });
+        }
+      }
     }
   }
 }
@@ -2633,6 +2726,14 @@ function draw() {
     ctx.fillRect(e.x - barW / 2, e.y - e.radius - 10, barW, 4);
     ctx.fillStyle = "#39ff14";
     ctx.fillRect(e.x - barW / 2, e.y - e.radius - 10, barW * pct, 4);
+
+    if (e.maxShield > 0) {
+      const shieldPct = Math.max(0, e.shield / e.maxShield);
+      ctx.fillStyle = "#000";
+      ctx.fillRect(e.x - barW / 2, e.y - e.radius - 15, barW, 3);
+      ctx.fillStyle = "#60a5fa";
+      ctx.fillRect(e.x - barW / 2, e.y - e.radius - 15, barW * shieldPct, 3);
+    }
   }
 
   // allies (temporary units deployed by Recruiter towers) - fade out
@@ -2689,6 +2790,8 @@ function loop(now) {
   if (!state.gameOver && !state.paused) {
     updateSpawning(dt);
     updateEnemies(dt);
+    updateHealers(dt);
+    updateShields(dt);
     updateTowers(dt);
     updateSentries(dt);
     updateRecruiters(dt);
