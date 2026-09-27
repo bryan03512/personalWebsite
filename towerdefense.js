@@ -387,7 +387,9 @@ function applyLoadedState(parsed) {
   // race with navigating away mid-round) silently deleting placed towers -
   // never adopt an incoming towers list that's smaller than what's already here.
   if (Array.isArray(parsed.towers) && parsed.towers.length >= state.towers.length) {
-    state.towers = parsed.towers;
+    // flashUntil is a performance.now() timestamp from whatever session saved
+    // this - meaningless (and potentially crash-inducing, see draw()) now.
+    state.towers = parsed.towers.map((t) => ({ ...t, flashUntil: 0 }));
   }
 }
 
@@ -1151,10 +1153,17 @@ function draw() {
       ctx.setLineDash([]);
     }
 
-    // brief flash pulse right after placing/upgrading/leveling up
+    // brief flash pulse right after placing/upgrading/leveling up. flashUntil
+    // is a performance.now()-based timestamp, which is meaningless across a
+    // page reload (it resets to ~0 each session) - a stale value loaded from
+    // a previous session could otherwise make `p` go deeply negative, which
+    // sends ctx.arc() a negative radius and throws, silently freezing the
+    // whole render loop for the rest of the session. Clamped here as a
+    // guardrail regardless of cause; stale values are also cleared on load
+    // (see applyLoadedState) so this branch shouldn't normally even trigger.
     if (t.flashUntil && t.flashUntil > performance.now()) {
       const remaining = t.flashUntil - performance.now();
-      const p = 1 - remaining / 400;
+      const p = Math.min(1, Math.max(0, 1 - remaining / 400));
       ctx.globalAlpha = 1 - p;
       ctx.strokeStyle = "#ffffff";
       ctx.lineWidth = 3;
