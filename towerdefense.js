@@ -348,6 +348,26 @@ const TOWER_PATHS = {
           desc: "acquired - staggering credits/sec, the team retires early", cost: 1000,
           apply: (t) => { t.pathIncomeMult = 8.5; state.gold += 800; },
         },
+        {
+          desc: "strategic partnership - massive credits/sec, another payout", cost: 1600,
+          apply: (t) => { t.pathIncomeMult = 12; state.gold += 1200; },
+        },
+        {
+          desc: "unicorn status - huge credits/sec, huge payout", cost: 2500,
+          apply: (t) => { t.pathIncomeMult = 17; state.gold += 1800; },
+        },
+        {
+          desc: "market leader - enormous credits/sec, big payout", cost: 3800,
+          apply: (t) => { t.pathIncomeMult = 24; state.gold += 2600; },
+        },
+        {
+          desc: "monopoly - staggering credits/sec, giant payout", cost: 5600,
+          apply: (t) => { t.pathIncomeMult = 34; state.gold += 3800; },
+        },
+        {
+          desc: "post-scarcity - the credits never stop flowing", cost: 8000,
+          apply: (t) => { t.pathIncomeMult = 48; state.gold += 5500; },
+        },
       ],
     },
     vc: {
@@ -367,6 +387,26 @@ const TOWER_PATHS = {
         {
           desc: "towers/upgrades cost 30% less, IPO windfall", cost: 1000,
           apply: (t) => { t.costDiscountPct = 0.30; state.gold += 600; },
+        },
+        {
+          desc: "towers/upgrades cost 34% less, strategic funding round", cost: 1600,
+          apply: (t) => { t.costDiscountPct = 0.34; state.gold += 1000; },
+        },
+        {
+          desc: "towers/upgrades cost 38% less, unicorn valuation", cost: 2500,
+          apply: (t) => { t.costDiscountPct = 0.38; state.gold += 1500; },
+        },
+        {
+          desc: "towers/upgrades cost 42% less, market-leading capital", cost: 3800,
+          apply: (t) => { t.costDiscountPct = 0.42; state.gold += 2200; },
+        },
+        {
+          desc: "towers/upgrades cost 46% less, monopoly capital", cost: 5600,
+          apply: (t) => { t.costDiscountPct = 0.46; state.gold += 3200; },
+        },
+        {
+          desc: "towers/upgrades cost 50% less - practically free", cost: 8000,
+          apply: (t) => { t.costDiscountPct = 0.50; state.gold += 4600; },
         },
       ],
     },
