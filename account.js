@@ -168,6 +168,14 @@ function wireAccountWidget() {
 
   renderAccountWidget();
   sb.auth.onAuthStateChange(() => renderAccountWidget());
+
+  // Opt-in per page via <body data-auto-login-prompt> - opens the login
+  // modal automatically on load if nobody's signed in yet (used on the menu).
+  if (document.body.hasAttribute("data-auto-login-prompt")) {
+    accountGetUser().then((user) => {
+      if (!user) openModal("login");
+    });
+  }
 }
 
 document.addEventListener("DOMContentLoaded", buildAccountWidget);

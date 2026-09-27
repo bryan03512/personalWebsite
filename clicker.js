@@ -48,7 +48,7 @@ function defaultState() {
   UPGRADES.forEach((u) => (upgrades[u.id] = 0));
   const treeNodes = {};
   PRESTIGE_TREE.forEach((n) => (treeNodes[n.id] = false));
-  return { score: 0, upgrades, prestigePoints: 0, treeNodes, lastSaveTime: Date.now() };
+  return { score: 0, peakScore: 0, upgrades, prestigePoints: 0, treeNodes, lastSaveTime: Date.now() };
 }
 
 let state = defaultState();
@@ -160,6 +160,7 @@ function playClickEffect(amount) {
 function applyLoadedState(parsed) {
   if (!parsed) return;
   state.score = typeof parsed.score === "number" ? parsed.score : 0;
+  state.peakScore = typeof parsed.peakScore === "number" ? parsed.peakScore : state.score;
   state.prestigePoints = typeof parsed.prestigePoints === "number" ? parsed.prestigePoints : 0;
   state.lastSaveTime = typeof parsed.lastSaveTime === "number" ? parsed.lastSaveTime : Date.now();
   if (parsed.upgrades) {
@@ -560,6 +561,7 @@ function applyOfflineProgress() {
 }
 
 function render() {
+  if (state.score > state.peakScore) state.peakScore = state.score;
   scoreEl.textContent = `commits: ${state.score}`;
   statsEl.textContent = `lines/commit: ${getClickPower()}  |  CI bots: ${getAutoPower()}/sec`;
   refreshUpgradeButtons();
@@ -686,3 +688,28 @@ buildPrestigeTree();
 render(); // instant feedback from the local save, before any network round-trip
 setInterval(tick, 1000);
 syncAndApplyOffline();
+
+if (typeof createTutorial === "function") {
+  createTutorial("clicker", [
+    {
+      title: "welcome to clicker.sh",
+      text: "Click the big button to earn commits. Each click gives you 'lines/commit' worth of progress.",
+    },
+    {
+      title: "hold to auto-commit",
+      text: "Hold the button down for about 1 second to start auto-committing repeatedly - no need to click a thousand times by hand.",
+    },
+    {
+      title: "buy upgrades",
+      text: "Spend commits on typing and CI/CD upgrades below to boost your commits-per-click and passive commits-per-second. Use the x1/x10/max switch to buy in bulk.",
+    },
+    {
+      title: "prestige for permanent power",
+      text: "Once you've built up enough commits, hit 'refactor --prestige' to reset your run for permanent prestige points - spend them in the prestige tree (the 🌳 tab) for lasting bonuses.",
+    },
+    {
+      title: "save your progress",
+      text: "Check the 📁 farm tab to see everything you've collected. Log in (top-right) to save your progress across devices and appear on the leaderboard.",
+    },
+  ]);
+}

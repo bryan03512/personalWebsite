@@ -59,56 +59,177 @@ const TOWER_TYPES = {
     cost: 120, damage: 0, range: 130, fireRate: Infinity, color: "#ffd166", projectileSpeed: 0,
     isSupport: true, buffDamagePct: 0.2, buffRatePct: 0.2,
   },
+  farmer: {
+    name: "Consultant", desc: "no combat - generates credits over time", emoji: "💼",
+    cost: 100, damage: 0, range: 0, fireRate: Infinity, color: "#34d399", projectileSpeed: 0,
+    isEconomy: true, incomePerSec: 3,
+  },
 };
 
 const OVERCLOCK_DURATION = 8;
 const OVERCLOCK_COOLDOWN = 30;
+const SPEED_STEPS = [1, 2, 5];
 
 // Each tower unlocks a choice between two mutually-exclusive specialization
-// paths once it reaches PATH_UNLOCK_LEVEL. Choosing one is permanent and
-// locks out the other, but leveling continues independently afterward -
-// path bonuses are separate multipliers layered on top of level scaling.
+// paths once it reaches PATH_UNLOCK_LEVEL. Choosing one buys tier 1
+// immediately; tiers 2 and 3 are bought afterward once the tower reaches
+// their own (higher) level requirement. Choosing a path locks out the
+// other permanently, but leveling continues independently throughout -
+// path bonuses are separate multipliers/effects layered on top of level
+// scaling, and each tier adds its own new effect rather than just bigger
+// numbers on the same one.
 const PATH_UNLOCK_LEVEL = 3;
+const PATH_TIER_LEVELS = [3, 6, 10];
 
 const TOWER_PATHS = {
   gamer: {
     speedrunner: {
-      name: "Speedrunner", desc: "much faster fire rate, shorter range", cost: 80,
-      apply: (t) => { t.pathRateMult = 1.6; t.pathRangeMult = 0.8; },
+      name: "Speedrunner",
+      tiers: [
+        {
+          desc: "much faster fire rate, shorter range", cost: 80,
+          apply: (t) => { t.pathRateMult = 1.6; t.pathRangeMult = 0.8; },
+        },
+        {
+          desc: "even faster, plus a chance to crit for 1.5x", cost: 150,
+          apply: (t) => { t.pathRateMult = 2.3; t.critChance = 0.15; t.critMult = 1.5; },
+        },
+        {
+          desc: "now hits 2 targets, bigger crits", cost: 260,
+          apply: (t) => { t.pathRateMult = 3.0; t.critChance = 0.25; t.critMult = 2.0; t.multiShot = 2; },
+        },
+      ],
     },
     multiplayer: {
-      name: "Multiplayer", desc: "fires at 2 enemies at once", cost: 80,
-      apply: (t) => { t.multiShot = 2; },
+      name: "Multiplayer",
+      tiers: [
+        { desc: "fires at 2 enemies at once", cost: 80, apply: (t) => { t.multiShot = 2; } },
+        {
+          desc: "fires at 3 enemies, wider range", cost: 150,
+          apply: (t) => { t.multiShot = 3; t.pathRangeMult = 1.15; },
+        },
+        {
+          desc: "fires at 4 enemies, bonus gold per kill", cost: 260,
+          apply: (t) => { t.multiShot = 4; t.pathRangeMult = 1.15; t.bonusGoldPerKill = 1; },
+        },
+      ],
     },
   },
   coder: {
     architect: {
-      name: "Architect", desc: "huge range & damage, even slower", cost: 140,
-      apply: (t) => { t.pathDamageMult = 1.6; t.pathRangeMult = 1.4; t.pathRateMult = 0.7; },
+      name: "Architect",
+      tiers: [
+        {
+          desc: "huge range & damage, even slower", cost: 140,
+          apply: (t) => { t.pathDamageMult = 1.6; t.pathRangeMult = 1.4; t.pathRateMult = 0.7; },
+        },
+        {
+          desc: "bigger hits, chance to crit for 2.5x", cost: 260,
+          apply: (t) => { t.pathDamageMult = 2.3; t.pathRangeMult = 1.7; t.pathRateMult = 0.7; t.critChance = 0.2; t.critMult = 2.5; },
+        },
+        {
+          desc: "massive range/damage, extra dmg vs bosses", cost: 450,
+          apply: (t) => { t.pathDamageMult = 3.2; t.pathRangeMult = 2.0; t.pathRateMult = 0.7; t.critChance = 0.3; t.critMult = 3.0; t.bossDamageMult = 1.5; },
+        },
+      ],
     },
     debugger: {
-      name: "Debugger", desc: "slows hit enemies 40% for 2s", cost: 140,
-      apply: (t) => { t.slowOnHit = { pct: 0.4, duration: 2 }; },
+      name: "Debugger",
+      tiers: [
+        { desc: "slows hit enemies 40% for 2s", cost: 140, apply: (t) => { t.slowOnHit = { pct: 0.4, duration: 2 }; } },
+        {
+          desc: "stronger slow, plus a passive slow aura in range", cost: 260,
+          apply: (t) => { t.slowOnHit = { pct: 0.55, duration: 3 }; t.auraSlowPct = 0.15; },
+        },
+        {
+          desc: "even stronger slow/aura, extra dmg vs merge conflicts", cost: 450,
+          apply: (t) => { t.slowOnHit = { pct: 0.7, duration: 4 }; t.auraSlowPct = 0.25; t.tankDamageMult = 1.4; },
+        },
+      ],
     },
   },
   hacker: {
     ddos: {
-      name: "DDoS", desc: "much bigger blast radius", cost: 200,
-      apply: (t) => { t.pathSplashMult = 1.7; t.pathDamageMult = 1.15; },
+      name: "DDoS",
+      tiers: [
+        { desc: "much bigger blast radius", cost: 200, apply: (t) => { t.pathSplashMult = 1.7; t.pathDamageMult = 1.15; } },
+        {
+          desc: "even bigger blast, more damage", cost: 340,
+          apply: (t) => { t.pathSplashMult = 2.2; t.pathDamageMult = 1.3; },
+        },
+        {
+          desc: "huge blast, mines gold from every kill in it", cost: 550,
+          apply: (t) => { t.pathSplashMult = 2.8; t.pathDamageMult = 1.5; t.bonusGoldPerKill = 2; },
+        },
+      ],
     },
     zeroday: {
-      name: "Zero-Day", desc: "+100% dmg vs bosses, +50% vs merge conflicts", cost: 200,
-      apply: (t) => { t.bossDamageMult = 2.0; t.tankDamageMult = 1.5; },
+      name: "Zero-Day",
+      tiers: [
+        { desc: "+100% dmg vs bosses, +50% vs merge conflicts", cost: 200, apply: (t) => { t.bossDamageMult = 2.0; t.tankDamageMult = 1.5; } },
+        {
+          desc: "even more dmg vs both, chance to crit 2x", cost: 340,
+          apply: (t) => { t.bossDamageMult = 2.75; t.tankDamageMult = 2.0; t.critChance = 0.2; t.critMult = 2.0; },
+        },
+        {
+          desc: "devastating vs both, bigger crits, more base dmg", cost: 550,
+          apply: (t) => { t.bossDamageMult = 3.5; t.tankDamageMult = 2.5; t.critChance = 0.3; t.critMult = 2.5; t.pathDamageMult = 1.2; },
+        },
+      ],
     },
   },
   manager: {
     scrummaster: {
-      name: "Scrum Master", desc: "much bigger fire-rate buff to allies", cost: 130,
-      apply: (t) => { t.pathBuffRateMult = 2.2; t.pathBuffDamageMult = 0.5; },
+      name: "Scrum Master",
+      tiers: [
+        { desc: "much bigger fire-rate buff to allies", cost: 130, apply: (t) => { t.pathBuffRateMult = 2.2; t.pathBuffDamageMult = 0.5; } },
+        {
+          desc: "even bigger rate buff, bigger support radius", cost: 240,
+          apply: (t) => { t.pathBuffRateMult = 3.0; t.pathBuffDamageMult = 0.6; t.pathRangeMult = 1.2; },
+        },
+        {
+          desc: "huge rate buff & radius for the whole team", cost: 400,
+          apply: (t) => { t.pathBuffRateMult = 3.8; t.pathBuffDamageMult = 0.7; t.pathRangeMult = 1.4; },
+        },
+      ],
     },
     techlead: {
-      name: "Tech Lead", desc: "much bigger damage buff to allies", cost: 130,
-      apply: (t) => { t.pathBuffDamageMult = 2.2; t.pathBuffRateMult = 0.5; },
+      name: "Tech Lead",
+      tiers: [
+        { desc: "much bigger damage buff to allies", cost: 130, apply: (t) => { t.pathBuffDamageMult = 2.2; t.pathBuffRateMult = 0.5; } },
+        {
+          desc: "even bigger damage buff, bigger support radius", cost: 240,
+          apply: (t) => { t.pathBuffDamageMult = 3.0; t.pathBuffRateMult = 0.6; t.pathRangeMult = 1.2; },
+        },
+        {
+          desc: "huge damage buff & radius for the whole team", cost: 400,
+          apply: (t) => { t.pathBuffDamageMult = 3.8; t.pathBuffRateMult = 0.7; t.pathRangeMult = 1.4; },
+        },
+      ],
+    },
+  },
+  farmer: {
+    retainer: {
+      name: "Retainer Client",
+      tiers: [
+        { desc: "generates a lot more credits/sec", cost: 90, apply: (t) => { t.pathIncomeMult = 1.8; } },
+        { desc: "even more credits/sec", cost: 170, apply: (t) => { t.pathIncomeMult = 2.6; } },
+        {
+          desc: "huge credits/sec, instant IPO payout", cost: 300,
+          apply: (t) => { t.pathIncomeMult = 3.6; state.gold += 200; },
+        },
+      ],
+    },
+    vc: {
+      name: "Venture Capital",
+      tiers: [
+        { desc: "all towers/upgrades cost 5% less", cost: 90, apply: (t) => { t.costDiscountPct = 0.05; } },
+        { desc: "all towers/upgrades cost 10% less", cost: 170, apply: (t) => { t.costDiscountPct = 0.10; } },
+        {
+          desc: "towers/upgrades cost 18% less, instant seed funding", cost: 300,
+          apply: (t) => { t.costDiscountPct = 0.18; state.gold += 150; },
+        },
+      ],
     },
   },
 };
@@ -194,7 +315,7 @@ function refreshTowerButtons() {
 }
 
 function updateStats() {
-  goldStat.textContent = state.gold;
+  goldStat.textContent = Math.floor(state.gold);
   livesStat.textContent = state.lives;
   waveStat.textContent = state.wave;
   bestWaveStat.textContent = state.bestWave;
@@ -241,7 +362,7 @@ function applyLoadedState(parsed) {
   if (typeof parsed.wave === "number") state.wave = parsed.wave;
   if (typeof parsed.bestWave === "number") state.bestWave = parsed.bestWave;
   if (typeof parsed.kills === "number") state.kills = parsed.kills;
-  state.gameSpeed = parsed.gameSpeed === 2 ? 2 : 1;
+  state.gameSpeed = SPEED_STEPS.includes(parsed.gameSpeed) ? parsed.gameSpeed : 1;
   state.lastSaveTime = parsed.lastSaveTime || Date.now();
   if (Array.isArray(parsed.towers)) state.towers = parsed.towers;
 }
@@ -271,7 +392,7 @@ function scheduleCloudSync() {
 
 function syncSpeedButton() {
   speedBtn.textContent = `${state.gameSpeed}x`;
-  speedBtn.classList.toggle("active", state.gameSpeed === 2);
+  speedBtn.classList.toggle("active", state.gameSpeed > 1);
 }
 
 async function pullCloudSave() {
@@ -322,9 +443,10 @@ function handlePlacementOrSelection(pos) {
   if (state.towers.some((t) => t.col === col && t.row === row)) return;
 
   const def = TOWER_TYPES[state.selectedTowerType];
-  if (state.gold < def.cost) return;
+  const cost = Math.round(def.cost * (1 - getCostDiscount()));
+  if (state.gold < cost) return;
 
-  state.gold -= def.cost;
+  state.gold -= cost;
   const center = cellCenter([col, row]);
   const tower = {
     type: state.selectedTowerType,
@@ -335,8 +457,11 @@ function handlePlacementOrSelection(pos) {
     cooldown: 0,
     level: 1,
     path: null,
-    totalInvested: def.cost,
+    pathTier: 0,
+    totalInvested: cost,
     totalDamageDealt: 0,
+    flashUntil: performance.now() + 400,
+    visualStage: 0,
     ...def,
   };
   recomputeTowerStats(tower);
@@ -379,16 +504,26 @@ function hideTowerInfoPanel() {
   towerInfoPanel.hidden = true;
 }
 
+// Sum of cost-discount percentages from every placed Venture Capital farmer.
+function getCostDiscount() {
+  let discount = 0;
+  for (const t of state.towers) {
+    if (t.costDiscountPct) discount += t.costDiscountPct;
+  }
+  return Math.min(discount, 0.6); // sanity cap so towers never approach free
+}
+
 function towerUpgradeCost(t) {
   const baseCost = TOWER_TYPES[t.type].cost;
-  return Math.round(baseCost * 0.6 * Math.pow(1.6, t.level - 1));
+  const raw = baseCost * 0.6 * Math.pow(1.6, t.level - 1);
+  return Math.round(raw * (1 - getCostDiscount()));
 }
 
 // Recomputes a tower's derived stats from its base definition, level, and
 // (if chosen) its path multipliers. Path bonuses are permanent multipliers
 // layered on top of level scaling, so leveling keeps working the same way
 // after a path is chosen - called on placement, on level-up, and right
-// after a path is picked.
+// after a path tier is bought.
 function recomputeTowerStats(t) {
   const def = TOWER_TYPES[t.type];
   const levelFactor = 1 + 0.25 * (t.level - 1);
@@ -397,11 +532,22 @@ function recomputeTowerStats(t) {
   if (t.isSupport) {
     t.buffDamagePct = def.buffDamagePct * levelFactor * (t.pathBuffDamageMult || 1);
     t.buffRatePct = def.buffRatePct * levelFactor * (t.pathBuffRateMult || 1);
+  } else if (t.isEconomy) {
+    t.incomePerSec = def.incomePerSec * levelFactor * (t.pathIncomeMult || 1);
   } else {
     t.damage = def.damage * levelFactor * (t.pathDamageMult || 1);
     t.fireRate = def.fireRate / (t.pathRateMult || 1);
     t.splashRadius = (def.splashRadius || 0) * (t.pathSplashMult || 1);
   }
+}
+
+// Visual milestones: 0 = base, 1 = after 1st upgrade (level 2), 2 = after
+// 2nd upgrade (level 3), 3 = after a path is chosen. Drawn as a growing,
+// more elaborate ring around the tower (see draw()). Also triggers the
+// brief upgrade-flash animation.
+function markVisualMilestone(t, stage) {
+  if (stage > (t.visualStage || 0)) t.visualStage = stage;
+  t.flashUntil = performance.now() + 400;
 }
 
 function upgradeTower(t) {
@@ -411,18 +557,33 @@ function upgradeTower(t) {
   t.level += 1;
   t.totalInvested += cost;
   recomputeTowerStats(t);
+  if (t.level === 2) markVisualMilestone(t, 1);
+  else if (t.level === 3) markVisualMilestone(t, 2);
+  else t.flashUntil = performance.now() + 400;
   updateStats();
   saveGame();
 }
 
-function choosePath(t, pathId) {
-  if (t.path) return;
+// Buys the next tier of a tower's path: tier 0 picks the path (locking out
+// the other one permanently), tiers 1-2 advance an already-chosen path.
+// Each tier has its own level requirement (PATH_TIER_LEVELS) and cost.
+function buyPathTier(t, pathId) {
   const pathDef = TOWER_PATHS[t.type]?.[pathId];
-  if (!pathDef || t.level < PATH_UNLOCK_LEVEL || state.gold < pathDef.cost) return;
-  state.gold -= pathDef.cost;
+  if (!pathDef) return;
+  if (t.path && t.path !== pathId) return;
+
+  const nextTierIndex = t.pathTier || 0;
+  const tier = pathDef.tiers[nextTierIndex];
+  if (!tier) return; // already maxed
+  if (t.level < PATH_TIER_LEVELS[nextTierIndex] || state.gold < tier.cost) return;
+
+  state.gold -= tier.cost;
   t.path = pathId;
-  pathDef.apply(t);
+  t.pathTier = nextTierIndex + 1;
+  tier.apply(t);
   recomputeTowerStats(t);
+  if (nextTierIndex === 0) markVisualMilestone(t, 3);
+  else t.flashUntil = performance.now() + 400;
   updateStats();
   saveGame();
 }
@@ -445,11 +606,16 @@ function refreshTowerInfoPanel() {
   }
   towerInfoPanel.hidden = false;
   const def = TOWER_TYPES[t.type];
-  const pathLabel = t.path ? ` - ${TOWER_PATHS[t.type][t.path].name}` : "";
+  const pathLabel = t.path ? ` - ${TOWER_PATHS[t.type][t.path].name} T${t.pathTier}` : "";
   towerInfoName.textContent = `${def.emoji} ${def.name} (Lv.${t.level})${pathLabel}`;
-  const statsLine = t.isSupport
-    ? `+${Math.round(t.buffDamagePct * 100)}% dmg, +${Math.round(t.buffRatePct * 100)}% rate to devs in range`
-    : `dmg ${Math.round(t.damage)} | range ${Math.round(t.range)}`;
+  let statsLine;
+  if (t.isSupport) {
+    statsLine = `+${Math.round(t.buffDamagePct * 100)}% dmg, +${Math.round(t.buffRatePct * 100)}% rate to devs in range`;
+  } else if (t.isEconomy) {
+    statsLine = `+${t.incomePerSec.toFixed(1)} credits/sec`;
+  } else {
+    statsLine = `dmg ${Math.round(t.damage)} | range ${Math.round(t.range)}`;
+  }
   towerInfoLevel.textContent = `${statsLine} | dealt: ${Math.round(t.totalDamageDealt || 0).toLocaleString()}`;
 
   const cost = towerUpgradeCost(t);
@@ -465,12 +631,33 @@ function refreshTowerPathSection(t) {
   towerPathSection.innerHTML = "";
   if (!paths) return;
 
+  const tierIndex = t.pathTier || 0;
+
   if (t.path) {
     const chosen = paths[t.path];
-    const p = document.createElement("p");
-    p.className = "tower-path-chosen";
-    p.textContent = `path: ${chosen.name} - ${chosen.desc}`;
-    towerPathSection.appendChild(p);
+    for (let i = 0; i < tierIndex; i++) {
+      const p = document.createElement("p");
+      p.className = "tower-path-chosen";
+      p.textContent = `${chosen.name} T${i + 1}: ${chosen.tiers[i].desc}`;
+      towerPathSection.appendChild(p);
+    }
+    const nextTier = chosen.tiers[tierIndex];
+    if (nextTier) {
+      const requiredLevel = PATH_TIER_LEVELS[tierIndex];
+      if (t.level < requiredLevel) {
+        const hint = document.createElement("p");
+        hint.className = "tower-path-hint";
+        hint.textContent = `reach level ${requiredLevel} for ${chosen.name} T${tierIndex + 1}: ${nextTier.desc}`;
+        towerPathSection.appendChild(hint);
+      } else {
+        const btn = document.createElement("button");
+        btn.className = "btn path-btn";
+        btn.innerHTML = `<span class="path-name">${chosen.name} T${tierIndex + 1}</span><span class="path-desc">${nextTier.desc}</span><span class="path-cost">${nextTier.cost}c</span>`;
+        btn.disabled = state.gold < nextTier.cost;
+        btn.addEventListener("click", () => buyPathTier(t, t.path));
+        towerPathSection.appendChild(btn);
+      }
+    }
     return;
   }
 
@@ -483,11 +670,12 @@ function refreshTowerPathSection(t) {
   }
 
   Object.entries(paths).forEach(([pathId, pathDef]) => {
+    const tier1 = pathDef.tiers[0];
     const btn = document.createElement("button");
     btn.className = "btn path-btn";
-    btn.innerHTML = `<span class="path-name">${pathDef.name}</span><span class="path-desc">${pathDef.desc}</span><span class="path-cost">${pathDef.cost}c</span>`;
-    btn.disabled = state.gold < pathDef.cost;
-    btn.addEventListener("click", () => choosePath(t, pathId));
+    btn.innerHTML = `<span class="path-name">${pathDef.name}</span><span class="path-desc">${tier1.desc}</span><span class="path-cost">${tier1.cost}c</span>`;
+    btn.disabled = state.gold < tier1.cost;
+    btn.addEventListener("click", () => buyPathTier(t, pathId));
     towerPathSection.appendChild(btn);
   });
 }
@@ -509,6 +697,26 @@ function getTowerBuffs(tower) {
   }
   if (state.overclockActive) rateMult += 0.75;
   return { damageMult, rateMult };
+}
+
+// Passive income from Consultant towers, and passive slow auras from
+// upgraded Debuggers - both run continuously regardless of fire cooldown.
+function updateEconomy(dt) {
+  for (const t of state.towers) {
+    if (t.isEconomy) state.gold += t.incomePerSec * dt;
+  }
+}
+
+function updateAuras(dt) {
+  for (const t of state.towers) {
+    if (!t.auraSlowPct) continue;
+    for (const e of state.enemies) {
+      if (distance(t.x, t.y, e.x, e.y) <= t.range) {
+        e.slowPct = Math.max(e.slowPct || 0, t.auraSlowPct);
+        e.slowTimer = Math.max(e.slowTimer || 0, 0.4);
+      }
+    }
+  }
 }
 
 // ---------- Overclock ability ----------
@@ -533,7 +741,8 @@ function updateOverclock(dt) {
 overclockBtn.addEventListener("click", activateOverclock);
 
 speedBtn.addEventListener("click", () => {
-  state.gameSpeed = state.gameSpeed === 1 ? 2 : 1;
+  const idx = SPEED_STEPS.indexOf(state.gameSpeed);
+  state.gameSpeed = SPEED_STEPS[(idx + 1) % SPEED_STEPS.length];
   syncSpeedButton();
   saveGame();
 });
@@ -651,7 +860,7 @@ function findTargets(t, count) {
 
 function updateTowers(dt) {
   for (const t of state.towers) {
-    if (t.isSupport) continue; // managers boost - they don't attack
+    if (t.isSupport || t.isEconomy) continue; // managers/consultants don't attack
     t.cooldown -= dt;
     if (t.cooldown > 0) continue;
 
@@ -659,12 +868,16 @@ function updateTowers(dt) {
     if (targets.length > 0) {
       const buffs = getTowerBuffs(t);
       for (const target of targets) {
+        let dmg = t.damage * buffs.damageMult;
+        const isCrit = t.critChance && Math.random() < t.critChance;
+        if (isCrit) dmg *= t.critMult || 2;
         state.projectiles.push({
           x: t.x,
           y: t.y,
           target,
           speed: t.projectileSpeed,
-          damage: t.damage * buffs.damageMult,
+          damage: dmg,
+          isCrit,
           splashRadius: t.splashRadius || 0,
           color: t.color,
           sourceTower: t,
@@ -693,6 +906,7 @@ function applyDamage(enemy, amount, sourceTower) {
     if (idx !== -1) {
       state.enemies.splice(idx, 1);
       state.gold += enemy.reward;
+      if (sourceTower?.bonusGoldPerKill) state.gold += sourceTower.bonusGoldPerKill;
       state.kills += 1;
     }
   }
@@ -841,6 +1055,47 @@ function draw() {
     ctx.stroke();
     ctx.font = `${CELL * 0.4}px sans-serif`;
     ctx.fillText(t.emoji, t.x, t.y + 1);
+
+    // visual evolution: a growing, more elaborate ring per upgrade milestone
+    const stage = t.visualStage || 0;
+    if (stage >= 1) {
+      ctx.strokeStyle = "#cfd8dc";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(t.x, t.y, CELL * 0.34 + 4, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    if (stage >= 2) {
+      ctx.strokeStyle = "#ffd700";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(t.x, t.y, CELL * 0.34 + 7, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    if (stage >= 3) {
+      const spin = (performance.now() / 40) % 24;
+      ctx.setLineDash([4, 3]);
+      ctx.lineDashOffset = -spin;
+      ctx.strokeStyle = t.color;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(t.x, t.y, CELL * 0.34 + 10, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // brief flash pulse right after placing/upgrading/leveling up
+    if (t.flashUntil && t.flashUntil > performance.now()) {
+      const remaining = t.flashUntil - performance.now();
+      const p = 1 - remaining / 400;
+      ctx.globalAlpha = 1 - p;
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(t.x, t.y, CELL * 0.3 + p * 22, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
   }
 
   // ghost preview: follows the pointer/finger while a tower type is selected
@@ -950,6 +1205,8 @@ function loop(now) {
     updateSpawning(dt);
     updateEnemies(dt);
     updateTowers(dt);
+    updateEconomy(dt);
+    updateAuras(dt);
     updateProjectiles(dt);
     updateExplosions(dt);
     updateOverclock(dt);
@@ -1003,3 +1260,28 @@ updateStats();
 requestAnimationFrame(loop);
 setInterval(saveGame, 3000);
 pullCloudSave();
+
+if (typeof createTutorial === "function") {
+  createTutorial("towerdefense", [
+    {
+      title: "welcome to tower_defense.sh",
+      text: "Bugs crawl along the path toward your uptime. Select a dev from the list, then drag onto the board to place them - they'll auto-attack anything in range.",
+    },
+    {
+      title: "credits & income",
+      text: "Placing towers costs credits. Defeating bugs earns credits back, and a Consultant tower generates credits passively over time even without fighting.",
+    },
+    {
+      title: "start a sprint",
+      text: "Click 'deploy sprint' to send the next wave. Losing all your uptime ends the run - toggle 'auto' to launch sprints automatically, and use the speed button to speed up play.",
+    },
+    {
+      title: "upgrade & specialize",
+      text: "Click a placed dev to upgrade its stats, or sell it for some credits back. At level 3 you can lock in a permanent specialization path with 3 tiers of its own - choose carefully, it can't be undone.",
+    },
+    {
+      title: "bosses & the leaderboard",
+      text: "Every 5th sprint brings a tough boss. Use 'overclock' for an emergency damage burst - and remember, your best sprint ever reached is what counts on the leaderboard, even after you lose.",
+    },
+  ]);
+}

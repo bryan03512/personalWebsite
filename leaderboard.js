@@ -1,4 +1,5 @@
 const clickerBoard = document.getElementById("clickerBoard");
+const peakBoard = document.getElementById("peakBoard");
 const towerBoard = document.getElementById("towerBoard");
 const lbVisibility = document.getElementById("lbVisibility");
 const lbVisibleCheckbox = document.getElementById("lbVisibleCheckbox");
@@ -34,6 +35,18 @@ async function loadLeaderboards() {
     clickerBoard.innerHTML = `<p class="lb-loading">couldn't load leaderboard.</p>`;
   } else {
     renderBoard(clickerBoard, clickerRows.filter((r) => r.clicker_prestige > 0), "clicker_prestige", "pts");
+  }
+
+  const { data: peakRows, error: peakError } = await sb
+    .from("leaderboard")
+    .select("display_name, clicker_peak")
+    .order("clicker_peak", { ascending: false })
+    .limit(15);
+
+  if (peakError) {
+    peakBoard.innerHTML = `<p class="lb-loading">couldn't load leaderboard.</p>`;
+  } else {
+    renderBoard(peakBoard, peakRows.filter((r) => r.clicker_peak > 0), "clicker_peak", "commits");
   }
 
   const { data: towerRows, error: towerError } = await sb
