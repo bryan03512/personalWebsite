@@ -1114,13 +1114,17 @@ function updateRecruiters(dt) {
     for (let i = 0; i < t.allyCount; i++) {
       const angle = (Math.PI * 2 * i) / t.allyCount;
       state.allies.push({
-        x: t.x + Math.cos(angle) * 18,
-        y: t.y + Math.sin(angle) * 18,
+        // Offset well clear of the tower's own ~20px body, and colored
+        // distinctly from it (not t.color) - otherwise a single ally sits
+        // almost exactly on top of an identically-colored tower and is
+        // effectively invisible.
+        x: t.x + Math.cos(angle) * 34,
+        y: t.y + Math.sin(angle) * 34,
         damage: t.allyDamage,
         range: t.allyRange,
         fireRate: t.allyFireRate,
         cooldown: 0,
-        color: t.color,
+        color: t.pathAllyExplosive ? "#fb923c" : "#fde047",
         emoji: "🧑‍💻",
         damageType: t.pathAllyExplosive ? "explosive" : "normal",
         splashRadius: t.pathAllyExplosive ? 40 : 0,
@@ -1737,9 +1741,12 @@ function draw() {
     ctx.globalAlpha = 0.4 + 0.6 * fade;
     ctx.fillStyle = a.color;
     ctx.beginPath();
-    ctx.arc(a.x, a.y, CELL * 0.2, 0, Math.PI * 2);
+    ctx.arc(a.x, a.y, CELL * 0.22, 0, Math.PI * 2);
     ctx.fill();
-    ctx.font = `${CELL * 0.24}px sans-serif`;
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.font = `${CELL * 0.26}px sans-serif`;
     ctx.fillText(a.emoji, a.x, a.y + 1);
     ctx.globalAlpha = 1;
   }
