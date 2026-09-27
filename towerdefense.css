@@ -338,10 +338,45 @@ canvas {
   font-size: 0.9rem;
 }
 
-.change-map-btn {
+.change-map-btn, .pause-btn {
   margin-left: 10px;
   padding: 4px 10px;
   font-size: 0.8rem;
+}
+
+.pause-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  background: rgba(0, 0, 0, 0.8);
+  align-items: center;
+  justify-content: center;
+}
+
+.pause-overlay:not([hidden]) {
+  display: flex;
+}
+
+.pause-box {
+  width: min(280px, 90vw);
+  background: var(--bg-panel);
+  border: 1px solid var(--green-dim);
+  border-radius: 6px;
+  padding: 20px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pause-box h2 {
+  margin: 0 0 6px;
+  color: var(--green);
+  font-size: 1.2rem;
+}
+
+.pause-box .btn {
+  width: 100%;
 }
 
 .map-picker-overlay {

@@ -87,9 +87,9 @@ const TOWER_TYPES = {
     isEconomy: true, incomePerSec: 3,
   },
   recruiter: {
-    name: "Recruiter", desc: "deploys temporary allies to fight for you", emoji: "🧑‍💼",
+    name: "Recruiter", desc: "deploys warriors that march backwards up the path to meet incoming bugs", emoji: "🧑‍💼",
     cost: 150, damage: 0, range: 0, fireRate: Infinity, color: "#f97316", projectileSpeed: 0,
-    isRecruiter: true, deployInterval: 6, allyDamage: 14, allyRange: 110, allyFireRate: 0.8, allyDuration: 6, allyCount: 1,
+    isRecruiter: true, deployInterval: 6, allyDamage: 14, allyRange: 34, allySpeed: 70, allyFireRate: 0.8, allyDuration: 6, allyCount: 1,
   },
   quant: {
     name: "Quant", desc: "arcane exploits - true damage, ignores all resistances", emoji: "🔮",
@@ -477,6 +477,7 @@ const state = {
   spawnQueue: [],
   spawnTimer: 0,
   gameOver: false,
+  paused: false,
   gameSpeed: 1,
   overclockActive: false,
   overclockTimer: 0,
@@ -503,6 +504,11 @@ const restartBtn = document.getElementById("restartBtn");
 const changeMapBtn = document.getElementById("changeMapBtn");
 const mapPickerOverlay = document.getElementById("mapPickerOverlay");
 const mapPickerList = document.getElementById("mapPickerList");
+const pauseBtn = document.getElementById("pauseBtn");
+const pauseOverlay = document.getElementById("pauseOverlay");
+const resumeBtn = document.getElementById("resumeBtn");
+const pauseChangeMapBtn = document.getElementById("pauseChangeMapBtn");
+const pauseRestartBtn = document.getElementById("pauseRestartBtn");
 
 const overclockBtn = document.getElementById("overclockBtn");
 const speedBtn = document.getElementById("speedBtn");
@@ -737,6 +743,30 @@ changeMapBtn.addEventListener("click", () => {
   mapPickerOverlay.hidden = false;
 });
 
+pauseBtn.addEventListener("click", () => {
+  if (state.gameOver) return;
+  state.paused = true;
+  pauseOverlay.hidden = false;
+});
+
+resumeBtn.addEventListener("click", () => {
+  state.paused = false;
+  pauseOverlay.hidden = true;
+});
+
+pauseChangeMapBtn.addEventListener("click", () => {
+  state.paused = false;
+  pauseOverlay.hidden = true;
+  renderMapPicker();
+  mapPickerOverlay.hidden = false;
+});
+
+pauseRestartBtn.addEventListener("click", () => {
+  state.paused = false;
+  pauseOverlay.hidden = true;
+  resetGame();
+});
+
 // Cloud push happens on a flat 20s heartbeat instead of a cancellable
 // debounce - a single-shot setTimeout gets destroyed outright by navigating
 // to another page before it fires, which could leave the cloud save stale
@@ -960,6 +990,7 @@ function recomputeTowerStats(t) {
     t.deployInterval = def.deployInterval / (t.pathDeployRateMult || 1);
     t.allyDamage = def.allyDamage * levelFactor * (t.pathAllyDamageMult || 1);
     t.allyRange = def.allyRange;
+    t.allySpeed = def.allySpeed;
     t.allyFireRate = def.allyFireRate;
     t.allyDuration = def.allyDuration * (t.pathAllyDurationMult || 1);
     t.allyCount = def.allyCount + (t.pathAllyCountBonus || 0);
@@ -1043,7 +1074,7 @@ function refreshTowerInfoPanel() {
   } else if (t.isEconomy) {
     statsLine = `+${t.incomePerSec.toFixed(1)} credits/sec during sprints`;
   } else if (t.isRecruiter) {
-    statsLine = `deploys ${t.allyCount} for ${t.allyDuration.toFixed(1)}s every ${t.deployInterval.toFixed(1)}s`;
+    statsLine = `deploys ${t.allyCount} warrior${t.allyCount === 1 ? "" : "s"} for ${t.allyDuration.toFixed(1)}s every ${t.deployInterval.toFixed(1)}s`;
   } else if (t.percentDamage) {
     statsLine = `dmg ${(t.damage * 100).toFixed(1)}% max hp | range ${Math.round(t.range)}`;
   } else {
@@ -1225,15 +1256,16 @@ function updateRecruiters(dt) {
     t.deployCooldown = (t.deployCooldown ?? 0) - dt;
     if (t.deployCooldown > 0) continue;
     t.deployCooldown = t.deployInterval;
+    // Warriors march in from the path's exit and walk backwards toward the
+    // entrance (segment counts DOWN, the reverse of how enemies move),
+    // fighting anything they meet along the way instead of sitting still.
+    const spawnPoint = PATH_POINTS[PATH_POINTS.length - 1];
     for (let i = 0; i < t.allyCount; i++) {
-      const angle = (Math.PI * 2 * i) / t.allyCount;
       state.allies.push({
-        // Offset well clear of the tower's own ~20px body, and colored
-        // distinctly from it (not t.color) - otherwise a single ally sits
-        // almost exactly on top of an identically-colored tower and is
-        // effectively invisible.
-        x: t.x + Math.cos(angle) * 34,
-        y: t.y + Math.sin(angle) * 34,
+        x: spawnPoint.x + (Math.random() - 0.5) * 24,
+        y: spawnPoint.y + (Math.random() - 0.5) * 24,
+        segment: PATH_POINTS.length - 2,
+        speed: t.allySpeed,
         damage: t.allyDamage,
         range: t.allyRange,
         fireRate: t.allyFireRate,
@@ -1249,7 +1281,9 @@ function updateRecruiters(dt) {
   }
 }
 
-// Allies never see camo (only real towers can, via Manager support).
+// Allies never see camo (only real towers can, via Manager support). Each
+// one holds position and melees whatever's in range on its own cooldown;
+// only once nothing is in range does it resume marching backwards.
 function updateAllies(dt) {
   const now = performance.now();
   for (let i = state.allies.length - 1; i >= 0; i--) {
@@ -1258,22 +1292,39 @@ function updateAllies(dt) {
       state.allies.splice(i, 1);
       continue;
     }
-    a.cooldown -= dt;
-    if (a.cooldown > 0) continue;
+
     const targets = findTargets(a, 1, false);
     if (targets.length > 0) {
-      state.projectiles.push({
-        x: a.x,
-        y: a.y,
-        target: targets[0],
-        speed: 480,
-        damage: a.damage,
-        isCrit: false,
-        splashRadius: a.splashRadius || 0,
-        color: a.color,
-        sourceTower: a,
-      });
-      a.cooldown = a.fireRate;
+      a.cooldown -= dt;
+      if (a.cooldown <= 0) {
+        const target = targets[0];
+        if (a.splashRadius > 0) {
+          spawnExplosion(target.x, target.y, a.splashRadius, a.color);
+          [...state.enemies].forEach((e) => {
+            if (distance(target.x, target.y, e.x, e.y) <= a.splashRadius) applyDamage(e, a.damage, a);
+          });
+        } else {
+          applyDamage(target, a.damage, a);
+        }
+        a.cooldown = a.fireRate;
+      }
+      continue;
+    }
+
+    const wp = PATH_POINTS[a.segment];
+    if (!wp) {
+      state.allies.splice(i, 1); // reached the entrance - patrol's over
+      continue;
+    }
+    const d = distance(a.x, a.y, wp.x, wp.y);
+    const step = a.speed * dt;
+    if (step >= d) {
+      a.x = wp.x;
+      a.y = wp.y;
+      a.segment -= 1;
+    } else {
+      a.x += ((wp.x - a.x) / d) * step;
+      a.y += ((wp.y - a.y) / d) * step;
     }
   }
 }
@@ -1899,7 +1950,7 @@ function loop(now) {
   lastTime = now;
   const dt = rawDt * state.gameSpeed;
 
-  if (!state.gameOver) {
+  if (!state.gameOver && !state.paused) {
     updateSpawning(dt);
     updateEnemies(dt);
     updateTowers(dt);
@@ -1935,6 +1986,7 @@ function resetTransientState() {
   state.spawnQueue = [];
   state.spawnTimer = 0;
   state.gameOver = false;
+  state.paused = false;
   state.gameSpeed = 1;
   state.overclockActive = false;
   state.overclockTimer = 0;
@@ -1942,6 +1994,7 @@ function resetTransientState() {
   state.autoRun = false;
   state.autoRunTimer = 0;
   gameOverOverlay.classList.remove("visible");
+  pauseOverlay.hidden = true;
   waveBtn.disabled = false;
   waveBtn.textContent = "deploy sprint 1";
   speedBtn.textContent = "1x";
