@@ -896,12 +896,11 @@ autoRunBtn.addEventListener("click", () => {
 
 function spawnEnemy(type) {
   const def = ENEMY_TYPES[type];
-  let hp = def.hp;
-  let reward = def.reward;
-  if (type === "boss") {
-    hp = Math.round(def.hp * (1 + state.wave * 0.18));
-    reward = Math.round(def.reward + state.wave * 4);
-  }
+  // Previously only bosses scaled with wave - every other enemy stayed at
+  // its wave-1 hp forever, so a snowballing tower build made mid-to-late
+  // waves trivial once it outgrew that fixed baseline. Scale everyone now.
+  const hp = Math.round(def.hp * (1 + state.wave * 0.18));
+  const reward = Math.round(def.reward + state.wave * (type === "boss" ? 4 : 1));
   state.enemies.push({
     type,
     x: PATH_POINTS[0].x,
