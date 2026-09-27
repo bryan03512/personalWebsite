@@ -41,6 +41,12 @@ canvas {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  /* Matches the canvas's native height so the board stays fully visible
+     while the (now much longer, with up to 10-tier paths) sidebar content
+     scrolls independently instead of pushing the page down. */
+  max-height: 600px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .stats {
