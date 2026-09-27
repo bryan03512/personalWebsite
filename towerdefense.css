@@ -33,7 +33,7 @@ canvas {
 }
 
 .panel {
-  flex: 0 0 240px;
+  flex: 0 0 300px;
   background: var(--bg-inset);
   border: 1px solid var(--border);
   border-radius: 4px;
