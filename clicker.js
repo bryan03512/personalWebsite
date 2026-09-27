@@ -48,7 +48,7 @@ function defaultState() {
   UPGRADES.forEach((u) => (upgrades[u.id] = 0));
   const treeNodes = {};
   PRESTIGE_TREE.forEach((n) => (treeNodes[n.id] = false));
-  return { score: 0, peakScore: 0, upgrades, prestigePoints: 0, treeNodes, lastSaveTime: Date.now() };
+  return { score: 0, peakScore: 0, upgrades, prestigePoints: 0, treeNodes, lastSaveTime: Date.now(), ownerId: null };
 }
 
 let state = defaultState();
@@ -163,6 +163,7 @@ function applyLoadedState(parsed) {
   state.peakScore = typeof parsed.peakScore === "number" ? parsed.peakScore : state.score;
   state.prestigePoints = typeof parsed.prestigePoints === "number" ? parsed.prestigePoints : 0;
   state.lastSaveTime = typeof parsed.lastSaveTime === "number" ? parsed.lastSaveTime : Date.now();
+  state.ownerId = typeof parsed.ownerId === "string" ? parsed.ownerId : null;
   if (parsed.upgrades) {
     UPGRADES.forEach((u) => {
       if (typeof parsed.upgrades[u.id] === "number") {
@@ -209,15 +210,31 @@ function scheduleCloudSync() {
 // offline-progress calculation against the merged baseline before either
 // happens. Otherwise a stale cloud save can silently overwrite an
 // offline-progress bonus the instant it's granted.
+//
+// The local save is tagged with the account id it belongs to (state.ownerId).
+// If that matches whoever is currently logged in, this is the same account
+// continuing on this device, so cloud vs local is merged by recency (cloud
+// might be ahead if they played elsewhere since this device's last save).
+// If it DOESN'T match (was a guest, or a different account), local state has
+// nothing to do with this account, so recency comparisons are meaningless -
+// the account's own cloud save is adopted outright instead. The one
+// exception is a brand-new account with no cloud save yet: then the current
+// (guest) progress is kept and gets claimed as that account's save on the
+// next save() - so "play as guest, then sign up" doesn't lose progress.
 async function pullCloudSave() {
-  if (typeof loadCloudSave !== "function") return;
+  if (typeof accountGetUser !== "function") return;
+  const user = await accountGetUser();
+  if (!user) return;
+
   const cloudState = await loadCloudSave("clicker");
-  if (!cloudState) return; // no cloud save yet - local progress will be pushed up on next save()
-  const cloudTime = cloudState.lastSaveTime || 0;
-  const localTime = state.lastSaveTime || 0;
-  if (cloudTime >= localTime) {
+  if (state.ownerId === user.id) {
+    if (cloudState && (cloudState.lastSaveTime || 0) >= (state.lastSaveTime || 0)) {
+      applyLoadedState(cloudState);
+    }
+  } else if (cloudState) {
     applyLoadedState(cloudState);
   }
+  state.ownerId = user.id;
 }
 
 async function syncAndApplyOffline() {
@@ -226,6 +243,15 @@ async function syncAndApplyOffline() {
   render();
   save();
 }
+
+// Logging out should never leave the previous account's data on screen (or
+// in localStorage, on a shared device) - snap straight back to a blank
+// guest state.
+window.addEventListener("account:logout", () => {
+  state = defaultState();
+  localStorage.removeItem(SAVE_KEY);
+  render();
+});
 
 window.addEventListener("account:login", syncAndApplyOffline);
 

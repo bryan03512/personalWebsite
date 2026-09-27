@@ -264,6 +264,7 @@ const state = {
   overclockCooldown: 0,
   autoRun: false,
   autoRunTimer: 0,
+  ownerId: null,
 };
 
 // ---------- Canvas / DOM ----------
@@ -350,6 +351,7 @@ function saveGame() {
     towers: state.towers,
     gameSpeed: state.gameSpeed,
     lastSaveTime: state.lastSaveTime,
+    ownerId: state.ownerId,
   };
   localStorage.setItem(TD_SAVE_KEY, JSON.stringify(payload));
   scheduleCloudSync();
@@ -364,6 +366,7 @@ function applyLoadedState(parsed) {
   if (typeof parsed.kills === "number") state.kills = parsed.kills;
   state.gameSpeed = SPEED_STEPS.includes(parsed.gameSpeed) ? parsed.gameSpeed : 1;
   state.lastSaveTime = parsed.lastSaveTime || Date.now();
+  state.ownerId = typeof parsed.ownerId === "string" ? parsed.ownerId : null;
   if (Array.isArray(parsed.towers)) state.towers = parsed.towers;
 }
 
@@ -395,21 +398,48 @@ function syncSpeedButton() {
   speedBtn.classList.toggle("active", state.gameSpeed > 1);
 }
 
+// The local save is tagged with the account id it belongs to (state.ownerId).
+// If that matches whoever is currently logged in, this is the same account
+// continuing on this device, so cloud vs local is merged by recency (cloud
+// might be ahead if they played elsewhere since this device's last save).
+// If it doesn't match (was a guest, or a different account), local state has
+// nothing to do with this account, so recency comparisons are meaningless -
+// the account's own cloud save is adopted outright instead, UNLESS this is a
+// brand-new account with no cloud save yet, in which case current (guest)
+// progress is kept and gets claimed as that account's save on the next
+// saveGame() - so "play as guest, then sign up" doesn't lose progress.
 async function pullCloudSave() {
-  if (typeof loadCloudSave !== "function") return;
+  if (typeof accountGetUser !== "function") return;
+  const user = await accountGetUser();
+  if (!user) return;
+
   const cloudState = await loadCloudSave("towerdefense");
-  if (!cloudState) return; // no cloud save yet - local progress will be pushed up on next saveGame()
-  const cloudTime = cloudState.lastSaveTime || 0;
-  const localTime = state.lastSaveTime || 0;
-  if (cloudTime >= localTime) {
+  if (state.ownerId === user.id) {
+    if (cloudState && (cloudState.lastSaveTime || 0) >= (state.lastSaveTime || 0)) {
+      applyLoadedState(cloudState);
+    }
+  } else if (cloudState) {
     applyLoadedState(cloudState);
-    saveGame();
-    updateStats();
-    syncSpeedButton();
   }
+  state.ownerId = user.id;
+  saveGame();
+  updateStats();
+  syncSpeedButton();
 }
 
 window.addEventListener("account:login", pullCloudSave);
+
+// Logging out should never leave the previous account's data on screen (or
+// in localStorage, on a shared device) - snap straight back to a blank
+// guest state, including bestWave, which is tied to that account's identity.
+window.addEventListener("account:logout", () => {
+  resetTransientState();
+  state.bestWave = 0;
+  state.ownerId = null;
+  localStorage.removeItem(TD_SAVE_KEY);
+  syncSpeedButton();
+  updateStats();
+});
 
 // ---------- Placement ----------
 function canvasPosFromEvent(evt) {
@@ -1217,7 +1247,9 @@ function loop(now) {
 }
 
 // ---------- Restart ----------
-function resetGame() {
+// Shared by "restart after a loss" (resetGame) and "logged out" - the two
+// differ only in whether bestWave/ownerId (tied to account identity) reset.
+function resetTransientState() {
   state.gold = 150;
   state.lives = 20;
   state.wave = 0;
@@ -1246,6 +1278,10 @@ function resetGame() {
   autoRunBtn.textContent = "auto: off";
   autoRunBtn.classList.remove("active");
   hideTowerInfoPanel();
+}
+
+function resetGame() {
+  resetTransientState();
   updateStats();
   saveGame();
 }
