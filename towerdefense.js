@@ -201,6 +201,29 @@ const TOWER_PATHS = {
         },
       ],
     },
+    clutch: {
+      name: "Clutch",
+      accentColor: "#f472b6",
+      tiers: [
+        { desc: "big crit chance and multiplier", cost: 80, apply: (t) => { t.critChance = 0.3; t.critMult = 2.2; } },
+        {
+          desc: "bigger crits, bigger hits", cost: 150,
+          apply: (t) => { t.critChance = 0.4; t.critMult = 2.6; t.pathDamageMult = 1.2; },
+        },
+        {
+          desc: "even bigger crits, bonus gold per kill", cost: 260,
+          apply: (t) => { t.critChance = 0.5; t.critMult = 3.0; t.bonusGoldPerKill = 1; },
+        },
+        {
+          desc: "huge crit chance, bigger hits", cost: 440,
+          apply: (t) => { t.critChance = 0.6; t.critMult = 3.5; t.pathDamageMult = 1.4; },
+        },
+        {
+          desc: "clutch every time - massive crits, extra dmg vs bosses", cost: 750,
+          apply: (t) => { t.critChance = 0.7; t.critMult = 4.2; t.bonusGoldPerKill = 2; t.bossDamageMult = 1.5; },
+        },
+      ],
+    },
   },
   coder: {
     architect: {
@@ -252,6 +275,29 @@ const TOWER_PATHS = {
         },
       ],
     },
+    rewrite: {
+      name: "Full Rewrite",
+      accentColor: "#818cf8",
+      tiers: [
+        { desc: "true damage - ignores all resistances", cost: 140, apply: (t) => { t.damageType = "magic"; t.pathDamageMult = 1.3; } },
+        {
+          desc: "bigger true damage, wider range", cost: 260,
+          apply: (t) => { t.pathDamageMult = 1.7; t.pathRangeMult = 1.3; },
+        },
+        {
+          desc: "even bigger true damage, chance to crit 2x", cost: 450,
+          apply: (t) => { t.pathDamageMult = 2.2; t.critChance = 0.2; t.critMult = 2.0; },
+        },
+        {
+          desc: "massive true damage, wider range still", cost: 765,
+          apply: (t) => { t.pathDamageMult = 2.8; t.pathRangeMult = 1.6; },
+        },
+        {
+          desc: "rewritten from scratch - nothing resists this anymore", cost: 1300,
+          apply: (t) => { t.pathDamageMult = 3.6; t.critChance = 0.3; t.critMult = 2.5; t.bossDamageMult = 1.6; },
+        },
+      ],
+    },
   },
   hacker: {
     ddos: {
@@ -300,6 +346,29 @@ const TOWER_PATHS = {
         },
       ],
     },
+    botnet: {
+      name: "Botnet",
+      accentColor: "#4ade80",
+      tiers: [
+        { desc: "hits 2 targets at once", cost: 200, apply: (t) => { t.multiShot = 2; t.pathDamageMult = 0.9; } },
+        {
+          desc: "hits 3 targets, faster fire rate", cost: 340,
+          apply: (t) => { t.multiShot = 3; t.pathRateMult = 1.3; },
+        },
+        {
+          desc: "hits 3 targets, bigger hits, bonus gold per kill", cost: 550,
+          apply: (t) => { t.multiShot = 3; t.pathDamageMult = 1.2; t.bonusGoldPerKill = 1; },
+        },
+        {
+          desc: "hits 4 targets, even faster fire rate", cost: 880,
+          apply: (t) => { t.multiShot = 4; t.pathRateMult = 1.6; },
+        },
+        {
+          desc: "a botnet of 5 - every target gets hit", cost: 1400,
+          apply: (t) => { t.multiShot = 5; t.pathDamageMult = 1.6; t.bonusGoldPerKill = 2; },
+        },
+      ],
+    },
   },
   manager: {
     scrummaster: {
@@ -345,6 +414,29 @@ const TOWER_PATHS = {
         {
           desc: "the whole team hits like a wrecking crew", cost: 1090,
           apply: (t) => { t.pathBuffDamageMult = 5.6; t.pathBuffRateMult = 0.9; t.pathRangeMult = 1.8; },
+        },
+      ],
+    },
+    teambuilding: {
+      name: "Team Building",
+      accentColor: "#2dd4bf",
+      tiers: [
+        { desc: "passive slow aura in range, wider range", cost: 130, apply: (t) => { t.auraSlowPct = 0.12; t.pathRangeMult = 1.2; } },
+        {
+          desc: "stronger aura, small buff to allies too", cost: 240,
+          apply: (t) => { t.auraSlowPct = 0.18; t.buffDamagePct = 0.1; t.buffRatePct = 0.1; },
+        },
+        {
+          desc: "even stronger aura, wider range still", cost: 400,
+          apply: (t) => { t.auraSlowPct = 0.24; t.pathRangeMult = 1.4; },
+        },
+        {
+          desc: "strong aura, bigger buff to allies", cost: 660,
+          apply: (t) => { t.auraSlowPct = 0.3; t.buffDamagePct = 0.15; t.buffRatePct = 0.15; },
+        },
+        {
+          desc: "the whole team works in perfect sync", cost: 1090,
+          apply: (t) => { t.auraSlowPct = 0.38; t.pathRangeMult = 1.6; t.buffDamagePct = 0.2; t.buffRatePct = 0.2; },
         },
       ],
     },
@@ -433,6 +525,46 @@ const TOWER_PATHS = {
         },
       ],
     },
+    diversified: {
+      name: "Diversified Portfolio",
+      accentColor: "#38bdf8",
+      tiers: [
+        { desc: "more credits/sec and a small cost discount", cost: 90, apply: (t) => { t.pathIncomeMult = 1.5; t.costDiscountPct = 0.05; } },
+        { desc: "more of both", cost: 170, apply: (t) => { t.pathIncomeMult = 2.0; t.costDiscountPct = 0.08; } },
+        {
+          desc: "even more of both, small payout", cost: 300,
+          apply: (t) => { t.pathIncomeMult = 2.6; t.costDiscountPct = 0.12; state.gold += 150; },
+        },
+        {
+          desc: "bigger income and discount, bigger payout", cost: 600,
+          apply: (t) => { t.pathIncomeMult = 3.4; t.costDiscountPct = 0.16; state.gold += 300; },
+        },
+        {
+          desc: "big income and discount, big payout", cost: 1000,
+          apply: (t) => { t.pathIncomeMult = 4.4; t.costDiscountPct = 0.2; state.gold += 600; },
+        },
+        {
+          desc: "huge income and discount, huge payout", cost: 1600,
+          apply: (t) => { t.pathIncomeMult = 5.8; t.costDiscountPct = 0.24; state.gold += 900; },
+        },
+        {
+          desc: "even huger income and discount", cost: 2500,
+          apply: (t) => { t.pathIncomeMult = 7.5; t.costDiscountPct = 0.28; state.gold += 1400; },
+        },
+        {
+          desc: "massive income and discount, massive payout", cost: 3800,
+          apply: (t) => { t.pathIncomeMult = 9.5; t.costDiscountPct = 0.32; state.gold += 2000; },
+        },
+        {
+          desc: "staggering income and discount", cost: 5600,
+          apply: (t) => { t.pathIncomeMult = 12; t.costDiscountPct = 0.36; state.gold += 2800; },
+        },
+        {
+          desc: "a balanced portfolio that never stops paying", cost: 8000,
+          apply: (t) => { t.pathIncomeMult = 16; t.costDiscountPct = 0.4; state.gold += 4000; },
+        },
+      ],
+    },
   },
   recruiter: {
     scrum: {
@@ -481,6 +613,29 @@ const TOWER_PATHS = {
         },
       ],
     },
+    elite: {
+      name: "Elite Task Force",
+      accentColor: "#dc2626",
+      tiers: [
+        { desc: "far stronger ally, longer-lived", cost: 130, apply: (t) => { t.pathAllyDamageMult = 2.0; t.pathAllyDurationMult = 1.3; } },
+        {
+          desc: "even stronger ally, extra dmg vs bosses", cost: 240,
+          apply: (t) => { t.pathAllyDamageMult = 2.6; t.pathAllyBossMult = 1.5; },
+        },
+        {
+          desc: "stronger still, extra dmg vs merge conflicts too", cost: 400,
+          apply: (t) => { t.pathAllyDamageMult = 3.4; t.pathAllyTankMult = 1.6; t.pathAllyBossMult = 1.8; },
+        },
+        {
+          desc: "devastating ally, bigger boss bonus", cost: 660,
+          apply: (t) => { t.pathAllyDamageMult = 4.4; t.pathAllyBossMult = 2.4; },
+        },
+        {
+          desc: "one elite warrior worth an entire squad", cost: 1090,
+          apply: (t) => { t.pathAllyDamageMult = 5.6; t.pathAllyTankMult = 2.4; t.pathAllyBossMult = 3.2; t.pathAllyDurationMult = 1.8; },
+        },
+      ],
+    },
   },
   quant: {
     overflow: {
@@ -526,6 +681,100 @@ const TOWER_PATHS = {
         {
           desc: "a recursive exploit with no base case - hits 4 targets", cost: 1400,
           apply: (t) => { t.pathDotPct = 0.065; t.pathDotDuration = 7; t.multiShot = 4; },
+        },
+      ],
+    },
+    zeropoint: {
+      name: "Zero Point Field",
+      accentColor: "#38bdf8",
+      tiers: [
+        { desc: "much wider range, chance to crit", cost: 180, apply: (t) => { t.pathRangeMult = 1.4; t.critChance = 0.15; t.critMult = 1.8; } },
+        {
+          desc: "even wider range, bigger crits, bigger % damage", cost: 320,
+          apply: (t) => { t.pathRangeMult = 1.7; t.critChance = 0.22; t.critMult = 2.2; t.pathDamageMult = 1.2; },
+        },
+        {
+          desc: "huge range, extra dmg vs bosses", cost: 520,
+          apply: (t) => { t.pathRangeMult = 2.0; t.critChance = 0.3; t.critMult = 2.6; t.bossDamageMult = 1.5; },
+        },
+        {
+          desc: "even huger range, bigger % damage", cost: 850,
+          apply: (t) => { t.pathRangeMult = 2.4; t.critChance = 0.38; t.critMult = 3.2; t.pathDamageMult = 1.4; },
+        },
+        {
+          desc: "sees and hits anything on the board", cost: 1400,
+          apply: (t) => { t.pathRangeMult = 2.8; t.critChance = 0.45; t.critMult = 4.0; t.bossDamageMult = 2.2; },
+        },
+      ],
+    },
+  },
+  freeze: {
+    absolutezero: {
+      name: "Absolute Zero",
+      accentColor: "#0ea5e9",
+      tiers: [
+        { desc: "much longer freeze, bigger hits", cost: 130, apply: (t) => { t.slowOnHit = { pct: 1.0, duration: 1.8 }; t.pathDamageMult = 1.3; } },
+        {
+          desc: "even longer freeze, bigger hits still", cost: 220,
+          apply: (t) => { t.slowOnHit = { pct: 1.0, duration: 2.3 }; t.pathDamageMult = 1.6; },
+        },
+        {
+          desc: "huge freeze duration, extra dmg vs merge conflicts", cost: 360,
+          apply: (t) => { t.slowOnHit = { pct: 1.0, duration: 2.8 }; t.pathDamageMult = 2.0; t.tankDamageMult = 1.5; },
+        },
+        {
+          desc: "even huger freeze, bigger hits", cost: 600,
+          apply: (t) => { t.slowOnHit = { pct: 1.0, duration: 3.4 }; t.pathDamageMult = 2.5; },
+        },
+        {
+          desc: "frozen solid - nothing thaws in time", cost: 1000,
+          apply: (t) => { t.slowOnHit = { pct: 1.0, duration: 4.0 }; t.pathDamageMult = 3.2; t.tankDamageMult = 2.2; },
+        },
+      ],
+    },
+    cryofield: {
+      name: "Cryo Field",
+      accentColor: "#a5f3fc",
+      tiers: [
+        { desc: "passive slow aura in range, wider range", cost: 130, apply: (t) => { t.auraSlowPct = 0.3; t.pathRangeMult = 1.2; } },
+        {
+          desc: "stronger aura, even wider range", cost: 220,
+          apply: (t) => { t.auraSlowPct = 0.4; t.pathRangeMult = 1.4; },
+        },
+        {
+          desc: "even stronger aura, bigger hits", cost: 360,
+          apply: (t) => { t.auraSlowPct = 0.5; t.pathDamageMult = 1.3; },
+        },
+        {
+          desc: "huge aura, much wider range", cost: 600,
+          apply: (t) => { t.auraSlowPct = 0.6; t.pathRangeMult = 1.7; },
+        },
+        {
+          desc: "an entire field of permafrost", cost: 1000,
+          apply: (t) => { t.auraSlowPct = 0.75; t.pathDamageMult = 1.7; t.pathRangeMult = 2.0; },
+        },
+      ],
+    },
+    shatter: {
+      name: "Shatter",
+      accentColor: "#e0e7ff",
+      tiers: [
+        { desc: "bonus damage vs already-slowed targets", cost: 130, apply: (t) => { t.shatterBonusPct = 0.5; t.pathDamageMult = 1.1; } },
+        {
+          desc: "bigger shatter bonus, bigger hits", cost: 220,
+          apply: (t) => { t.shatterBonusPct = 0.8; t.pathDamageMult = 1.3; },
+        },
+        {
+          desc: "even bigger shatter bonus, chance to crit 2x", cost: 360,
+          apply: (t) => { t.shatterBonusPct = 1.2; t.pathDamageMult = 1.5; t.critChance = 0.15; t.critMult = 2.0; },
+        },
+        {
+          desc: "huge shatter bonus, bigger crits", cost: 600,
+          apply: (t) => { t.shatterBonusPct = 1.7; t.pathDamageMult = 1.8; },
+        },
+        {
+          desc: "frozen enemies don't just stop - they shatter", cost: 1000,
+          apply: (t) => { t.shatterBonusPct = 2.5; t.pathDamageMult = 2.2; t.critChance = 0.25; t.critMult = 2.6; t.bossDamageMult = 1.6; },
         },
       ],
     },
@@ -1754,6 +2003,8 @@ function updateRecruiters(dt) {
         damageType: t.pathAllyExplosive ? "explosive" : "normal",
         splashRadius: t.pathAllyExplosive ? 40 : 0,
         bonusGoldPerKill: t.pathAllyBonusGold || 0,
+        bossDamageMult: t.pathAllyBossMult || 0,
+        tankDamageMult: t.pathAllyTankMult || 0,
         expiresAt: performance.now() + t.allyDuration * 1000,
       });
     }
@@ -2057,6 +2308,12 @@ function applyDamage(enemy, amount, sourceTower) {
   if (sourceTower) {
     if (sourceTower.bossDamageMult && enemy.isBoss) amount *= sourceTower.bossDamageMult;
     else if (sourceTower.tankDamageMult && enemy.type === "tank") amount *= sourceTower.tankDamageMult;
+
+    // Freeze's Shatter path - bonus damage vs already-slowed/frozen targets.
+    // Checked against the enemy's state from BEFORE this hit's own
+    // slowOnHit (below) can refresh it, so it only rewards a target that
+    // was already chilled going in.
+    if (sourceTower.shatterBonusPct && enemy.slowTimer > 0) amount *= 1 + sourceTower.shatterBonusPct;
 
     if (sourceTower.slowOnHit) {
       enemy.slowPct = sourceTower.slowOnHit.pct;
