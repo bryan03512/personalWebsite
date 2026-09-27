@@ -110,7 +110,7 @@
   margin-left: 4px;
 }
 
-.lb-account-list {
+.lb-account-list:not([hidden]) {
   display: flex;
   flex-direction: column;
   gap: 4px;
