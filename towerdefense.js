@@ -60,7 +60,7 @@ const TOWER_TYPES = {
     isSupport: true, buffDamagePct: 0.2, buffRatePct: 0.2,
   },
   farmer: {
-    name: "Consultant", desc: "no combat - generates credits over time", emoji: "💼",
+    name: "Consultant", desc: "no combat - earns credits during sprints", emoji: "💼",
     cost: 100, damage: 0, range: 0, fireRate: Infinity, color: "#34d399", projectileSpeed: 0,
     isEconomy: true, incomePerSec: 3,
   },
@@ -170,7 +170,7 @@ const TOWER_PATHS = {
     },
     zeroday: {
       name: "Zero-Day",
-      accentColor: "#ffee58",
+      accentColor: "#39ff14",
       tiers: [
         { desc: "+100% dmg vs bosses, +50% vs merge conflicts", cost: 200, apply: (t) => { t.bossDamageMult = 2.0; t.tankDamageMult = 1.5; } },
         {
@@ -678,7 +678,7 @@ function refreshTowerInfoPanel() {
   if (t.isSupport) {
     statsLine = `+${Math.round(t.buffDamagePct * 100)}% dmg, +${Math.round(t.buffRatePct * 100)}% rate to devs in range`;
   } else if (t.isEconomy) {
-    statsLine = `+${t.incomePerSec.toFixed(1)} credits/sec`;
+    statsLine = `+${t.incomePerSec.toFixed(1)} credits/sec during sprints`;
   } else {
     statsLine = `dmg ${Math.round(t.damage)} | range ${Math.round(t.range)}`;
   }
@@ -768,6 +768,7 @@ function getTowerBuffs(tower) {
 // Passive income from Consultant towers, and passive slow auras from
 // upgraded Debuggers - both run continuously regardless of fire cooldown.
 function updateEconomy(dt) {
+  if (!state.waveInProgress) return; // Consultants only earn while a sprint is active
   for (const t of state.towers) {
     if (t.isEconomy) state.gold += t.incomePerSec * dt;
   }
@@ -1108,14 +1109,20 @@ function draw() {
       ctx.stroke();
     }
 
-    ctx.fillStyle = t.color;
-    ctx.globalAlpha = 0.25;
+    // Once a path is chosen, its accent color takes over the tower's main
+    // body (fill + outline), not just a thin outer ring - a spinning ring
+    // alone was too subtle to notice at a glance.
+    const pathColor = t.path ? TOWER_PATHS[t.type]?.[t.path]?.accentColor : null;
+    const bodyColor = pathColor || t.color;
+
+    ctx.fillStyle = bodyColor;
+    ctx.globalAlpha = pathColor ? 0.4 : 0.25;
     ctx.beginPath();
     ctx.arc(t.x, t.y, CELL * 0.34, 0, Math.PI * 2);
     ctx.fill();
     ctx.globalAlpha = 1;
-    ctx.strokeStyle = t.color;
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = bodyColor;
+    ctx.lineWidth = pathColor ? 3 : 2;
     ctx.beginPath();
     ctx.arc(t.x, t.y, CELL * 0.34, 0, Math.PI * 2);
     ctx.stroke();
@@ -1138,10 +1145,7 @@ function draw() {
       ctx.arc(t.x, t.y, CELL * 0.34 + 7, 0, Math.PI * 2);
       ctx.stroke();
     }
-    if (stage >= 3) {
-      // Colored by which path was chosen (not the tower's own base color),
-      // so the two paths for a given tower type are visually distinguishable.
-      const pathColor = TOWER_PATHS[t.type]?.[t.path]?.accentColor || t.color;
+    if (stage >= 3 && pathColor) {
       const spin = (performance.now() / 40) % 24;
       ctx.setLineDash([4, 3]);
       ctx.lineDashOffset = -spin;
@@ -1151,6 +1155,20 @@ function draw() {
       ctx.arc(t.x, t.y, CELL * 0.34 + 10, 0, Math.PI * 2);
       ctx.stroke();
       ctx.setLineDash([]);
+
+      // A static solid badge (doesn't rely on noticing the spinning ring) so
+      // the path reads clearly even from a glance or a screenshot.
+      const badgeX = t.x + CELL * 0.3;
+      const badgeY = t.y - CELL * 0.3;
+      ctx.fillStyle = pathColor;
+      ctx.beginPath();
+      ctx.arc(badgeX, badgeY, 6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#000000";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(badgeX, badgeY, 6, 0, Math.PI * 2);
+      ctx.stroke();
     }
 
     // brief flash pulse right after placing/upgrading/leveling up. flashUntil
