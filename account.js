@@ -7,6 +7,9 @@ const SUPABASE_ANON_KEY = "sb_publishable_QZ1Jkd_6ojbhF-QKTRnIUQ_-TT-W_5F";
 
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+// Fire-and-forget page-view counter, works whether or not anyone's logged in.
+sb.rpc("record_visit");
+
 // ---- auth helpers ----
 async function accountSignUp(email, password) {
   return sb.auth.signUp({ email, password });

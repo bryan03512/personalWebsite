@@ -1,5 +1,112 @@
 const SAVE_KEY = "clickerGameSave";
 
+// Formats big commit-scale numbers: plain (with commas) below 1M, then
+// tenths-precision (1.1M) from 1M up to 10M, whole units (12M) from 10M up
+// to the next tier, then repeats the same pattern at B, T, and beyond.
+function formatNum(n) {
+  n = Math.floor(n);
+  const tiers = [
+    { unit: 1e15, suffix: "Qa" },
+    { unit: 1e12, suffix: "T" },
+    { unit: 1e9, suffix: "B" },
+    { unit: 1e6, suffix: "M" },
+  ];
+  for (const { unit, suffix } of tiers) {
+    if (n >= unit) {
+      const scaled = n / unit;
+      if (scaled < 10) return `${(Math.round(scaled * 10) / 10).toFixed(1)}${suffix}`;
+      return `${Math.round(scaled)}${suffix}`;
+    }
+  }
+  return n.toLocaleString();
+}
+
+// Evenly spaced hues so generated upgrade tiers each get a distinct color
+// without hand-picking dozens of RGB triplets.
+function hslToRgbString(h, s, l) {
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = l - c / 2;
+  let r, g, b;
+  if (h < 60) [r, g, b] = [c, x, 0];
+  else if (h < 120) [r, g, b] = [x, c, 0];
+  else if (h < 180) [r, g, b] = [0, c, x];
+  else if (h < 240) [r, g, b] = [0, x, c];
+  else if (h < 300) [r, g, b] = [x, 0, c];
+  else [r, g, b] = [c, 0, x];
+  const to255 = (v) => Math.round((v + m) * 255);
+  return `${to255(r)},${to255(g)},${to255(b)}`;
+}
+
+// Generates upgrade tiers 11-30 for a category, continuing the established
+// geometric cost/amount progression from tier 10 rather than hand-typing
+// exponentially-growing numbers (error-prone at this scale).
+function generateUpgradeTiers(type, metaList, tier10Cost, tier10Amount, hueStart) {
+  return metaList.map((meta, i) => {
+    const step = i + 1; // tiers 11..30
+    const baseCost = Math.round(tier10Cost * Math.pow(2.8, step));
+    const baseAmount = Math.round(tier10Amount * Math.pow(1.8, step));
+    const hue = (hueStart + step * (360 / metaList.length)) % 360;
+    return {
+      id: meta.id,
+      name: meta.name,
+      icon: meta.icon,
+      color: hslToRgbString(hue, 0.65, 0.6),
+      type,
+      baseCost,
+      costGrowth: 1.15,
+      baseAmount,
+      amountGrowth: 1.08,
+    };
+  });
+}
+
+const CLICK_TIER_META = [
+  { id: "gamingchair", name: "Gaming Chair", icon: "💺" },
+  { id: "predictai", name: "Predictive AI Autocomplete Pro", icon: "🔮" },
+  { id: "voicemic", name: "Voice Dictation Mic", icon: "🎙️" },
+  { id: "macropad", name: "Macro Pad", icon: "🕹️" },
+  { id: "multitask", name: "Multitasking Mastery", icon: "🤹" },
+  { id: "nappod", name: "Nap Pod", icon: "🛌" },
+  { id: "smartglasses", name: "Smart Glasses HUD", icon: "🥽" },
+  { id: "cyberfingers", name: "Cybernetic Fingers", icon: "🦾" },
+  { id: "quantumkeyboard", name: "Quantum Keyboard", icon: "⚛️" },
+  { id: "brainlace", name: "Neural Lace", icon: "🕸️" },
+  { id: "cloneassist", name: "Clone Assistant", icon: "👯" },
+  { id: "timedilation", name: "Time Dilation Field", icon: "⏳" },
+  { id: "paralleluniverse", name: "Parallel Universe Coder", icon: "🌀" },
+  { id: "hivemind", name: "Hivemind Sync", icon: "🐝" },
+  { id: "dimensionalkeyboard", name: "Dimensional Keyboard", icon: "🌌" },
+  { id: "singularityengine", name: "Singularity Engine", icon: "🌠" },
+  { id: "realitycompiler", name: "Reality Compiler", icon: "🔧" },
+  { id: "cosmickeystrokes", name: "Cosmic Keystrokes", icon: "✨" },
+  { id: "omniscientide", name: "Omniscient IDE", icon: "👁️" },
+  { id: "godmode", name: "God Mode Typing", icon: "🕉️" },
+];
+
+const AUTO_TIER_META = [
+  { id: "seniordevbot", name: "Senior Dev Bot", icon: "🧑‍💻" },
+  { id: "staffengbot", name: "Staff Engineer Bot", icon: "🎓" },
+  { id: "oncallbot", name: "On-call Rotation Bot", icon: "📟" },
+  { id: "loadbalancer", name: "Load Balancer", icon: "⚖️" },
+  { id: "microserviceswarm", name: "Microservice Swarm", icon: "🐜" },
+  { id: "serverlessfleet", name: "Serverless Fleet", icon: "☁️" },
+  { id: "edgenodes", name: "Edge Compute Nodes", icon: "🌐" },
+  { id: "neuralnetfarm", name: "Neural Net Farm", icon: "🧬" },
+  { id: "quantumcompiler", name: "Quantum Compiler", icon: "⚛️" },
+  { id: "autonomoussre", name: "Autonomous SRE", icon: "🤖" },
+  { id: "datacenter", name: "Data Center", icon: "🏭" },
+  { id: "orbitalservers", name: "Orbital Server Array", icon: "🛰️" },
+  { id: "dysonsphere", name: "Dyson Sphere Compute", icon: "☀️" },
+  { id: "planetarygrid", name: "Planetary Grid Computer", icon: "🪐" },
+  { id: "galacticcluster", name: "Galactic Cluster", icon: "🌌" },
+  { id: "interdimensionalci", name: "Interdimensional CI", icon: "🌀" },
+  { id: "timeloopdeploy", name: "Time-Loop Deployment", icon: "🔁" },
+  { id: "multiversepipeline", name: "Multiverse Pipeline", icon: "🪞" },
+  { id: "singularityagi", name: "Singularity AGI Swarm", icon: "🌠" },
+  { id: "omniscientdevops", name: "Omniscient DevOps", icon: "👁️" },
+];
+
 // Each upgrade can be bought repeatedly. Every purchase raises its own cost
 // (costGrowth) AND raises how much the *next* purchase of it grants
 // (amountGrowth) - so early upgrades stay useful longer instead of being
@@ -28,6 +135,10 @@ const UPGRADES = [
   { id: "autoscaler", name: "Cloud Auto-scaler", icon: "📈", color: "52,211,153", type: "auto", baseCost: 65000, costGrowth: 1.15, baseAmount: 90, amountGrowth: 1.08 },
   { id: "aipair", name: "AI Pair Programmer", icon: "👥", color: "139,92,246", type: "auto", baseCost: 180000, costGrowth: 1.15, baseAmount: 160, amountGrowth: 1.08 },
   { id: "agi", name: "Self-Improving AGI", icon: "🌐", color: "57,255,20", type: "auto", baseCost: 500000, costGrowth: 1.15, baseAmount: 300, amountGrowth: 1.08 },
+
+  // ---- tiers 11-30, generated to continue the same progression ----
+  ...generateUpgradeTiers("click", CLICK_TIER_META, 300000, 300, 20),
+  ...generateUpgradeTiers("auto", AUTO_TIER_META, 500000, 300, 200),
 ];
 
 // Prestige tree: a root node splitting into a "typing" branch and an "ops"
@@ -39,8 +150,15 @@ const PRESTIGE_TREE = [
   { id: "typing2", name: "Muscle Memory", desc: "+15% commits per click", icon: "💪", row: "tier2", col: 0, cost: 2, requires: ["typing1"], effect: { clickMult: 0.15 } },
   { id: "ops2", name: "Pipeline Tuning", desc: "+15% CI bot output", icon: "📡", row: "tier2", col: 1, cost: 2, requires: ["ops1"], effect: { autoMult: 0.15 } },
   { id: "typing3", name: "Flow State", desc: "hold-to-type fires 2x faster", icon: "🌀", row: "tier3", col: 0, cost: 3, requires: ["typing2"], effect: { typingSpeed: true } },
-  { id: "ops3", name: "Offline Commits", desc: "CI bots earn while you're away (up to 8h)", icon: "🌙", row: "tier3", col: 1, cost: 3, requires: ["ops2"], effect: { offline: true } },
+  { id: "ops3", name: "Offline Commits", desc: "CI bots earn while you're away, uncapped (now free for everyone - this node is a milestone)", icon: "🌙", row: "tier3", col: 1, cost: 3, requires: ["ops2"], effect: { offline: true } },
   { id: "capstone", name: "10x Engineer", desc: "+25% to everything", icon: "🚀", row: "capstone", cost: 5, requires: ["typing3", "ops3"], effect: { clickMult: 0.25, autoMult: 0.25 } },
+
+  // ---- extended tree (appended, existing nodes above are untouched) ----
+  { id: "typing4", name: "Ludicrous Speed", desc: "+35% commits per click", icon: "🚀", row: "tier4", col: 0, cost: 8, requires: ["capstone"], effect: { clickMult: 0.35 } },
+  { id: "ops4", name: "Blazing Pipelines", desc: "+35% CI bot output", icon: "🔥", row: "tier4", col: 1, cost: 8, requires: ["capstone"], effect: { autoMult: 0.35 } },
+  { id: "typing5", name: "Legendary Coder", desc: "+50% commits per click", icon: "🌟", row: "tier5", col: 0, cost: 13, requires: ["typing4"], effect: { clickMult: 0.50 } },
+  { id: "ops5", name: "Infinite Scale", desc: "+50% CI bot output", icon: "💫", row: "tier5", col: 1, cost: 13, requires: ["ops4"], effect: { autoMult: 0.50 } },
+  { id: "capstone2", name: "Grand Architect", desc: "+60% to everything", icon: "👑", row: "capstone2", cost: 20, requires: ["typing5", "ops5"], effect: { clickMult: 0.60, autoMult: 0.60 } },
 ];
 
 function defaultState() {
@@ -126,7 +244,7 @@ function spawnFloatText(amount) {
 
   const el = document.createElement("span");
   el.className = "float-text";
-  el.textContent = `+${amount}`;
+  el.textContent = `+${formatNum(amount)}`;
   el.style.left = `${clickZoneOrigin.x}px`;
   el.style.top = `${clickZoneOrigin.y}px`;
   document.body.appendChild(el);
@@ -195,16 +313,29 @@ function save() {
 }
 
 // ---- cloud sync (account.js) ----
-let cloudSyncTimer = null;
+// Cloud push happens on a flat 20s heartbeat instead of a cancellable
+// debounce - a single-shot setTimeout gets destroyed outright by navigating
+// to another page before it fires, which could leave the cloud save stale
+// even though localStorage (written synchronously on every change) was fine.
+let cloudDirty = false;
 
 function scheduleCloudSync() {
-  if (cloudSyncTimer || typeof accountGetUser !== "function") return;
-  cloudSyncTimer = setTimeout(async () => {
-    cloudSyncTimer = null;
-    const user = await accountGetUser();
-    if (user) saveCloudField("clicker", state);
-  }, 5000);
+  cloudDirty = true;
 }
+
+async function flushCloudSync() {
+  if (!cloudDirty || typeof accountGetUser !== "function") return;
+  const user = await accountGetUser();
+  if (!user) return;
+  cloudDirty = false;
+  saveCloudField("clicker", state);
+}
+
+setInterval(flushCloudSync, 20000);
+window.addEventListener("pagehide", () => {
+  save();
+  flushCloudSync();
+});
 
 // Only merges state - does NOT save/render itself, so callers can run
 // offline-progress calculation against the merged baseline before either
@@ -408,9 +539,9 @@ function refreshUpgradeButtons() {
     const owned = state.upgrades[upg.id];
     const unit = upg.type === "click" ? "lines/commit" : "commits/sec";
     const qtyLabel = buyQty === "max" ? `max×${qty}` : `×${qty}`;
-    btn.querySelector('[data-role="gain"]').textContent = `buy ${qtyLabel}: +${gain} ${unit}`;
+    btn.querySelector('[data-role="gain"]').textContent = `buy ${qtyLabel}: +${formatNum(gain)} ${unit}`;
     btn.querySelector('[data-role="owned"]').textContent = `x${owned}`;
-    btn.querySelector('[data-role="cost"]').textContent = `${cost}c`;
+    btn.querySelector('[data-role="cost"]').textContent = `${formatNum(cost)}c`;
     btn.disabled = qty < 1 || state.score < cost;
   });
 }
@@ -568,17 +699,19 @@ window.addEventListener("resize", () => {
 
 // ---- offline progress ----
 
+// Available to everyone regardless of prestige tree, with no cap on how
+// long you've been away - offline progress just runs at full CPS the whole
+// time, however long that is.
 function applyOfflineProgress() {
-  if (!hasOfflineCommits() || !state.lastSaveTime) return;
+  if (!state.lastSaveTime) return;
   const elapsedSec = Math.max(0, (Date.now() - state.lastSaveTime) / 1000);
-  const cappedSec = Math.min(elapsedSec, 8 * 3600);
   const auto = getAutoPower();
-  const earned = Math.floor(auto * cappedSec);
+  const earned = Math.floor(auto * elapsedSec);
   if (earned < 1) return;
   state.score += earned;
-  const hours = Math.floor(cappedSec / 3600);
-  const mins = Math.floor((cappedSec % 3600) / 60);
-  offlineBanner.textContent = `welcome back — CI bots earned +${earned} commits while you were away (${hours}h ${mins}m)`;
+  const hours = Math.floor(elapsedSec / 3600);
+  const mins = Math.floor((elapsedSec % 3600) / 60);
+  offlineBanner.textContent = `welcome back — CI bots earned +${formatNum(earned)} commits while you were away (${hours}h ${mins}m)`;
   const closeBtn = document.createElement("button");
   closeBtn.textContent = "×";
   closeBtn.addEventListener("click", () => (offlineBanner.hidden = true));
@@ -588,8 +721,8 @@ function applyOfflineProgress() {
 
 function render() {
   if (state.score > state.peakScore) state.peakScore = state.score;
-  scoreEl.textContent = `commits: ${state.score}`;
-  statsEl.textContent = `lines/commit: ${getClickPower()}  |  CI bots: ${getAutoPower()}/sec`;
+  scoreEl.textContent = `commits: ${formatNum(state.score)}`;
+  statsEl.textContent = `lines/commit: ${formatNum(getClickPower())}  |  CI bots: ${formatNum(getAutoPower())}/sec`;
   refreshUpgradeButtons();
   refreshCollectionPanel();
 
@@ -602,7 +735,7 @@ function render() {
   const ceil = prestigeThreshold(gain + 1);
   const pct = Math.min(100, ((state.score - floor) / (ceil - floor)) * 100);
   prestigeFill.style.width = `${pct}%`;
-  prestigeProgressLabel.textContent = `${state.score.toLocaleString()} / ${ceil.toLocaleString()} commits to next point`;
+  prestigeProgressLabel.textContent = `${formatNum(state.score)} / ${formatNum(ceil)} commits to next point`;
 
   refreshPrestigeTree();
 }
@@ -633,13 +766,21 @@ function tick() {
 
 // ---- prestige ----
 
+// Exponential rather than quadratic - each additional point costs 1.6x the
+// previous point's threshold, so the curve gets dramatically steeper at
+// higher points instead of just growing as the square of the point count.
+const PRESTIGE_BASE = 100000;
+const PRESTIGE_RATIO = 1.6;
+
 function getPrestigeGain() {
-  return Math.floor(Math.sqrt(state.score / 100000));
+  if (state.score < PRESTIGE_BASE) return 0;
+  return 1 + Math.floor(Math.log(state.score / PRESTIGE_BASE) / Math.log(PRESTIGE_RATIO));
 }
 
 // Lifetime commits (this run) needed to reach a given prestige point count.
 function prestigeThreshold(points) {
-  return points * points * 100000;
+  if (points <= 0) return 0;
+  return Math.round(PRESTIGE_BASE * Math.pow(PRESTIGE_RATIO, points - 1));
 }
 
 function doPrestige() {

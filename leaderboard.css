@@ -84,6 +84,37 @@
   color: var(--green-faint);
 }
 
+.lb-owner-panel {
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.lb-owner-panel:not([hidden]) {
+  display: flex;
+}
+
+.admin-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-inset);
+  font-size: 0.85rem;
+}
+
+.admin-row span {
+  color: var(--green-faint);
+}
+
+.admin-row strong {
+  color: var(--cyan);
+  font-size: 1rem;
+}
+
 .lb-visibility {
   align-items: center;
   gap: 8px;

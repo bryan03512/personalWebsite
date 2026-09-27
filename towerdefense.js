@@ -85,6 +85,7 @@ const TOWER_PATHS = {
   gamer: {
     speedrunner: {
       name: "Speedrunner",
+      accentColor: "#00e5ff",
       tiers: [
         {
           desc: "much faster fire rate, shorter range", cost: 80,
@@ -102,6 +103,7 @@ const TOWER_PATHS = {
     },
     multiplayer: {
       name: "Multiplayer",
+      accentColor: "#ff9f43",
       tiers: [
         { desc: "fires at 2 enemies at once", cost: 80, apply: (t) => { t.multiShot = 2; } },
         {
@@ -118,6 +120,7 @@ const TOWER_PATHS = {
   coder: {
     architect: {
       name: "Architect",
+      accentColor: "#ffd700",
       tiers: [
         {
           desc: "huge range & damage, even slower", cost: 140,
@@ -135,6 +138,7 @@ const TOWER_PATHS = {
     },
     debugger: {
       name: "Debugger",
+      accentColor: "#8b5cf6",
       tiers: [
         { desc: "slows hit enemies 40% for 2s", cost: 140, apply: (t) => { t.slowOnHit = { pct: 0.4, duration: 2 }; } },
         {
@@ -151,6 +155,7 @@ const TOWER_PATHS = {
   hacker: {
     ddos: {
       name: "DDoS",
+      accentColor: "#ff5722",
       tiers: [
         { desc: "much bigger blast radius", cost: 200, apply: (t) => { t.pathSplashMult = 1.7; t.pathDamageMult = 1.15; } },
         {
@@ -165,6 +170,7 @@ const TOWER_PATHS = {
     },
     zeroday: {
       name: "Zero-Day",
+      accentColor: "#ffee58",
       tiers: [
         { desc: "+100% dmg vs bosses, +50% vs merge conflicts", cost: 200, apply: (t) => { t.bossDamageMult = 2.0; t.tankDamageMult = 1.5; } },
         {
@@ -181,6 +187,7 @@ const TOWER_PATHS = {
   manager: {
     scrummaster: {
       name: "Scrum Master",
+      accentColor: "#2ec4b6",
       tiers: [
         { desc: "much bigger fire-rate buff to allies", cost: 130, apply: (t) => { t.pathBuffRateMult = 2.2; t.pathBuffDamageMult = 0.5; } },
         {
@@ -195,6 +202,7 @@ const TOWER_PATHS = {
     },
     techlead: {
       name: "Tech Lead",
+      accentColor: "#e05353",
       tiers: [
         { desc: "much bigger damage buff to allies", cost: 130, apply: (t) => { t.pathBuffDamageMult = 2.2; t.pathBuffRateMult = 0.5; } },
         {
@@ -211,6 +219,7 @@ const TOWER_PATHS = {
   farmer: {
     retainer: {
       name: "Retainer Client",
+      accentColor: "#ffd700",
       tiers: [
         { desc: "generates a lot more credits/sec", cost: 90, apply: (t) => { t.pathIncomeMult = 1.8; } },
         { desc: "even more credits/sec", cost: 170, apply: (t) => { t.pathIncomeMult = 2.6; } },
@@ -222,6 +231,7 @@ const TOWER_PATHS = {
     },
     vc: {
       name: "Venture Capital",
+      accentColor: "#4d9de0",
       tiers: [
         { desc: "all towers/upgrades cost 5% less", cost: 90, apply: (t) => { t.costDiscountPct = 0.05; } },
         { desc: "all towers/upgrades cost 10% less", cost: 170, apply: (t) => { t.costDiscountPct = 0.10; } },
@@ -244,6 +254,7 @@ const ENEMY_TYPES = {
 // ---------- Game state ----------
 const state = {
   gold: 150,
+  bestGold: 150,
   lives: 20,
   wave: 0,
   bestWave: 0,
@@ -274,6 +285,7 @@ const goldStat = document.getElementById("goldStat");
 const livesStat = document.getElementById("livesStat");
 const waveStat = document.getElementById("waveStat");
 const bestWaveStat = document.getElementById("bestWaveStat");
+const bestGoldStat = document.getElementById("bestGoldStat");
 const killsStat = document.getElementById("killsStat");
 const towerListEl = document.getElementById("towerList");
 const waveBtn = document.getElementById("waveBtn");
@@ -316,7 +328,9 @@ function refreshTowerButtons() {
 }
 
 function updateStats() {
+  if (state.gold > state.bestGold) state.bestGold = state.gold;
   goldStat.textContent = Math.floor(state.gold);
+  bestGoldStat.textContent = Math.floor(state.bestGold);
   livesStat.textContent = state.lives;
   waveStat.textContent = state.wave;
   bestWaveStat.textContent = state.bestWave;
@@ -344,6 +358,7 @@ function saveGame() {
   state.lastSaveTime = Date.now();
   const payload = {
     gold: state.gold,
+    bestGold: state.bestGold,
     lives: state.lives,
     wave: state.wave,
     bestWave: state.bestWave,
@@ -367,7 +382,13 @@ function applyLoadedState(parsed) {
   state.gameSpeed = SPEED_STEPS.includes(parsed.gameSpeed) ? parsed.gameSpeed : 1;
   state.lastSaveTime = parsed.lastSaveTime || Date.now();
   state.ownerId = typeof parsed.ownerId === "string" ? parsed.ownerId : null;
-  if (Array.isArray(parsed.towers)) state.towers = parsed.towers;
+  if (typeof parsed.bestGold === "number") state.bestGold = parsed.bestGold;
+  // Guard against a stale/incomplete snapshot (e.g. a cloud push that lost a
+  // race with navigating away mid-round) silently deleting placed towers -
+  // never adopt an incoming towers list that's smaller than what's already here.
+  if (Array.isArray(parsed.towers) && parsed.towers.length >= state.towers.length) {
+    state.towers = parsed.towers;
+  }
 }
 
 function loadGame() {
@@ -380,18 +401,30 @@ function loadGame() {
   }
 }
 
-let cloudSyncTimer = null;
+// Cloud push happens on a flat 20s heartbeat instead of a cancellable
+// debounce - a single-shot setTimeout gets destroyed outright by navigating
+// to another page before it fires, which could leave the cloud save stale
+// even though localStorage (written synchronously on every change) was fine.
+let cloudDirty = false;
 
 function scheduleCloudSync() {
-  if (cloudSyncTimer || typeof accountGetUser !== "function") return;
-  cloudSyncTimer = setTimeout(async () => {
-    cloudSyncTimer = null;
-    const user = await accountGetUser();
-    if (!user) return;
-    const saved = localStorage.getItem(TD_SAVE_KEY);
-    if (saved) saveCloudField("towerdefense", JSON.parse(saved));
-  }, 5000);
+  cloudDirty = true;
 }
+
+async function flushCloudSync() {
+  if (!cloudDirty || typeof accountGetUser !== "function") return;
+  const user = await accountGetUser();
+  if (!user) return;
+  cloudDirty = false;
+  const saved = localStorage.getItem(TD_SAVE_KEY);
+  if (saved) saveCloudField("towerdefense", JSON.parse(saved));
+}
+
+setInterval(flushCloudSync, 20000);
+window.addEventListener("pagehide", () => {
+  saveGame();
+  flushCloudSync();
+});
 
 function syncSpeedButton() {
   speedBtn.textContent = `${state.gameSpeed}x`;
@@ -435,6 +468,7 @@ window.addEventListener("account:login", pullCloudSave);
 window.addEventListener("account:logout", () => {
   resetTransientState();
   state.bestWave = 0;
+  state.bestGold = 150;
   state.ownerId = null;
   localStorage.removeItem(TD_SAVE_KEY);
   syncSpeedButton();
@@ -1103,10 +1137,13 @@ function draw() {
       ctx.stroke();
     }
     if (stage >= 3) {
+      // Colored by which path was chosen (not the tower's own base color),
+      // so the two paths for a given tower type are visually distinguishable.
+      const pathColor = TOWER_PATHS[t.type]?.[t.path]?.accentColor || t.color;
       const spin = (performance.now() / 40) % 24;
       ctx.setLineDash([4, 3]);
       ctx.lineDashOffset = -spin;
-      ctx.strokeStyle = t.color;
+      ctx.strokeStyle = pathColor;
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.arc(t.x, t.y, CELL * 0.34 + 10, 0, Math.PI * 2);

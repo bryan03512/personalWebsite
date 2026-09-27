@@ -1,8 +1,12 @@
 const clickerBoard = document.getElementById("clickerBoard");
 const peakBoard = document.getElementById("peakBoard");
 const towerBoard = document.getElementById("towerBoard");
+const goldBoard = document.getElementById("goldBoard");
 const lbVisibility = document.getElementById("lbVisibility");
 const lbVisibleCheckbox = document.getElementById("lbVisibleCheckbox");
+const lbOwnerPanel = document.getElementById("lbOwnerPanel");
+const lbTotalAccounts = document.getElementById("lbTotalAccounts");
+const lbTotalVisits = document.getElementById("lbTotalVisits");
 
 function renderBoard(container, rows, scoreKey, scoreLabel) {
   if (!rows || rows.length === 0) {
@@ -60,6 +64,18 @@ async function loadLeaderboards() {
   } else {
     renderBoard(towerBoard, towerRows.filter((r) => r.td_best_wave > 0), "td_best_wave", "sprint");
   }
+
+  const { data: goldRows, error: goldError } = await sb
+    .from("leaderboard")
+    .select("display_name, td_best_gold")
+    .order("td_best_gold", { ascending: false })
+    .limit(15);
+
+  if (goldError) {
+    goldBoard.innerHTML = `<p class="lb-loading">couldn't load leaderboard.</p>`;
+  } else {
+    renderBoard(goldBoard, goldRows.filter((r) => r.td_best_gold > 0), "td_best_gold", "credits");
+  }
 }
 
 async function refreshVisibilityToggle() {
@@ -77,10 +93,33 @@ lbVisibleCheckbox.addEventListener("change", async () => {
   loadLeaderboards();
 });
 
+// Silently does nothing for everyone except the one account this RPC
+// authorizes server-side - no error shown here, it just stays hidden.
+async function refreshOwnerPanel() {
+  const user = await accountGetUser();
+  if (!user) {
+    lbOwnerPanel.hidden = true;
+    return;
+  }
+  const { data, error } = await sb.rpc("get_site_overview");
+  if (error || !data) {
+    lbOwnerPanel.hidden = true;
+    return;
+  }
+  lbTotalAccounts.textContent = data.total_accounts ?? 0;
+  lbTotalVisits.textContent = data.total_visits ?? 0;
+  lbOwnerPanel.hidden = false;
+}
+
 loadLeaderboards();
 refreshVisibilityToggle();
+refreshOwnerPanel();
 window.addEventListener("account:login", () => {
   loadLeaderboards();
   refreshVisibilityToggle();
+  refreshOwnerPanel();
 });
-window.addEventListener("account:logout", refreshVisibilityToggle);
+window.addEventListener("account:logout", () => {
+  refreshVisibilityToggle();
+  lbOwnerPanel.hidden = true;
+});
