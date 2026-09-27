@@ -1196,7 +1196,7 @@ function getCostDiscount() {
 
 function towerUpgradeCost(t) {
   const baseCost = TOWER_TYPES[t.type].cost;
-  const raw = baseCost * 0.5 * Math.pow(1.6, t.level - 1);
+  const raw = baseCost * 0.4 * Math.pow(1.6, t.level - 1);
   return Math.round(raw * (1 - getCostDiscount()));
 }
 
