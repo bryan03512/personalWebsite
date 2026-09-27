@@ -1431,6 +1431,27 @@ function updateAuras(dt) {
 // Recruiters periodically deploy temporary ally units near themselves -
 // these are lightweight, separate from state.towers (no placement, no
 // selection/upgrade UI), and expire on their own after allyDuration.
+// Finds the point on the path polyline nearest (x, y), and which segment
+// it falls on - used so a Recruiter's warriors emerge from the stretch of
+// track closest to that specific tower instead of a fixed spot on the map.
+function closestPointOnPath(x, y) {
+  let best = null;
+  for (let i = 0; i < PATH_POINTS.length - 1; i++) {
+    const a = PATH_POINTS[i];
+    const b = PATH_POINTS[i + 1];
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const lenSq = dx * dx + dy * dy;
+    let t = lenSq > 0 ? ((x - a.x) * dx + (y - a.y) * dy) / lenSq : 0;
+    t = Math.max(0, Math.min(1, t));
+    const px = a.x + dx * t;
+    const py = a.y + dy * t;
+    const dist = Math.hypot(x - px, y - py);
+    if (!best || dist < best.dist) best = { x: px, y: py, segment: i, dist };
+  }
+  return best;
+}
+
 function updateRecruiters(dt) {
   if (!state.waveInProgress) return; // warriors only deploy during an active sprint
   for (const t of state.towers) {
@@ -1438,15 +1459,16 @@ function updateRecruiters(dt) {
     t.deployCooldown = (t.deployCooldown ?? 0) - dt;
     if (t.deployCooldown > 0) continue;
     t.deployCooldown = t.deployInterval;
-    // Warriors march in from the path's exit and walk backwards toward the
-    // entrance (segment counts DOWN, the reverse of how enemies move),
-    // fighting anything they meet along the way instead of sitting still.
-    const spawnPoint = PATH_POINTS[PATH_POINTS.length - 1];
+    // Warriors emerge from the stretch of track nearest this Recruiter and
+    // walk backwards toward the entrance from there (segment counts DOWN,
+    // the reverse of how enemies move), fighting anything they meet along
+    // the way instead of sitting still.
+    const spawnPoint = closestPointOnPath(t.x, t.y);
     for (let i = 0; i < t.allyCount; i++) {
       state.allies.push({
         x: spawnPoint.x + (Math.random() - 0.5) * 24,
         y: spawnPoint.y + (Math.random() - 0.5) * 24,
-        segment: PATH_POINTS.length - 2,
+        segment: spawnPoint.segment,
         speed: t.allySpeed,
         damage: t.allyDamage,
         range: t.allyRange,
