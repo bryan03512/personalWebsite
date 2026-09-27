@@ -122,10 +122,10 @@ const SPEED_STEPS = [1, 2, 5];
 // scaling, and each tier adds its own new effect rather than just bigger
 // numbers on the same one.
 const PATH_UNLOCK_LEVEL = 3;
-// 10x Engineer's 3 paths run 5 tiers deep instead of 3 - every other tower's
-// paths only ever define 3 tiers, so indices 3/4 simply don't exist for them
-// and buyPathTier's "already maxed" check stops them exactly as before.
-const PATH_TIER_LEVELS = [3, 6, 10, 14, 18];
+// Every tower's paths run 5 tiers deep; 10x Engineer's run 10. A tower with
+// fewer tiers than an index simply has pathDef.tiers[i] === undefined there,
+// and buyPathTier's "already maxed" check stops it exactly as before.
+const PATH_TIER_LEVELS = [3, 6, 10, 14, 18, 23, 28, 34, 40, 47];
 
 const TOWER_PATHS = {
   gamer: {
@@ -145,6 +145,14 @@ const TOWER_PATHS = {
           desc: "now hits 2 targets, bigger crits", cost: 260,
           apply: (t) => { t.pathRateMult = 3.0; t.critChance = 0.25; t.critMult = 2.0; t.multiShot = 2; },
         },
+        {
+          desc: "blistering fire rate, even bigger crits", cost: 440,
+          apply: (t) => { t.pathRateMult = 3.8; t.critChance = 0.32; t.critMult = 2.4; t.multiShot = 2; },
+        },
+        {
+          desc: "top speed - hits 3 targets, massive crits", cost: 750,
+          apply: (t) => { t.pathRateMult = 4.8; t.critChance = 0.4; t.critMult = 2.8; t.multiShot = 3; },
+        },
       ],
     },
     multiplayer: {
@@ -159,6 +167,14 @@ const TOWER_PATHS = {
         {
           desc: "fires at 4 enemies, bonus gold per kill", cost: 260,
           apply: (t) => { t.multiShot = 4; t.pathRangeMult = 1.15; t.bonusGoldPerKill = 1; },
+        },
+        {
+          desc: "fires at 5 enemies, even wider range", cost: 440,
+          apply: (t) => { t.multiShot = 5; t.pathRangeMult = 1.3; t.bonusGoldPerKill = 2; },
+        },
+        {
+          desc: "fires at 6 enemies at once, huge bonus gold", cost: 750,
+          apply: (t) => { t.multiShot = 6; t.pathRangeMult = 1.5; t.bonusGoldPerKill = 3; },
         },
       ],
     },
@@ -180,6 +196,14 @@ const TOWER_PATHS = {
           desc: "massive range/damage, extra dmg vs bosses", cost: 450,
           apply: (t) => { t.pathDamageMult = 3.2; t.pathRangeMult = 2.0; t.pathRateMult = 0.7; t.critChance = 0.3; t.critMult = 3.0; t.bossDamageMult = 1.5; },
         },
+        {
+          desc: "even more range/damage, bigger dmg vs bosses", cost: 765,
+          apply: (t) => { t.pathDamageMult = 4.2; t.pathRangeMult = 2.4; t.pathRateMult = 0.7; t.critChance = 0.35; t.critMult = 3.5; t.bossDamageMult = 2.0; },
+        },
+        {
+          desc: "sees the whole board - devastating vs everything", cost: 1300,
+          apply: (t) => { t.pathDamageMult = 5.5; t.pathRangeMult = 2.8; t.pathRateMult = 0.7; t.critChance = 0.4; t.critMult = 4.0; t.bossDamageMult = 2.6; t.tankDamageMult = 1.8; },
+        },
       ],
     },
     debugger: {
@@ -194,6 +218,14 @@ const TOWER_PATHS = {
         {
           desc: "even stronger slow/aura, extra dmg vs merge conflicts", cost: 450,
           apply: (t) => { t.slowOnHit = { pct: 0.7, duration: 4 }; t.auraSlowPct = 0.25; t.tankDamageMult = 1.4; },
+        },
+        {
+          desc: "near-total slow/aura, bigger dmg vs merge conflicts", cost: 765,
+          apply: (t) => { t.slowOnHit = { pct: 0.8, duration: 5 }; t.auraSlowPct = 0.32; t.tankDamageMult = 1.8; },
+        },
+        {
+          desc: "everything crawls in range, extra dmg vs bosses too", cost: 1300,
+          apply: (t) => { t.slowOnHit = { pct: 0.9, duration: 6 }; t.auraSlowPct = 0.4; t.tankDamageMult = 2.4; t.bossDamageMult = 1.3; },
         },
       ],
     },
@@ -212,6 +244,14 @@ const TOWER_PATHS = {
           desc: "huge blast, mines gold from every kill in it", cost: 550,
           apply: (t) => { t.pathSplashMult = 2.8; t.pathDamageMult = 1.5; t.bonusGoldPerKill = 2; },
         },
+        {
+          desc: "even huger blast, more gold per kill in it", cost: 880,
+          apply: (t) => { t.pathSplashMult = 3.4; t.pathDamageMult = 1.8; t.bonusGoldPerKill = 3; },
+        },
+        {
+          desc: "a blast that blankets the whole lane", cost: 1400,
+          apply: (t) => { t.pathSplashMult = 4.2; t.pathDamageMult = 2.2; t.bonusGoldPerKill = 4; },
+        },
       ],
     },
     zeroday: {
@@ -226,6 +266,14 @@ const TOWER_PATHS = {
         {
           desc: "devastating vs both, bigger crits, more base dmg", cost: 550,
           apply: (t) => { t.bossDamageMult = 3.5; t.tankDamageMult = 2.5; t.critChance = 0.3; t.critMult = 2.5; t.pathDamageMult = 1.2; },
+        },
+        {
+          desc: "even more devastating, bigger crits still", cost: 880,
+          apply: (t) => { t.bossDamageMult = 4.5; t.tankDamageMult = 3.2; t.critChance = 0.35; t.critMult = 3.0; t.pathDamageMult = 1.4; },
+        },
+        {
+          desc: "a zero-day for every system - nothing resists this", cost: 1400,
+          apply: (t) => { t.bossDamageMult = 6.0; t.tankDamageMult = 4.0; t.critChance = 0.4; t.critMult = 3.5; t.pathDamageMult = 1.7; },
         },
       ],
     },
@@ -244,6 +292,14 @@ const TOWER_PATHS = {
           desc: "huge rate buff & radius for the whole team", cost: 400,
           apply: (t) => { t.pathBuffRateMult = 3.8; t.pathBuffDamageMult = 0.7; t.pathRangeMult = 1.4; },
         },
+        {
+          desc: "even huger rate buff & radius", cost: 660,
+          apply: (t) => { t.pathBuffRateMult = 4.6; t.pathBuffDamageMult = 0.8; t.pathRangeMult = 1.6; },
+        },
+        {
+          desc: "the whole team fires at superhuman speed", cost: 1090,
+          apply: (t) => { t.pathBuffRateMult = 5.6; t.pathBuffDamageMult = 0.9; t.pathRangeMult = 1.8; },
+        },
       ],
     },
     techlead: {
@@ -259,10 +315,21 @@ const TOWER_PATHS = {
           desc: "huge damage buff & radius for the whole team", cost: 400,
           apply: (t) => { t.pathBuffDamageMult = 3.8; t.pathBuffRateMult = 0.7; t.pathRangeMult = 1.4; },
         },
+        {
+          desc: "even huger damage buff & radius", cost: 660,
+          apply: (t) => { t.pathBuffDamageMult = 4.6; t.pathBuffRateMult = 0.8; t.pathRangeMult = 1.6; },
+        },
+        {
+          desc: "the whole team hits like a wrecking crew", cost: 1090,
+          apply: (t) => { t.pathBuffDamageMult = 5.6; t.pathBuffRateMult = 0.9; t.pathRangeMult = 1.8; },
+        },
       ],
     },
   },
   farmer: {
+    // The economy path - deliberately pricier and steeper than the combat
+    // towers' tiers 4/5, so it keeps outpacing gold sinks deep into a run
+    // instead of income flattening out while everything else gets pricier.
     retainer: {
       name: "Retainer Client",
       accentColor: "#ffd700",
@@ -272,6 +339,14 @@ const TOWER_PATHS = {
         {
           desc: "huge credits/sec, instant IPO payout", cost: 300,
           apply: (t) => { t.pathIncomeMult = 3.6; state.gold += 200; },
+        },
+        {
+          desc: "enterprise contract - massive credits/sec, big payout", cost: 600,
+          apply: (t) => { t.pathIncomeMult = 5.5; state.gold += 400; },
+        },
+        {
+          desc: "acquired - staggering credits/sec, the team retires early", cost: 1000,
+          apply: (t) => { t.pathIncomeMult = 8.5; state.gold += 800; },
         },
       ],
     },
@@ -284,6 +359,14 @@ const TOWER_PATHS = {
         {
           desc: "towers/upgrades cost 18% less, instant seed funding", cost: 300,
           apply: (t) => { t.costDiscountPct = 0.18; state.gold += 150; },
+        },
+        {
+          desc: "towers/upgrades cost 24% less, another funding round", cost: 600,
+          apply: (t) => { t.costDiscountPct = 0.24; state.gold += 300; },
+        },
+        {
+          desc: "towers/upgrades cost 30% less, IPO windfall", cost: 1000,
+          apply: (t) => { t.costDiscountPct = 0.30; state.gold += 600; },
         },
       ],
     },
@@ -302,6 +385,14 @@ const TOWER_PATHS = {
           desc: "deploys 4 allies, much stronger & longer-lived", cost: 400,
           apply: (t) => { t.pathAllyCountBonus = 3; t.pathAllyDurationMult = 2.0; t.pathAllyDamageMult = 1.8; },
         },
+        {
+          desc: "deploys 5 allies, even stronger & longer-lived", cost: 660,
+          apply: (t) => { t.pathAllyCountBonus = 4; t.pathAllyDurationMult = 2.4; t.pathAllyDamageMult = 2.3; },
+        },
+        {
+          desc: "deploys a full squad of 6 elite warriors", cost: 1090,
+          apply: (t) => { t.pathAllyCountBonus = 5; t.pathAllyDurationMult = 3.0; t.pathAllyDamageMult = 3.0; },
+        },
       ],
     },
     freelance: {
@@ -316,6 +407,14 @@ const TOWER_PATHS = {
         {
           desc: "rapid deploys, allies hit explosively", cost: 400,
           apply: (t) => { t.pathDeployRateMult = 3.0; t.pathAllyBonusGold = 2; t.pathAllyExplosive = true; },
+        },
+        {
+          desc: "even faster deploys, bigger bonus per kill", cost: 660,
+          apply: (t) => { t.pathDeployRateMult = 3.8; t.pathAllyBonusGold = 3; t.pathAllyExplosive = true; },
+        },
+        {
+          desc: "constant deploys - the path is never empty", cost: 1090,
+          apply: (t) => { t.pathDeployRateMult = 4.8; t.pathAllyBonusGold = 4; t.pathAllyExplosive = true; },
         },
       ],
     },
@@ -334,6 +433,14 @@ const TOWER_PATHS = {
           desc: "massive % damage, huge crits, extra vs bosses", cost: 520,
           apply: (t) => { t.pathDamageMult = 3.6; t.critChance = 0.3; t.critMult = 2.5; t.bossDamageMult = 1.6; },
         },
+        {
+          desc: "even more % damage, bigger crits and boss bonus", cost: 850,
+          apply: (t) => { t.pathDamageMult = 4.6; t.critChance = 0.36; t.critMult = 3.0; t.bossDamageMult = 2.1; },
+        },
+        {
+          desc: "overflows every buffer - massive % true damage", cost: 1400,
+          apply: (t) => { t.pathDamageMult = 6.0; t.critChance = 0.42; t.critMult = 3.6; t.bossDamageMult = 2.8; },
+        },
       ],
     },
     recursive: {
@@ -348,6 +455,14 @@ const TOWER_PATHS = {
         {
           desc: "devastating exploit, also hits 2 targets", cost: 520,
           apply: (t) => { t.pathDotPct = 0.03; t.pathDotDuration = 5; t.multiShot = 2; },
+        },
+        {
+          desc: "even more devastating exploit, hits 3 targets", cost: 850,
+          apply: (t) => { t.pathDotPct = 0.045; t.pathDotDuration = 6; t.multiShot = 3; },
+        },
+        {
+          desc: "a recursive exploit with no base case - hits 4 targets", cost: 1400,
+          apply: (t) => { t.pathDotPct = 0.065; t.pathDotDuration = 7; t.multiShot = 4; },
         },
       ],
     },
@@ -374,6 +489,26 @@ const TOWER_PATHS = {
           desc: "hits 8 targets at once - a one-person army", cost: 2000,
           apply: (t) => { t.multiShot = 8; t.pathDamageMult = 2.6; t.critChance = 0.3; t.critMult = 2.5; t.bossDamageMult = 1.5; },
         },
+        {
+          desc: "hits 10 targets, bigger hits and crits", cost: 2800,
+          apply: (t) => { t.multiShot = 10; t.pathDamageMult = 3.2; t.critChance = 0.35; t.critMult = 2.8; t.bossDamageMult = 1.8; },
+        },
+        {
+          desc: "hits 12 targets, even bigger hits and crits", cost: 3800,
+          apply: (t) => { t.multiShot = 12; t.pathDamageMult = 3.8; t.critChance = 0.4; t.critMult = 3.2; t.bossDamageMult = 2.2; },
+        },
+        {
+          desc: "hits 15 targets, massive hits and crits", cost: 5200,
+          apply: (t) => { t.multiShot = 15; t.pathDamageMult = 4.5; t.critChance = 0.45; t.critMult = 3.6; t.bossDamageMult = 2.6; },
+        },
+        {
+          desc: "hits 18 targets, staggering hits and crits", cost: 7000,
+          apply: (t) => { t.multiShot = 18; t.pathDamageMult = 5.5; t.critChance = 0.5; t.critMult = 4.0; t.bossDamageMult = 3.0; },
+        },
+        {
+          desc: "hits 24 targets at once - nearly everything on screen", cost: 9500,
+          apply: (t) => { t.multiShot = 24; t.pathDamageMult = 7.0; t.critChance = 0.55; t.critMult = 4.5; t.bossDamageMult = 3.5; },
+        },
       ],
     },
     velocity: {
@@ -396,6 +531,26 @@ const TOWER_PATHS = {
         {
           desc: "a blur of commits - nothing survives close range", cost: 2000,
           apply: (t) => { t.pathRateMult = 4.5; t.critChance = 0.5; t.critMult = 4.0; t.bossDamageMult = 3.0; t.tankDamageMult = 2.5; },
+        },
+        {
+          desc: "even faster, bigger crits and boss/tank bonus", cost: 2800,
+          apply: (t) => { t.pathRateMult = 5.5; t.critChance = 0.55; t.critMult = 4.5; t.bossDamageMult = 3.6; t.tankDamageMult = 3.0; },
+        },
+        {
+          desc: "faster still, huge crit chance", cost: 3800,
+          apply: (t) => { t.pathRateMult = 6.5; t.critChance = 0.6; t.critMult = 5.0; t.bossDamageMult = 4.2; t.tankDamageMult = 3.6; },
+        },
+        {
+          desc: "approaching the speed limit of code review", cost: 5200,
+          apply: (t) => { t.pathRateMult = 7.8; t.critChance = 0.65; t.critMult = 5.5; t.bossDamageMult = 5.0; t.tankDamageMult = 4.2; },
+        },
+        {
+          desc: "faster than the eye can follow", cost: 7000,
+          apply: (t) => { t.pathRateMult = 9.2; t.critChance = 0.7; t.critMult = 6.0; t.bossDamageMult = 6.0; t.tankDamageMult = 5.0; },
+        },
+        {
+          desc: "faster than physically possible - nothing survives", cost: 9500,
+          apply: (t) => { t.pathRateMult = 11; t.critChance = 0.75; t.critMult = 7.0; t.bossDamageMult = 7.5; t.tankDamageMult = 6.0; },
         },
       ],
     },
@@ -422,6 +577,26 @@ const TOWER_PATHS = {
         {
           desc: "omniscient - massive true-damage blast, reaches every service at once", cost: 2000,
           apply: (t) => { t.splashRadius = 170; t.auraSlowPct = 0.45; t.pathDamageMult = 2.2; },
+        },
+        {
+          desc: "even bigger true-damage blast, stronger slow", cost: 2800,
+          apply: (t) => { t.splashRadius = 200; t.auraSlowPct = 0.5; t.pathDamageMult = 2.6; },
+        },
+        {
+          desc: "a blast that spans half the board", cost: 3800,
+          apply: (t) => { t.splashRadius = 230; t.auraSlowPct = 0.55; t.pathDamageMult = 3.0; },
+        },
+        {
+          desc: "an even wider blast, near-total slow", cost: 5200,
+          apply: (t) => { t.splashRadius = 270; t.auraSlowPct = 0.6; t.pathDamageMult = 3.5; },
+        },
+        {
+          desc: "the blast reaches nearly every corner of the map", cost: 7000,
+          apply: (t) => { t.splashRadius = 310; t.auraSlowPct = 0.65; t.pathDamageMult = 4.0; },
+        },
+        {
+          desc: "total system convergence - the blast spans the entire board", cost: 9500,
+          apply: (t) => { t.splashRadius = 360; t.auraSlowPct = 0.7; t.pathDamageMult = 4.6; },
         },
       ],
     },
@@ -668,7 +843,13 @@ function applyMapDataToState(mapData) {
   if (Array.isArray(mapData.towers) && mapData.towers.length >= state.towers.length) {
     // flashUntil is a performance.now() timestamp from whatever session saved
     // this - meaningless (and potentially crash-inducing, see draw()) now.
+    // recomputeTowerStats refreshes any derived field the game code has
+    // added since this was last saved (e.g. allySpeed didn't exist before
+    // the Recruiter rework) - without this, a tower saved under older code
+    // keeps missing fields forever, which silently breaks as NaN math
+    // rather than an obvious error.
     state.towers = mapData.towers.map((t) => ({ ...t, flashUntil: 0 }));
+    state.towers.forEach(recomputeTowerStats);
   }
 }
 
