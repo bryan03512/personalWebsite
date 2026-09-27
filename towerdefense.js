@@ -1095,7 +1095,7 @@ function spawnEnemy(type) {
   // so builds strong enough to reach wave 90+ still meet real resistance
   // instead of one-shotting everything before it's visible on screen.
   const lateWaves = Math.max(0, state.wave - 50);
-  const hp = Math.round(def.hp * (1 + state.wave * 0.18) * Math.pow(1.07, lateWaves));
+  const hp = Math.round(def.hp * (1 + state.wave * 0.18) * Math.pow(1.15, lateWaves));
   const reward = Math.round(def.reward + state.wave * (type === "boss" ? 4 : 1));
   state.enemies.push({
     type,
