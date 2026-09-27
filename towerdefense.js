@@ -732,6 +732,10 @@ const pauseOverlay = document.getElementById("pauseOverlay");
 const resumeBtn = document.getElementById("resumeBtn");
 const pauseChangeMapBtn = document.getElementById("pauseChangeMapBtn");
 const pauseRestartBtn = document.getElementById("pauseRestartBtn");
+const codexBtn = document.getElementById("codexBtn");
+const codexOverlay = document.getElementById("codexOverlay");
+const codexContent = document.getElementById("codexContent");
+const codexClose = document.getElementById("codexClose");
 
 const overclockBtn = document.getElementById("overclockBtn");
 const speedBtn = document.getElementById("speedBtn");
@@ -994,6 +998,81 @@ pauseRestartBtn.addEventListener("click", () => {
   state.paused = false;
   pauseOverlay.hidden = true;
   resetGame();
+});
+
+// ---------- Codex ----------
+// Generated straight from the live TOWER_TYPES/ENEMY_TYPES/RESISTANCES data
+// rather than hardcoded, so it can't drift out of sync as towers/enemies
+// get added. The secret 10x Engineer stays excluded until unlocked, same
+// as the tower list itself.
+const DAMAGE_TYPE_INFO = [
+  { emoji: "⚔️", name: "Normal", desc: "the default - most towers (Gamer, Coder, Recruiter's warriors) deal this." },
+  { emoji: "💥", name: "Explosive", desc: "Hacker's splash damage. Strong vs Legacy Code, wasted on Firewalled." },
+  { emoji: "🔮", name: "Magic", desc: "Quant, and 10x Engineer's Distributed Systems path at T4+. Ignores every resistance - the only reliable answer to Encrypted." },
+];
+
+function resistanceText(type) {
+  const r = RESISTANCES[type];
+  if (!r) return null;
+  return Object.entries(r)
+    .map(([dmgType, mult]) => `${Math.round((1 - mult) * 100)}% resistant to ${dmgType} damage`)
+    .join(", ");
+}
+
+function renderCodex() {
+  const damageSection = DAMAGE_TYPE_INFO.map(
+    (d) => `
+      <div class="codex-row">
+        <span class="codex-emoji">${d.emoji}</span>
+        <span><span class="codex-row-name">${d.name}</span><span class="codex-row-desc">${d.desc}</span></span>
+      </div>`,
+  ).join("");
+
+  const enemySection = Object.entries(ENEMY_TYPES)
+    .map(([key, def]) => {
+      const parts = [];
+      const resText = resistanceText(key);
+      if (resText) parts.push(resText);
+      if (def.camo) parts.push("camo - untargetable unless the shooting tower is currently inside an active Manager's buff range");
+      const desc = parts.length ? parts.join(" | ") : "no resistances";
+      return `
+      <div class="codex-row">
+        <span class="codex-emoji">${def.emoji}</span>
+        <span><span class="codex-row-name">${def.label}</span><span class="codex-row-desc">${desc}</span></span>
+      </div>`;
+    })
+    .join("");
+
+  const towerSection = Object.entries(TOWER_TYPES)
+    .filter(([, def]) => !def.isLegendary || state.bestWave > TOWER100_UNLOCK_WAVE)
+    .map(([, def]) => {
+      let typeNote;
+      if (def.isSupport) typeNote = "support - no damage";
+      else if (def.isEconomy) typeNote = "economy - no damage";
+      else if (def.isRecruiter) typeNote = "deploys melee allies - normal damage";
+      else typeNote = `${def.damageType || "normal"} damage`;
+      return `
+      <div class="codex-row">
+        <span class="codex-emoji">${def.emoji}</span>
+        <span><span class="codex-row-name">${def.name} - ${typeNote}</span><span class="codex-row-desc">${def.desc}</span></span>
+      </div>`;
+    })
+    .join("");
+
+  codexContent.innerHTML = `
+    <div class="codex-section"><h3># damage types</h3>${damageSection}</div>
+    <div class="codex-section"><h3># enemies</h3>${enemySection}</div>
+    <div class="codex-section"><h3># towers</h3>${towerSection}</div>
+  `;
+}
+
+codexBtn.addEventListener("click", () => {
+  renderCodex();
+  codexOverlay.hidden = false;
+});
+
+codexClose.addEventListener("click", () => {
+  codexOverlay.hidden = true;
 });
 
 // Cloud push happens on a flat 20s heartbeat instead of a cancellable
