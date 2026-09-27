@@ -880,3 +880,20 @@ if (typeof createTutorial === "function") {
     },
   ]);
 }
+
+// ---- cheat box (bottom-left corner) ----
+// Type "MONEY123 <amount>" and press Enter to set commits directly.
+const cheatBox = document.getElementById("cheatBox");
+if (cheatBox) {
+  cheatBox.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    const match = cheatBox.value.trim().match(/^MONEY123\s+(-?[\d.]+)$/i);
+    if (match) {
+      state.score = Math.max(0, Number(match[1]));
+      render();
+      save();
+    }
+    cheatBox.value = "";
+    cheatBox.blur();
+  });
+}

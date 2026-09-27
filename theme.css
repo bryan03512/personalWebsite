@@ -18,6 +18,29 @@
   box-sizing: border-box;
 }
 
+.cheat-box {
+  position: fixed;
+  left: 10px;
+  bottom: 10px;
+  width: 90px;
+  padding: 4px 6px;
+  font-family: var(--font);
+  font-size: 0.7rem;
+  color: var(--green-faint);
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  opacity: 0.35;
+  z-index: 50;
+}
+
+.cheat-box:focus {
+  opacity: 1;
+  color: var(--green);
+  outline: none;
+  border-color: var(--green-dim);
+}
+
 body {
   margin: 0;
   min-height: 100vh;
