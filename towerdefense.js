@@ -1277,18 +1277,21 @@ function hasBeatenAllMaps() {
 // frame from updateStats(); "placed a tower"/"maxed a path" ones fire once,
 // right at the moment they happen, since there's no ongoing state that
 // reflects tower-placement history once a tower's sold.
+// hint shows in place of desc while locked - kept vague for the two that
+// would otherwise spoil a secret tower's existence, direct for the plainly
+// numeric ones since there's nothing to spoil there.
 const ACHIEVEMENTS = [
-  { id: "first_tower", name: "Hello World", desc: "place your first tower", kind: "event" },
-  { id: "sprint10", name: "Warming Up", desc: "reach sprint 10 on any map", kind: "threshold" },
-  { id: "sprint50", name: "Halfway There", desc: "reach sprint 50 on any map", kind: "threshold" },
-  { id: "sprint100", name: "Centurion", desc: "reach sprint 100 on any map", kind: "threshold" },
-  { id: "sprint200", name: "Beyond the Limit", desc: "reach sprint 200 on any map", kind: "threshold" },
-  { id: "tenx_placed", name: "10x Engineer", desc: "place a 10x Engineer", kind: "event" },
-  { id: "singularity_placed", name: "Beyond Legendary", desc: "place a Singularity", kind: "event" },
-  { id: "conqueror", name: "Conqueror", desc: "beat all 3 maps", kind: "threshold" },
-  { id: "maxed_path", name: "Specialist", desc: "max out any tower's path all the way", kind: "event" },
-  { id: "big_spender", name: "Big Spender", desc: "accumulate 10,000 credits at once", kind: "threshold" },
-  { id: "boss_slayer", name: "Boss Slayer", desc: "defeat 50 bosses", kind: "threshold" },
+  { id: "first_tower", name: "Hello World", desc: "place your first tower", hint: "place a tower", kind: "event" },
+  { id: "sprint10", name: "Warming Up", desc: "reach sprint 10 on any map", hint: "reach sprint 10 on any map", kind: "threshold" },
+  { id: "sprint50", name: "Halfway There", desc: "reach sprint 50 on any map", hint: "reach sprint 50 on any map", kind: "threshold" },
+  { id: "sprint100", name: "Centurion", desc: "reach sprint 100 on any map", hint: "reach sprint 100 on any map", kind: "threshold" },
+  { id: "sprint200", name: "Beyond the Limit", desc: "reach sprint 200 on any map", hint: "reach sprint 200 on any map", kind: "threshold" },
+  { id: "tenx_placed", name: "10x Engineer", desc: "place a 10x Engineer", hint: "there may be more to discover past sprint 100...", kind: "event" },
+  { id: "singularity_placed", name: "Beyond Legendary", desc: "place a Singularity", hint: "some secrets require conquering everything", kind: "event" },
+  { id: "conqueror", name: "Conqueror", desc: "beat all 3 maps", hint: "beat every map at least once", kind: "threshold" },
+  { id: "maxed_path", name: "Specialist", desc: "max out any tower's path all the way", hint: "fully commit to one tower's specialization", kind: "event" },
+  { id: "big_spender", name: "Big Spender", desc: "accumulate 10,000 credits at once", hint: "accumulate 10,000 credits at once", kind: "threshold" },
+  { id: "boss_slayer", name: "Boss Slayer", desc: "defeat 50 bosses", hint: "defeat 50 bosses total", kind: "threshold" },
 ];
 
 const achievementToast = document.createElement("div");
@@ -1571,7 +1574,7 @@ function renderAchievements() {
     return `
       <div class="codex-row">
         <span class="codex-emoji">${unlocked ? "✅" : "🔒"}</span>
-        <span><span class="codex-row-name">${unlocked ? a.name : "???"}</span><span class="codex-row-desc">${unlocked ? a.desc : "locked"}</span></span>
+        <span><span class="codex-row-name">${unlocked ? a.name : "???"}</span><span class="codex-row-desc">${unlocked ? a.desc : a.hint}</span></span>
       </div>`;
   }).join("");
 }
