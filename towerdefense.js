@@ -2036,10 +2036,11 @@ const TOWER_HOTKEYS = {
   y: "recruiter", u: "quant", i: "freeze", o: "turret", p: "tenx", a: "singularity",
 };
 
-// With a tower selected: 1-4 pick a path option (or advance the chosen
-// path's next tier - up to 4 since some towers now offer that many), `
-// (backtick) upgrades, Delete/Backspace sells. Ignored while typing in any
-// input (e.g. the cheat box), since "MONEY123 123" contains these same digits.
+// = deploys the next sprint, - toggles auto-run (neither needs a tower
+// selected). With a tower selected: 1-4 pick a path option (or advance the
+// chosen path's next tier - up to 4 since some towers now offer that many),
+// ` (backtick) upgrades, Delete/Backspace sells. Ignored while typing in
+// any input (e.g. the cheat box), since "MONEY123 123" contains these same digits.
 document.addEventListener("keydown", (e) => {
   const tag = document.activeElement?.tagName;
   if (tag === "INPUT" || tag === "TEXTAREA") return;
@@ -2050,6 +2051,19 @@ document.addEventListener("keydown", (e) => {
     if (def.isLegendary && !def.unlockCheck()) return;
     state.selectedTowerType = state.selectedTowerType === hotkeyType ? null : hotkeyType;
     refreshTowerButtons();
+    return;
+  }
+
+  // = deploys the next sprint, - toggles auto-run - both work regardless of
+  // whether a tower is selected. .click() (not calling the handlers
+  // directly) so a disabled waveBtn mid-sprint is correctly a no-op, same
+  // as a real click.
+  if (e.key === "=") {
+    waveBtn.click();
+    return;
+  }
+  if (e.key === "-") {
+    autoRunBtn.click();
     return;
   }
 
