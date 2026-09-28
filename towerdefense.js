@@ -102,9 +102,9 @@ const TOWER_TYPES = {
     slowOnHit: { pct: 1.0, duration: 1.2 },
   },
   turret: {
-    name: "Sentry", desc: "no path - auto-levels for free over time, low maintenance", emoji: "🗼",
+    name: "Sentry", desc: "no path - auto-levels for free over time, targets the strongest enemy in range, damage scales exponentially", emoji: "🗼",
     cost: 90, damage: 12, range: 140, fireRate: 1.3, color: "#94a3b8", projectileSpeed: 480,
-    isSentry: true, autoLevelInterval: 20,
+    isSentry: true, autoLevelInterval: 20, targetPriority: "strongest",
   },
   // Secret capstone towers - excluded from buildTowerButtons (and therefore
   // invisible/unknown) until each one's unlockCheck() passes. How many may
@@ -1819,6 +1819,13 @@ function recomputeTowerStats(t) {
     t.allyFireRate = def.allyFireRate;
     t.allyDuration = def.allyDuration * (t.pathAllyDurationMult || 1);
     t.allyCount = def.allyCount + (t.pathAllyCountBonus || 0);
+  } else if (t.isSentry) {
+    // No path system, but auto-levels forever for free - exponential
+    // scaling rewards leaving it alone long-term instead of flattening out
+    // like the normal linear per-level curve everyone else uses.
+    t.damage = def.damage * Math.pow(1.12, t.level - 1);
+    t.fireRate = def.fireRate;
+    t.splashRadius = 0;
   } else {
     t.damage = def.damage * levelFactor * (t.pathDamageMult || 1);
     t.fireRate = def.fireRate / (t.pathRateMult || 1);
@@ -2464,14 +2471,20 @@ function updateEnemies(dt) {
 
 // Returns up to `count` enemies within range, nearest first. Camo enemies
 // are skipped entirely unless canSeeCamo is true for this attacker.
-function findTargets(t, count, canSeeCamo) {
+// targetPriority "strongest" (Sentry) picks highest-current-hp first instead
+// of nearest-first - everyone else keeps the default nearest-first behavior.
+function findTargets(t, count, canSeeCamo, targetPriority) {
   const inRange = [];
   for (const e of state.enemies) {
     if (e.camo && !canSeeCamo) continue;
     const d = distance(t.x, t.y, e.x, e.y);
     if (d <= t.range) inRange.push({ e, d });
   }
-  inRange.sort((a, b) => a.d - b.d);
+  if (targetPriority === "strongest") {
+    inRange.sort((a, b) => b.e.hp - a.e.hp);
+  } else {
+    inRange.sort((a, b) => a.d - b.d);
+  }
   return inRange.slice(0, count).map((entry) => entry.e);
 }
 
@@ -2482,7 +2495,7 @@ function updateTowers(dt) {
     if (t.cooldown > 0) continue;
 
     const buffs = getTowerBuffs(t);
-    const targets = findTargets(t, t.multiShot || 1, buffs.supported || t.alwaysSeeCamo);
+    const targets = findTargets(t, t.multiShot || 1, buffs.supported || t.alwaysSeeCamo, t.targetPriority);
     if (targets.length > 0) {
       for (const target of targets) {
         // Quant's damage is a fraction of the target's own max hp (true
