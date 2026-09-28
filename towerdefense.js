@@ -104,7 +104,7 @@ const TOWER_TYPES = {
   turret: {
     name: "Sentry", desc: "no path - auto-levels for free over time, targets the strongest enemy in range, damage scales exponentially", emoji: "🗼",
     cost: 90, damage: 12, range: 140, fireRate: 1.3, color: "#94a3b8", projectileSpeed: 480,
-    isSentry: true, autoLevelInterval: 20, targetPriority: "strongest",
+    isSentry: true, autoLevels: true, autoLevelInterval: 20, targetPriority: "strongest",
   },
   // Secret capstone towers - excluded from buildTowerButtons (and therefore
   // invisible/unknown) until each one's unlockCheck() passes. How many may
@@ -116,9 +116,9 @@ const TOWER_TYPES = {
     isLegendary: true, unique: true, unlockCheck: () => state.bestWave > TOWER100_UNLOCK_WAVE,
   },
   singularity: {
-    name: "Singularity", desc: "beyond legendary - unlocked by beating all 3 maps", emoji: "🌌",
+    name: "Singularity", desc: "beyond legendary - unlocked by beating all 3 maps, can own every path at once (incl. an explosive one), auto-levels for free - stays mid until deep levels, then damage explodes", emoji: "🌌",
     cost: 6000, damage: 180, range: 220, fireRate: 0.5, color: "#f0abfc", projectileSpeed: 950,
-    isLegendary: true, unique: true, unlockCheck: () => hasBeatenAllMaps(),
+    isLegendary: true, unique: true, multiPath: true, autoLevels: true, autoLevelInterval: 30, unlockCheck: () => hasBeatenAllMaps(),
   },
 };
 
@@ -967,37 +967,48 @@ const TOWER_PATHS = {
     },
   },
   singularity: {
+    // Since Singularity can own every path at once (multiPath), Omniscience
+    // and Time Dilation are the only two that would otherwise both write
+    // pathRangeMult/pathDamageMult and silently clobber each other - they
+    // write their own path-prefixed fields instead, which
+    // recomputeSingularityMultiPath() combines into the real
+    // pathRangeMult/pathDamageMult after every purchase.
     omniscience: {
       name: "Omniscience",
       accentColor: "#e0f2fe",
       tiers: [
         { desc: "sees everything - always detects camo, always crits", cost: 500, apply: (t) => { t.alwaysSeeCamo = true; t.critChance = 1.0; t.critMult = 1.6; } },
-        { desc: "much bigger crits, bigger range", cost: 850, apply: (t) => { t.critMult = 2.2; t.pathRangeMult = 1.3; } },
-        { desc: "even bigger crits and range", cost: 1300, apply: (t) => { t.critMult = 2.8; t.pathRangeMult = 1.6; t.pathDamageMult = 1.3; } },
-        { desc: "massive crits, extra dmg vs bosses", cost: 1900, apply: (t) => { t.critMult = 3.6; t.pathDamageMult = 1.7; t.bossDamageMult = 1.8; } },
-        { desc: "nothing on the board is hidden, nothing survives a hit", cost: 2700, apply: (t) => { t.critMult = 4.5; t.pathDamageMult = 2.2; t.bossDamageMult = 2.4; } },
+        { desc: "much bigger crits, bigger range", cost: 850, apply: (t) => { t.critMult = 2.2; t.omniscienceRangeMult = 1.3; } },
+        { desc: "even bigger crits and range", cost: 1300, apply: (t) => { t.critMult = 2.8; t.omniscienceRangeMult = 1.6; t.omniscienceDamageMult = 1.3; } },
+        { desc: "massive crits, extra dmg vs bosses", cost: 1900, apply: (t) => { t.critMult = 3.6; t.omniscienceDamageMult = 1.7; t.bossDamageMult = 1.8; } },
+        { desc: "nothing on the board is hidden, nothing survives a hit", cost: 2700, apply: (t) => { t.critMult = 4.5; t.omniscienceDamageMult = 2.2; t.bossDamageMult = 2.4; } },
       ],
     },
     dilation: {
       name: "Time Dilation",
       accentColor: "#fde68a",
       tiers: [
-        { desc: "buffs nearby devs' damage/rate too, wider range", cost: 500, apply: (t) => { t.grantsAura = true; t.buffDamagePct = 0.2; t.buffRatePct = 0.2; t.pathRangeMult = 1.3; } },
-        { desc: "bigger team buff, bigger own hits", cost: 850, apply: (t) => { t.buffDamagePct = 0.3; t.buffRatePct = 0.3; t.pathDamageMult = 1.3; } },
-        { desc: "even bigger team buff and hits", cost: 1300, apply: (t) => { t.buffDamagePct = 0.45; t.buffRatePct = 0.45; t.pathDamageMult = 1.7; } },
-        { desc: "huge team buff, wider range", cost: 1900, apply: (t) => { t.buffDamagePct = 0.6; t.buffRatePct = 0.6; t.pathDamageMult = 2.2; t.pathRangeMult = 1.6; } },
-        { desc: "time itself slows for everyone but your team", cost: 2700, apply: (t) => { t.buffDamagePct = 0.85; t.buffRatePct = 0.85; t.pathDamageMult = 2.8; } },
+        { desc: "buffs nearby devs' damage/rate too, wider range", cost: 500, apply: (t) => { t.grantsAura = true; t.buffDamagePct = 0.2; t.buffRatePct = 0.2; t.dilationRangeMult = 1.3; } },
+        { desc: "bigger team buff, bigger own hits", cost: 850, apply: (t) => { t.buffDamagePct = 0.3; t.buffRatePct = 0.3; t.dilationDamageMult = 1.3; } },
+        { desc: "even bigger team buff and hits", cost: 1300, apply: (t) => { t.buffDamagePct = 0.45; t.buffRatePct = 0.45; t.dilationDamageMult = 1.7; } },
+        { desc: "huge team buff, wider range", cost: 1900, apply: (t) => { t.buffDamagePct = 0.6; t.buffRatePct = 0.6; t.dilationDamageMult = 2.2; t.dilationRangeMult = 1.6; } },
+        { desc: "time itself slows for everyone but your team", cost: 2700, apply: (t) => { t.buffDamagePct = 0.85; t.buffRatePct = 0.85; t.dilationDamageMult = 2.8; } },
       ],
     },
     entropy: {
       name: "Entropy",
       accentColor: "#818cf8",
+      // entropyPercent (not damage directly) - recomputeTowerStats reads it
+      // when percentDamage is set. Writing straight to t.damage here would
+      // get clobbered the very next time stats are recomputed (level up,
+      // reload, another path's purchase), since the generic formula derives
+      // damage from def.damage (Singularity's flat 180, not a percentage).
       tiers: [
-        { desc: "true damage as a % of max hp, ignores all resistances", cost: 500, apply: (t) => { t.damageType = "magic"; t.percentDamage = true; t.damage = 0.02; } },
-        { desc: "bigger % damage, leaves a damaging exploit", cost: 850, apply: (t) => { t.damage = 0.032; t.pathDotPct = 0.015; t.pathDotDuration = 4; } },
-        { desc: "even bigger % damage, stronger exploit", cost: 1300, apply: (t) => { t.damage = 0.045; t.pathDotPct = 0.025; t.pathDotDuration = 5; } },
-        { desc: "massive % damage, hits 2 targets", cost: 1900, apply: (t) => { t.damage = 0.06; t.pathDotPct = 0.035; t.pathDotDuration = 6; t.multiShot = 2; } },
-        { desc: "entropy always wins - hp itself decays around it", cost: 2700, apply: (t) => { t.damage = 0.08; t.pathDotPct = 0.05; t.pathDotDuration = 7; t.multiShot = 3; } },
+        { desc: "true damage as a % of max hp, ignores all resistances", cost: 500, apply: (t) => { t.percentDamage = true; t.entropyPercent = 0.02; } },
+        { desc: "bigger % damage, leaves a damaging exploit", cost: 850, apply: (t) => { t.entropyPercent = 0.032; t.pathDotPct = 0.015; t.pathDotDuration = 4; } },
+        { desc: "even bigger % damage, stronger exploit", cost: 1300, apply: (t) => { t.entropyPercent = 0.045; t.pathDotPct = 0.025; t.pathDotDuration = 5; } },
+        { desc: "massive % damage, hits 2 targets", cost: 1900, apply: (t) => { t.entropyPercent = 0.06; t.pathDotPct = 0.035; t.pathDotDuration = 6; t.multiShot = 2; } },
+        { desc: "entropy always wins - hp itself decays around it", cost: 2700, apply: (t) => { t.entropyPercent = 0.08; t.pathDotPct = 0.05; t.pathDotDuration = 7; t.multiShot = 3; } },
       ],
     },
     genesis: {
@@ -1009,6 +1020,26 @@ const TOWER_PATHS = {
         { desc: "towers/upgrades cost 28% less, big payout", cost: 1300, apply: (t) => { t.costDiscountPct = 0.28; state.gold += 1500; } },
         { desc: "towers/upgrades cost 35% less, huge payout", cost: 1900, apply: (t) => { t.costDiscountPct = 0.35; state.gold += 2400; } },
         { desc: "a new economy, built from nothing", cost: 2700, apply: (t) => { t.costDiscountPct = 0.4; state.gold += 3800; } },
+      ],
+    },
+    // Trades raw power for coverage - every hit deals only half its normal
+    // damage (explosionDamageMult, folded into pathDamageMult by
+    // recomputeSingularityMultiPath), but splashes everyone in radius
+    // instead of just one target. hasExplosionPath is a marker only -
+    // the actual damageType is decided by that same combiner, since Entropy
+    // owning magic at the same time needs to win over it.
+    explosion: {
+      name: "Detonation",
+      accentColor: "#f97316",
+      tiers: [
+        {
+          desc: "explosive splash damage (50% of normal) to nearby targets", cost: 500,
+          apply: (t) => { t.hasExplosionPath = true; t.explosionDamageMult = 0.5; t.splashRadius = 70; },
+        },
+        { desc: "bigger blast radius", cost: 850, apply: (t) => { t.splashRadius = 100; } },
+        { desc: "even bigger blast radius", cost: 1300, apply: (t) => { t.splashRadius = 130; } },
+        { desc: "huge blast radius, slows everything it hits", cost: 1900, apply: (t) => { t.splashRadius = 165; t.auraSlowPct = 0.15; } },
+        { desc: "a blast that levels the battlefield", cost: 2700, apply: (t) => { t.splashRadius = 210; t.auraSlowPct = 0.25; } },
       ],
     },
   },
@@ -1804,6 +1835,22 @@ function towerUpgradeCost(t) {
 // layered on top of level scaling, so leveling keeps working the same way
 // after a path is chosen - called on placement, on level-up, and right
 // after a path tier is bought.
+// Combines Omniscience's, Time Dilation's, and Detonation's separately-
+// tracked contributions into the actual pathRangeMult/pathDamageMult that
+// recomputeTowerStats reads - called after every Singularity tier purchase,
+// before recomputeTowerStats. See the comment above the omniscience path.
+// Also derives damageType here rather than letting Entropy/Detonation's
+// apply() set it directly, since owning both at once would otherwise let
+// whichever was purchased more recently silently overwrite the other -
+// magic (Entropy) always wins when both are owned, since it bypasses every
+// resistance and there's never a reason to prefer explosive over it.
+function recomputeSingularityMultiPath(t) {
+  t.pathRangeMult = (t.omniscienceRangeMult || 1) * (t.dilationRangeMult || 1);
+  t.pathDamageMult = (t.omniscienceDamageMult || 1) * (t.dilationDamageMult || 1) * (t.explosionDamageMult || 1);
+  if (t.percentDamage) t.damageType = "magic";
+  else if (t.hasExplosionPath) t.damageType = "explosive";
+}
+
 function recomputeTowerStats(t) {
   const def = TOWER_TYPES[t.type];
   const levelFactor = 1 + 0.25 * (t.level - 1);
@@ -1829,6 +1876,28 @@ function recomputeTowerStats(t) {
     t.damage = def.damage * Math.pow(1.12, t.level - 1);
     t.fireRate = def.fireRate;
     t.splashRadius = 0;
+  } else if (t.type === "singularity") {
+    // Auto-levels forever for free (like Sentry) but keeps its full path
+    // system. Uses the exact same linear formulas as every other tower
+    // (levelFactor/rangeLevelFactor, already computed above) so it stays
+    // "mid" for a long time despite free uncapped leveling - a late kicker
+    // (1 until level 300, then compounding) makes damage specifically
+    // explode starting around level 350. Fire rate deliberately never
+    // scales from level at all - only a path could raise it, and none
+    // currently do - so an idled-forever Singularity can't spiral into
+    // firing fast enough to actually lag the game.
+    const lateDmgBoost = Math.pow(1.06, Math.max(0, t.level - 300));
+    const lateRangeBoost = Math.pow(1.02, Math.max(0, t.level - 300));
+    t.damage = t.percentDamage
+      ? (t.entropyPercent || 0) * (t.pathDamageMult || 1)
+      : def.damage * levelFactor * lateDmgBoost * (t.pathDamageMult || 1);
+    t.range = def.range * rangeLevelFactor * lateRangeBoost * (t.pathRangeMult || 1);
+    t.fireRate = def.fireRate / (t.pathRateMult || 1);
+    // splashRadius (Detonation path) and damageType (Entropy vs Detonation)
+    // are deliberately NOT derived here - they're set directly by
+    // buyPathTier/recomputeSingularityMultiPath instead, since Singularity
+    // has no single def.splashRadius/damageType to derive them from the way
+    // every other tower does.
   } else {
     t.damage = def.damage * levelFactor * (t.pathDamageMult || 1);
     t.fireRate = def.fireRate / (t.pathRateMult || 1);
@@ -1865,6 +1934,31 @@ function upgradeTower(t) {
 function buyPathTier(t, pathId) {
   const pathDef = TOWER_PATHS[t.type]?.[pathId];
   if (!pathDef) return;
+
+  // multiPath towers (Singularity) can own every path at once - progress is
+  // tracked per path in pathTiers instead of the single path/pathTier pair
+  // everyone else uses, and there's no "locks out the other paths" check.
+  if (TOWER_TYPES[t.type].multiPath) {
+    t.pathTiers = t.pathTiers || {};
+    const nextTierIndex = t.pathTiers[pathId] || 0;
+    const tier = pathDef.tiers[nextTierIndex];
+    if (!tier) return; // already maxed
+    const cost = pathTierCost(tier);
+    if (t.level < PATH_TIER_LEVELS[nextTierIndex] || state.gold < cost) return;
+
+    state.gold -= cost;
+    t.pathTiers[pathId] = nextTierIndex + 1;
+    tier.apply(t);
+    recomputeSingularityMultiPath(t);
+    recomputeTowerStats(t);
+    if (nextTierIndex === 0) markVisualMilestone(t, 3);
+    else t.flashUntil = performance.now() + 400;
+    if (t.pathTiers[pathId] >= pathDef.tiers.length) unlockAchievement("maxed_path");
+    updateStats();
+    saveGame();
+    return;
+  }
+
   if (t.path && t.path !== pathId) return;
 
   const nextTierIndex = t.pathTier || 0;
@@ -1903,7 +1997,13 @@ function refreshTowerInfoPanel() {
   }
   towerInfoPanel.hidden = false;
   const def = TOWER_TYPES[t.type];
-  const pathLabel = t.path ? ` - ${TOWER_PATHS[t.type][t.path].name} T${t.pathTier}` : "";
+  let pathLabel = "";
+  if (def.multiPath && t.pathTiers) {
+    const owned = Object.entries(t.pathTiers).filter(([, n]) => n > 0).map(([id, n]) => `${TOWER_PATHS[t.type][id].name} T${n}`);
+    if (owned.length) pathLabel = ` - ${owned.join(", ")}`;
+  } else if (t.path) {
+    pathLabel = ` - ${TOWER_PATHS[t.type][t.path].name} T${t.pathTier}`;
+  }
   towerInfoName.textContent = `${def.emoji} ${def.name} (Lv.${t.level})${pathLabel}`;
   let statsLine;
   if (t.isSupport) {
@@ -1917,7 +2017,7 @@ function refreshTowerInfoPanel() {
   } else {
     statsLine = `dmg ${Math.round(t.damage)} | range ${Math.round(t.range)}`;
   }
-  if (t.isSentry) {
+  if (t.autoLevels) {
     statsLine += ` | auto-levels in ${Math.ceil(t.autoLevelCooldown ?? t.autoLevelInterval)}s`;
   }
   towerInfoLevel.textContent = `${statsLine} | dealt: ${Math.round(t.totalDamageDealt || 0).toLocaleString()}`;
@@ -1949,6 +2049,23 @@ function refreshTowerPathSection(t) {
     return;
   }
 
+  if (TOWER_TYPES[t.type].multiPath) {
+    t.pathTiers = t.pathTiers || {};
+    const key = Object.keys(paths)
+      .map((id) => {
+        const idx = t.pathTiers[id] || 0;
+        return `${id}:${idx}:${t.level >= PATH_TIER_LEVELS[idx] ? 1 : 0}`;
+      })
+      .join("|");
+    if (t !== lastPathSectionTower || key !== lastPathSectionKey) {
+      lastPathSectionTower = t;
+      lastPathSectionKey = key;
+      buildMultiPathSectionDOM(t, paths);
+    }
+    updateMultiPathSectionDynamicBits(t, paths);
+    return;
+  }
+
   const tierIndex = t.pathTier || 0;
   const requiredLevel = t.path ? PATH_TIER_LEVELS[tierIndex] : PATH_UNLOCK_LEVEL;
   const levelMet = t.level >= requiredLevel;
@@ -1960,6 +2077,65 @@ function refreshTowerPathSection(t) {
     buildPathSectionDOM(t, paths, tierIndex, levelMet);
   }
   updatePathSectionDynamicBits(t, paths, tierIndex);
+}
+
+// multiPath towers (Singularity) show every path's own progress at once,
+// each with its own "reach level X" hint or buy button, instead of picking
+// one path and hiding the rest.
+function buildMultiPathSectionDOM(t, paths) {
+  towerPathSection.innerHTML = "";
+  Object.entries(paths).forEach(([pathId, pathDef]) => {
+    const tierIndex = t.pathTiers[pathId] || 0;
+    const group = document.createElement("div");
+    group.className = "multipath-group";
+    const heading = document.createElement("p");
+    heading.className = "multipath-heading";
+    heading.textContent = pathDef.name;
+    group.appendChild(heading);
+
+    for (let i = 0; i < tierIndex; i++) {
+      const p = document.createElement("p");
+      p.className = "tower-path-chosen";
+      p.textContent = `T${i + 1}: ${pathDef.tiers[i].desc}`;
+      group.appendChild(p);
+    }
+
+    const nextTier = pathDef.tiers[tierIndex];
+    if (nextTier) {
+      const requiredLevel = PATH_TIER_LEVELS[tierIndex];
+      if (t.level < requiredLevel) {
+        const hint = document.createElement("p");
+        hint.className = "tower-path-hint";
+        hint.textContent = `reach level ${requiredLevel} for T${tierIndex + 1}: ${nextTier.desc}`;
+        group.appendChild(hint);
+      } else {
+        const btn = document.createElement("button");
+        btn.className = "btn path-btn";
+        btn.dataset.pathId = pathId;
+        btn.innerHTML = `<span class="path-name">T${tierIndex + 1}</span><span class="path-desc">${nextTier.desc}</span><span class="path-cost">${pathTierCost(nextTier)}c</span>`;
+        btn.addEventListener("click", () => buyPathTier(t, pathId));
+        group.appendChild(btn);
+      }
+    } else {
+      const maxed = document.createElement("p");
+      maxed.className = "tower-path-chosen";
+      maxed.textContent = "maxed";
+      group.appendChild(maxed);
+    }
+
+    towerPathSection.appendChild(group);
+  });
+}
+
+function updateMultiPathSectionDynamicBits(t, paths) {
+  towerPathSection.querySelectorAll(".path-btn").forEach((btn) => {
+    const pathId = btn.dataset.pathId;
+    const pathDef = paths[pathId];
+    if (!pathDef) return;
+    const tierIndex = t.pathTiers[pathId] || 0;
+    const tier = pathDef.tiers[tierIndex];
+    if (tier) btn.disabled = state.gold < pathTierCost(tier);
+  });
 }
 
 function buildPathSectionDOM(t, paths, tierIndex, levelMet) {
@@ -2149,9 +2325,13 @@ function closestPointOnPath(x, y) {
 // Sentries have no path system - instead they auto-level for free on a
 // timer, reusing the normal level-scaling formula in recomputeTowerStats.
 // Paying for a manual upgrade still works too and doesn't reset this timer.
+// Drives any tower with autoLevels: true (Sentry, Singularity) - each just
+// levels up for free on its own interval, on top of still being manually
+// upgradeable. recomputeTowerStats reads t.autoLevelInterval/t.isSentry to
+// decide exactly how that level translates into stats for that tower.
 function updateSentries(dt) {
   for (const t of state.towers) {
-    if (!t.isSentry) continue;
+    if (!t.autoLevels) continue;
     t.autoLevelCooldown = (t.autoLevelCooldown ?? t.autoLevelInterval) - dt;
     if (t.autoLevelCooldown <= 0) {
       t.autoLevelCooldown = t.autoLevelInterval;
