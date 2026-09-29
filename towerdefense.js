@@ -1240,6 +1240,10 @@ const achievementsBtn = document.getElementById("achievementsBtn");
 const achievementsOverlay = document.getElementById("achievementsOverlay");
 const achievementsContent = document.getElementById("achievementsContent");
 const achievementsClose = document.getElementById("achievementsClose");
+const towerInfoPopupOverlay = document.getElementById("towerInfoPopupOverlay");
+const towerInfoPopupTitle = document.getElementById("towerInfoPopupTitle");
+const towerInfoPopupContent = document.getElementById("towerInfoPopupContent");
+const towerInfoPopupClose = document.getElementById("towerInfoPopupClose");
 
 const overclockBtn = document.getElementById("overclockBtn");
 const fundraiserBtn = document.getElementById("fundraiserBtn");
@@ -1260,11 +1264,15 @@ function buildTowerButtons() {
     const btn = document.createElement("button");
     btn.className = "tower-btn";
     btn.dataset.type = key;
-    btn.innerHTML = `<span class="emoji">${def.emoji}</span><span class="info"><span class="name">${def.name}</span><span class="desc">${def.desc}</span></span><span class="cost">${def.cost}c</span>`;
+    // No inline description - full desc + entire path tree lives in the
+    // double-click popup instead, so the list itself stays compact even as
+    // the roster grows.
+    btn.innerHTML = `<span class="emoji">${def.emoji}</span><span class="info"><span class="name">${def.name}</span></span><span class="cost">${def.cost}c</span>`;
     btn.addEventListener("click", () => {
       state.selectedTowerType = state.selectedTowerType === key ? null : key;
       refreshTowerButtons();
     });
+    btn.addEventListener("dblclick", () => openTowerInfoPopup(key));
     towerListEl.appendChild(btn);
   });
 }
@@ -1728,6 +1736,43 @@ achievementsBtn.addEventListener("click", () => {
 
 achievementsClose.addEventListener("click", () => {
   achievementsOverlay.hidden = true;
+});
+
+// Double-clicking a tower in the shop list opens this - full description
+// plus every path's entire tier list (including ones far out of reach),
+// as a read-only preview. Keeps the shop list itself compact.
+function openTowerInfoPopup(key) {
+  const def = TOWER_TYPES[key];
+  towerInfoPopupTitle.textContent = `${def.emoji} ${def.name}`;
+  const paths = TOWER_PATHS[key];
+
+  let html = `<p class="tower-info-popup-desc">${def.desc}</p>`;
+  if (!paths) {
+    html += `<p class="tower-path-hint">no path system</p>`;
+  } else {
+    html += Object.values(paths)
+      .map((pathDef) => {
+        const tiersHtml = pathDef.tiers
+          .map((tier, i) => {
+            const level = PATH_TIER_LEVELS[i];
+            const cost = pathTierCost(tier, i, key);
+            return `
+              <div class="codex-row">
+                <span class="codex-emoji">T${i + 1}</span>
+                <span><span class="codex-row-name">level ${level} - ${cost}c</span><span class="codex-row-desc">${tier.desc}</span></span>
+              </div>`;
+          })
+          .join("");
+        return `<div class="multipath-group"><p class="multipath-heading" style="color:${pathDef.accentColor}">${pathDef.name}</p>${tiersHtml}</div>`;
+      })
+      .join("");
+  }
+  towerInfoPopupContent.innerHTML = html;
+  towerInfoPopupOverlay.hidden = false;
+}
+
+towerInfoPopupClose.addEventListener("click", () => {
+  towerInfoPopupOverlay.hidden = true;
 });
 
 // Cloud push happens on a flat 20s heartbeat instead of a cancellable
