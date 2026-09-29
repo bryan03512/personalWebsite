@@ -1260,6 +1260,7 @@ const state = {
   explosions: [],
   floatingTexts: [],
   chainBolts: [],
+  deathParticles: [],
   allies: [],
   waveInProgress: false,
   spawnQueue: [],
@@ -3123,6 +3124,7 @@ function applyDamage(enemy, amount, sourceTower) {
     const idx = state.enemies.indexOf(enemy);
     if (idx !== -1) {
       state.enemies.splice(idx, 1);
+      spawnDeathBurst(enemy.x, enemy.y, enemy.color);
       state.gold += enemy.reward * goldYieldMult();
       if (sourceTower?.bonusGoldPerKill) state.gold += sourceTower.bonusGoldPerKill;
       state.kills += 1;
@@ -3225,6 +3227,40 @@ function updateExplosions(dt) {
     const ex = state.explosions[i];
     ex.age += dt;
     if (ex.age >= ex.duration) state.explosions.splice(i, 1);
+  }
+}
+
+// ---------- Enemy death burst (visual only) ----------
+// A handful of the enemy's own color flying outward and fading - fires for
+// every kill regardless of what killed it, so it stays lightweight (no ring
+// sprite, just small dots with drag) even when several enemies die at once.
+function spawnDeathBurst(x, y, color) {
+  const count = 7;
+  for (let i = 0; i < count; i++) {
+    const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.5;
+    const speed = 45 + Math.random() * 55;
+    state.deathParticles.push({
+      x, y, color,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      age: 0,
+      duration: 0.35 + Math.random() * 0.15,
+    });
+  }
+}
+
+function updateDeathParticles(dt) {
+  for (let i = state.deathParticles.length - 1; i >= 0; i--) {
+    const p = state.deathParticles[i];
+    p.age += dt;
+    if (p.age >= p.duration) {
+      state.deathParticles.splice(i, 1);
+      continue;
+    }
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.vx *= 0.9;
+    p.vy *= 0.9;
   }
 }
 
@@ -3703,6 +3739,17 @@ function draw() {
     ctx.globalAlpha = 1;
   }
 
+  // enemy death burst - a few fragments flying outward and shrinking/fading
+  for (const p of state.deathParticles) {
+    const t = p.age / p.duration;
+    ctx.globalAlpha = 1 - t;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, Math.max(0, 3 * (1 - t)), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
   // floating combat text (e.g. "CRIT!") - drifts up and fades out
   for (const f of state.floatingTexts) {
     const t = f.age / f.duration;
@@ -3742,6 +3789,7 @@ function loop(now) {
     updateAuras(dt);
     updateProjectiles(dt);
     updateExplosions(dt);
+    updateDeathParticles(dt);
     updateFloatingTexts(dt);
     updateChainBolts(dt);
     updateOverclock(dt);
@@ -3769,6 +3817,7 @@ function resetTransientState() {
   state.explosions = [];
   state.floatingTexts = [];
   state.chainBolts = [];
+  state.deathParticles = [];
   state.allies = [];
   state.waveInProgress = false;
   state.spawnQueue = [];
