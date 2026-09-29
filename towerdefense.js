@@ -3306,6 +3306,23 @@ function drawUnseenMark(x, y, radius) {
   ctx.stroke();
 }
 
+// A short jagged lightning-bolt segment centered on (x, y), oriented along
+// (dx, dy) - used for Tesla's in-flight projectile. len/amp are the bolt's
+// length and how far its jagged midpoint kicks sideways.
+function drawBolt(x, y, dx, dy, len, amp, color) {
+  const norm = Math.hypot(dx, dy) || 1;
+  const ux = dx / norm, uy = dy / norm;
+  const perpX = -uy, perpY = ux;
+  const kick = (Math.random() - 0.5) * 2 * amp;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(x - ux * len * 0.5, y - uy * len * 0.5);
+  ctx.lineTo(x + perpX * kick, y + perpY * kick);
+  ctx.lineTo(x + ux * len * 0.5, y + uy * len * 0.5);
+  ctx.stroke();
+}
+
 // ---------- Rendering ----------
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -3626,12 +3643,17 @@ function draw() {
     ctx.globalAlpha = 1;
   }
 
-  // projectiles
+  // projectiles - Tesla fires a small jagged bolt instead of a round dot,
+  // oriented toward whatever it's currently flying at.
   for (const p of state.projectiles) {
-    ctx.fillStyle = p.color;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, 2, 0, Math.PI * 2);
-    ctx.fill();
+    if (p.sourceTower?.type === "tesla") {
+      drawBolt(p.x, p.y, p.target.x - p.x, p.target.y - p.y, 24, 7, p.color);
+    } else {
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
 
   // explosions: expanding, fading ring where an AoE hit landed
@@ -3661,14 +3683,16 @@ function draw() {
     ctx.globalAlpha = 1;
   }
 
-  // chain lightning bolts (Tesla) - a quick jagged flash between hits
+  // chain lightning bolts (Tesla) - a quick jagged flash between hits.
+  // Sized 2x (was lineWidth 2 / jitter 12) - too faint to read at the
+  // zoomed-out scale.
   for (const b of state.chainBolts) {
     const t = b.age / b.duration;
     ctx.globalAlpha = 1 - t;
     ctx.strokeStyle = b.color;
-    ctx.lineWidth = 2;
-    const mx = (b.x1 + b.x2) / 2 + (Math.random() - 0.5) * 12;
-    const my = (b.y1 + b.y2) / 2 + (Math.random() - 0.5) * 12;
+    ctx.lineWidth = 4;
+    const mx = (b.x1 + b.x2) / 2 + (Math.random() - 0.5) * 24;
+    const my = (b.y1 + b.y2) / 2 + (Math.random() - 0.5) * 24;
     ctx.beginPath();
     ctx.moveTo(b.x1, b.y1);
     ctx.lineTo(mx, my);
