@@ -150,6 +150,12 @@ const DIFFICULTY_SETTINGS = {
   hard: { label: "Hard", hpMult: 1.6, rewardMult: 1.25, speedMult: 1.15 },
 };
 
+// A medal is earned per-map, per-difficulty, the moment that map's live wave
+// passes the listed sprint on that difficulty - lower thresholds on easier
+// settings since the enemies scale up less there. Stored in each map's save
+// slot (state.medals), never un-earned once true.
+const MEDAL_THRESHOLDS = { easy: 50, normal: 80, hard: 100 };
+
 const OVERCLOCK_DURATION = 8;
 const OVERCLOCK_COOLDOWN = 30;
 const FUNDRAISER_DURATION = 10;
@@ -1172,6 +1178,7 @@ const RESISTANCES = {
 const state = {
   mapId: "map1",
   difficulty: "normal",
+  medals: { easy: false, normal: false, hard: false },
   gold: 150,
   bestGold: 150,
   lives: 20,
@@ -1369,6 +1376,7 @@ function currentMapSlot() {
     kills: state.kills,
     towers: state.towers,
     difficulty: state.difficulty,
+    medals: state.medals,
   };
 }
 
@@ -1470,6 +1478,27 @@ function checkThresholdAchievements() {
   if (state.bestGold >= 10000) unlockAchievement("big_spender");
   if (state.totalBossKills >= 50) unlockAchievement("boss_slayer");
   if (!state.achievements.conqueror && hasBeatenAllMaps()) unlockAchievement("conqueror");
+  checkMedals();
+}
+
+const medalToast = document.createElement("div");
+medalToast.className = "achievement-toast";
+document.body.appendChild(medalToast);
+let medalToastTimer = null;
+
+// Checked every updateStats() call (same cadence as achievements) - fires
+// once per map+difficulty the instant the live wave crosses that
+// difficulty's threshold, then persists immediately so it survives a crash.
+function checkMedals() {
+  const threshold = MEDAL_THRESHOLDS[state.difficulty];
+  if (!threshold || state.wave <= threshold || state.medals[state.difficulty]) return;
+  state.medals[state.difficulty] = true;
+  const diffLabel = (DIFFICULTY_SETTINGS[state.difficulty] || DIFFICULTY_SETTINGS.normal).label;
+  medalToast.textContent = `medal earned: ${diffLabel} - ${MAP_DEFS[state.mapId]?.name || state.mapId}`;
+  medalToast.classList.add("visible");
+  clearTimeout(medalToastTimer);
+  medalToastTimer = setTimeout(() => medalToast.classList.remove("visible"), 3500);
+  saveGame();
 }
 
 // Applies one map's saved slot onto the live (currently active) state -
@@ -1485,6 +1514,7 @@ function applyMapDataToState(mapData) {
   if (typeof mapData.difficulty === "string" && DIFFICULTY_SETTINGS[mapData.difficulty]) {
     state.difficulty = mapData.difficulty;
   }
+  state.medals = { easy: false, normal: false, hard: false, ...(mapData.medals || {}) };
   // Guard against a stale/incomplete snapshot (e.g. a cloud push that lost a
   // race with navigating away mid-round) silently deleting placed towers -
   // never adopt an incoming towers list that's smaller than what's already here.
@@ -1579,9 +1609,11 @@ function renderMapPicker() {
       ? `best sprint ${mapData.bestWave || 0} | best credits ${Math.floor(mapData.bestGold || 0)}`
       : "not started yet";
     const currentDiff = mapData?.difficulty && DIFFICULTY_SETTINGS[mapData.difficulty] ? mapData.difficulty : "normal";
+    const medals = { easy: false, normal: false, hard: false, ...(mapData?.medals || {}) };
+    const mastered = medals.easy && medals.normal && medals.hard;
 
     const card = document.createElement("div");
-    card.className = "map-picker-card";
+    card.className = "map-picker-card" + (mastered ? " map-picker-card-mastered" : "");
 
     const btn = document.createElement("button");
     btn.className = "btn map-picker-btn";
@@ -1606,6 +1638,16 @@ function renderMapPicker() {
       diffRow.appendChild(diffBtn);
     });
     card.appendChild(diffRow);
+
+    const medalRow = document.createElement("div");
+    medalRow.className = "map-picker-medal-row";
+    medalRow.innerHTML = Object.entries(DIFFICULTY_SETTINGS)
+      .map(([diffId, diffDef]) => {
+        const earned = medals[diffId];
+        return `<span class="map-picker-medal${earned ? " earned" : ""}" title="${diffDef.label}: sprint ${MEDAL_THRESHOLDS[diffId]}+">${earned ? "🏅" : "⚪"} ${diffDef.label}</span>`;
+      })
+      .join("");
+    card.appendChild(medalRow);
 
     mapPickerList.appendChild(card);
   });
@@ -3496,6 +3538,7 @@ function resetTransientState() {
   state.lives = 20;
   state.wave = 0;
   state.kills = 0;
+  state.medals = { easy: false, normal: false, hard: false };
   state.selectedTowerType = null;
   state.selectedTower = null;
   state.towers = [];

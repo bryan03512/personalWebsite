@@ -492,6 +492,30 @@ canvas {
   color: #04150a;
 }
 
+.map-picker-medal-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.map-picker-medal {
+  font-size: 0.68rem;
+  color: var(--green-faint);
+  opacity: 0.6;
+}
+
+.map-picker-medal.earned {
+  color: var(--yellow);
+  opacity: 1;
+}
+
+.map-picker-card-mastered {
+  border: 1px solid var(--yellow);
+  border-radius: 6px;
+  padding: 8px;
+  box-shadow: 0 0 12px rgba(255, 215, 0, 0.35);
+}
+
 .codex-overlay {
   position: fixed;
   inset: 0;
