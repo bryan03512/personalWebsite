@@ -183,8 +183,10 @@ const PATH_TIER_LEVELS = [3, 6, 10, 14, 18, 23, 28, 34, 40, 47];
 
 // Applied on top of every path tier's listed cost - a single knob to make
 // path specializations pricier relative to plain leveling, rather than
-// editing every tier's cost individually.
-const PATH_TIER_COST_MULT = 1.4;
+// editing every tier's cost individually. Bumped from 1.4 so path investment
+// reads as a serious, deliberate spend everywhere (compounds with the T5
+// spike below - e.g. Singularity's T5 lands around 600k).
+const PATH_TIER_COST_MULT = 2.2;
 // T5 (tierIndex 4) is a deliberate price+power spike: the capstone tier for
 // every regular (5-tier) tower, and a notable checkpoint partway through
 // Singularity's 10-tier paths. 10x Engineer is explicitly excluded (its
@@ -2026,7 +2028,9 @@ function getCostDiscount() {
 
 function towerUpgradeCost(t) {
   const baseCost = TOWER_TYPES[t.type].cost;
-  const raw = baseCost * 0.4 * Math.pow(1.6, t.level - 1);
+  // Halved from 0.4 so plain leveling stays cheap and path investment (see
+  // PATH_TIER_COST_MULT) is where the real spending decisions happen.
+  const raw = baseCost * 0.2 * Math.pow(1.6, t.level - 1);
   return Math.round(raw * (1 - getCostDiscount()));
 }
 
