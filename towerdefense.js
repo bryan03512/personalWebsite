@@ -3306,21 +3306,51 @@ function drawUnseenMark(x, y, radius) {
   ctx.stroke();
 }
 
-// A short jagged lightning-bolt segment centered on (x, y), oriented along
-// (dx, dy) - used for Tesla's in-flight projectile. len/amp are the bolt's
-// length and how far its jagged midpoint kicks sideways.
-function drawBolt(x, y, dx, dy, len, amp, color) {
+// A proper jagged lightning bolt from (x1,y1) to (x2,y2) - several zigzag
+// segments (not just one bent kink) plus a short forking branch partway
+// along, like an actual lightning bolt rather than a bent stick.
+function drawLightning(x1, y1, x2, y2, color, width) {
+  const dx = x2 - x1, dy = y2 - y1;
+  const len = Math.hypot(dx, dy) || 1;
+  const ux = dx / len, uy = dy / len;
+  const perpX = -uy, perpY = ux;
+  const segs = 5;
+  const amp = Math.max(4, len * 0.16);
+
+  const points = [{ x: x1, y: y1 }];
+  for (let i = 1; i < segs; i++) {
+    const t = i / segs;
+    const jag = (Math.random() - 0.5) * 2 * amp;
+    points.push({ x: x1 + dx * t + perpX * jag, y: y1 + dy * t + perpY * jag });
+  }
+  points.push({ x: x2, y: y2 });
+
+  ctx.strokeStyle = color;
+  ctx.lineWidth = width;
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(points[0].x, points[0].y);
+  for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
+  ctx.stroke();
+
+  // One short forking branch off a middle point, angled away from the main line.
+  const forkFrom = points[1 + Math.floor(Math.random() * (points.length - 2))];
+  const forkAngle = Math.atan2(dy, dx) + (Math.random() < 0.5 ? 1 : -1) * (0.5 + Math.random() * 0.5);
+  const forkLen = len * 0.25;
+  ctx.lineWidth = width * 0.6;
+  ctx.beginPath();
+  ctx.moveTo(forkFrom.x, forkFrom.y);
+  ctx.lineTo(forkFrom.x + Math.cos(forkAngle) * forkLen, forkFrom.y + Math.sin(forkAngle) * forkLen);
+  ctx.stroke();
+}
+
+// Tesla's in-flight projectile: a short lightning bolt centered on (x, y)
+// and oriented toward whatever it's currently flying at, length `len`.
+function drawBolt(x, y, dx, dy, len, color) {
   const norm = Math.hypot(dx, dy) || 1;
   const ux = dx / norm, uy = dy / norm;
-  const perpX = -uy, perpY = ux;
-  const kick = (Math.random() - 0.5) * 2 * amp;
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.moveTo(x - ux * len * 0.5, y - uy * len * 0.5);
-  ctx.lineTo(x + perpX * kick, y + perpY * kick);
-  ctx.lineTo(x + ux * len * 0.5, y + uy * len * 0.5);
-  ctx.stroke();
+  drawLightning(x - ux * len * 0.5, y - uy * len * 0.5, x + ux * len * 0.5, y + uy * len * 0.5, color, 3);
 }
 
 // ---------- Rendering ----------
@@ -3647,7 +3677,7 @@ function draw() {
   // oriented toward whatever it's currently flying at.
   for (const p of state.projectiles) {
     if (p.sourceTower?.type === "tesla") {
-      drawBolt(p.x, p.y, p.target.x - p.x, p.target.y - p.y, 24, 7, p.color);
+      drawBolt(p.x, p.y, p.target.x - p.x, p.target.y - p.y, 24, p.color);
     } else {
       ctx.fillStyle = p.color;
       ctx.beginPath();
@@ -3683,21 +3713,11 @@ function draw() {
     ctx.globalAlpha = 1;
   }
 
-  // chain lightning bolts (Tesla) - a quick jagged flash between hits.
-  // Sized 2x (was lineWidth 2 / jitter 12) - too faint to read at the
-  // zoomed-out scale.
+  // chain lightning bolts (Tesla) - a quick jagged flash between hits
   for (const b of state.chainBolts) {
     const t = b.age / b.duration;
     ctx.globalAlpha = 1 - t;
-    ctx.strokeStyle = b.color;
-    ctx.lineWidth = 4;
-    const mx = (b.x1 + b.x2) / 2 + (Math.random() - 0.5) * 24;
-    const my = (b.y1 + b.y2) / 2 + (Math.random() - 0.5) * 24;
-    ctx.beginPath();
-    ctx.moveTo(b.x1, b.y1);
-    ctx.lineTo(mx, my);
-    ctx.lineTo(b.x2, b.y2);
-    ctx.stroke();
+    drawLightning(b.x1, b.y1, b.x2, b.y2, b.color, 4);
     ctx.globalAlpha = 1;
   }
 }
