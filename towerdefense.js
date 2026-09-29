@@ -81,11 +81,16 @@ function applyMapLayout(mapId) {
 // ---------- Free-placement geometry ----------
 // Replaces the old "one tower per grid cell, never on a path cell" rule.
 // Towers can go anywhere on the canvas as long as they clear the path,
-// obstacles, the canvas edge, and other towers by these margins.
-const TOWER_FOOTPRINT_RADIUS = 14; // clearance needed from the canvas edge/obstacles
-const TOWER_MIN_SPACING = 34; // minimum center-to-center distance between two towers
-const PATH_CLEARANCE = 28; // minimum distance from the path centerline
+// obstacles, the canvas edge, and other towers by these margins - all
+// derived from TOWER_BODY_RADIUS (the actual drawn tower circle, see
+// CELL * 0.34 in draw()) so the invalid/red preview lines up with what the
+// tower visually looks like, instead of an arbitrary bigger padding that
+// flags a placement as blocked well before it actually touches anything.
 const PATH_VISUAL_WIDTH = 46; // rendered path corridor width
+const TOWER_BODY_RADIUS = CELL * 0.34;
+const TOWER_FOOTPRINT_RADIUS = TOWER_BODY_RADIUS; // clearance needed from the canvas edge/obstacles
+const TOWER_MIN_SPACING = TOWER_BODY_RADIUS * 2; // two tower circles just touching, not overlapping
+const PATH_CLEARANCE = TOWER_BODY_RADIUS + PATH_VISUAL_WIDTH / 2; // tower edge just clears the path corridor edge
 
 function distToSegment(px, py, ax, ay, bx, by) {
   const dx = bx - ax, dy = by - ay;
@@ -3278,6 +3283,29 @@ function triggerGameOver() {
   saveGame();
 }
 
+// A small red zigzag/static scribble trending up-left from (x, y), scaled to
+// radius - marks a camo enemy that's inside the selected tower's range
+// circle but that tower still can't see (see the call site in draw()).
+function drawUnseenMark(x, y, radius) {
+  const dirX = -0.7, dirY = -0.7;
+  const perpX = -dirY, perpY = dirX;
+  const len = radius * 3.2;
+  const amp = radius * 0.55;
+  const segs = 5;
+  ctx.strokeStyle = "#ff3b3b";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  for (let i = 1; i <= segs; i++) {
+    const t = i / segs;
+    const bx = x + dirX * len * t;
+    const by = y + dirY * len * t;
+    const jag = amp * (i % 2 === 0 ? 1 : -1);
+    ctx.lineTo(bx + perpX * jag, by + perpY * jag);
+  }
+  ctx.stroke();
+}
+
 // ---------- Rendering ----------
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -3503,6 +3531,18 @@ function draw() {
     }
   }
 
+  // Whether the currently-selected tower can see camo enemies right now
+  // (same rule findTargets uses) - computed once so the enemy loop below
+  // can mark any camo enemy sitting inside that tower's range but still
+  // invisible to it, instead of the player wondering why it isn't firing.
+  let selectedCanSeeCamo = false;
+  const selT = state.selectedTower;
+  const selAttacks = selT && !selT.isSupport && !selT.isEconomy && !selT.isRecruiter;
+  if (selAttacks) {
+    const buffs = getTowerBuffs(selT);
+    selectedCanSeeCamo = buffs.supported || selT.alwaysSeeCamo;
+  }
+
   // enemies
   for (const e of state.enemies) {
     if (e.isBoss) {
@@ -3532,6 +3572,14 @@ function draw() {
       ctx.arc(e.x, e.y, e.radius + 3, 0, Math.PI * 2);
       ctx.stroke();
       ctx.setLineDash([]);
+
+      // Extra red "no signal" scribble specifically when this camo enemy is
+      // sitting inside the SELECTED tower's range circle but that tower
+      // still can't see it - the dashed ring alone doesn't explain why a
+      // tower with an enemy visibly in range isn't firing at it.
+      if (selAttacks && !selectedCanSeeCamo && distance(selT.x, selT.y, e.x, e.y) <= selT.range) {
+        drawUnseenMark(e.x, e.y, e.radius);
+      }
     }
 
     ctx.fillStyle = e.color;
