@@ -1,35 +1,64 @@
 // ---------- Grid / path setup ----------
-const CELL = 60;
-const COLS = 13;
-const ROWS = 10;
+// Grid halved (was 60/13/10) so more world fits the same 780x600 canvas -
+// "zoomed out" for longer, more winding paths. The grid is now only used to
+// author waypoints/obstacles/background gridlines; tower placement itself
+// is free-form pixel coordinates, not cell-snapped (see canPlaceTowerAt).
+const CELL = 30;
+const COLS = 26;
+const ROWS = 20;
 
 function cellCenter([col, row]) {
   return { x: col * CELL + CELL / 2, y: row * CELL + CELL / 2 };
 }
 
 // Three maps, each just a different path shape on the same grid - same
-// towers, enemies, and rules everywhere. map1's waypoints are the original
-// (only) layout, unchanged, so every existing save keeps working exactly as
-// before, now labeled "Main Branch".
+// towers, enemies, and rules everywhere. Each map also carries its own
+// static obstacles/walls: rects towers can't be placed on or overlapping
+// (see canPlaceTowerAt) - purely footprint blockers, they don't affect
+// enemy movement or tower targeting (towers "see over" them).
 const MAP_DEFS = {
   map1: {
     name: "Main Branch",
     waypoints: [
-      [-1, 1], [3, 1], [3, 8], [6, 8], [6, 1], [9, 1], [9, 8], [13, 8],
+      [-1, 2], [6, 2], [6, 6], [2, 6], [2, 10], [10, 10], [10, 4], [14, 4],
+      [14, 14], [4, 14], [4, 17], [20, 17], [20, 8], [24, 8], [24, 2], [26, 2],
+    ],
+    obstacles: [
+      { x: 16 * 30, y: 10 * 30, w: 3 * 30, h: 3 * 30, kind: "obstacle" },
+      { x: 200, y: 220, w: 70, h: 70, kind: "obstacle" },
+      { x: 22 * 30, y: 10 * 30, w: 2 * 30, h: 4 * 30, kind: "wall" },
+      { x: 250, y: 460, w: 90, h: 40, kind: "wall" },
     ],
     bgColor: "#060a06", gridColor: "#132313", pathColor: "#12240f",
   },
   map2: {
     name: "CI Pipeline",
+    // Rows 3 apart (was 2) so free placement actually has a legal gap
+    // between adjacent zigzag lanes - a tighter pitch left zero buildable
+    // space anywhere once path clearance is a continuous distance instead
+    // of a single exclusive grid cell.
     waypoints: [
-      [-1, 1], [11, 1], [11, 3], [1, 3], [1, 5], [11, 5], [11, 7], [1, 7], [1, 9], [13, 9],
+      [-1, 1], [24, 1], [24, 4], [2, 4], [2, 7], [24, 7], [24, 10], [2, 10],
+      [2, 13], [24, 13], [24, 16], [2, 16], [2, 19], [26, 19],
+    ],
+    obstacles: [
+      { x: 280, y: 75, w: 80, h: 28, kind: "wall" },
+      { x: 410, y: 255, w: 80, h: 28, kind: "obstacle" },
+      { x: 120, y: 435, w: 80, h: 28, kind: "wall" },
     ],
     bgColor: "#050a10", gridColor: "#13202f", pathColor: "#0f1e2c",
   },
   map3: {
     name: "The Monolith",
     waypoints: [
-      [-1, 4], [4, 4], [4, 0], [8, 0], [8, 6], [2, 6], [2, 9], [12, 9], [12, 2], [13, 2],
+      [-1, 8], [8, 8], [8, 1], [16, 1], [16, 12], [5, 12], [5, 18], [22, 18],
+      [22, 4], [13, 4], [13, 15], [24, 15], [24, 9], [26, 9],
+    ],
+    obstacles: [
+      { x: 285, y: 90, w: 90, h: 80, kind: "obstacle" },
+      { x: 18 * 30, y: 3 * 30, w: 3 * 30, h: 6 * 30, kind: "wall" },
+      { x: 8 * 30, y: 14 * 30, w: 4 * 30, h: 3 * 30, kind: "obstacle" },
+      { x: 18 * 30, y: 10 * 30, w: 3 * 30, h: 4 * 30, kind: "wall" },
     ],
     bgColor: "#0a0612", gridColor: "#231334", pathColor: "#1e1130",
   },
@@ -41,27 +70,53 @@ const MAP_DEFS = {
 // reads these bindings live, so no other code needs to change.
 let GRID_WAYPOINTS = MAP_DEFS.map1.waypoints;
 let PATH_POINTS = GRID_WAYPOINTS.map(cellCenter);
-let pathCells = new Set();
+let mapObstacles = MAP_DEFS.map1.obstacles;
 
 function applyMapLayout(mapId) {
   GRID_WAYPOINTS = MAP_DEFS[mapId].waypoints;
   PATH_POINTS = GRID_WAYPOINTS.map(cellCenter);
-  pathCells = new Set();
-  for (let i = 0; i < GRID_WAYPOINTS.length - 1; i++) {
-    let [c1, r1] = GRID_WAYPOINTS[i];
-    let [c2, r2] = GRID_WAYPOINTS[i + 1];
-    if (r1 === r2) {
-      const [lo, hi] = [Math.min(c1, c2), Math.max(c1, c2)];
-      for (let c = lo; c <= hi; c++) {
-        if (c >= 0 && c < COLS) pathCells.add(`${c},${r1}`);
-      }
-    } else {
-      const [lo, hi] = [Math.min(r1, r2), Math.max(r1, r2)];
-      for (let r = lo; r <= hi; r++) {
-        if (c1 >= 0 && c1 < COLS) pathCells.add(`${c1},${r}`);
-      }
-    }
+  mapObstacles = MAP_DEFS[mapId].obstacles || [];
+}
+
+// ---------- Free-placement geometry ----------
+// Replaces the old "one tower per grid cell, never on a path cell" rule.
+// Towers can go anywhere on the canvas as long as they clear the path,
+// obstacles, the canvas edge, and other towers by these margins.
+const TOWER_FOOTPRINT_RADIUS = 14; // clearance needed from the canvas edge/obstacles
+const TOWER_MIN_SPACING = 34; // minimum center-to-center distance between two towers
+const PATH_CLEARANCE = 28; // minimum distance from the path centerline
+const PATH_VISUAL_WIDTH = 46; // rendered path corridor width
+
+function distToSegment(px, py, ax, ay, bx, by) {
+  const dx = bx - ax, dy = by - ay;
+  const lenSq = dx * dx + dy * dy;
+  let t = lenSq === 0 ? 0 : ((px - ax) * dx + (py - ay) * dy) / lenSq;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+}
+
+function distanceToPath(x, y) {
+  let min = Infinity;
+  for (let i = 0; i < PATH_POINTS.length - 1; i++) {
+    const a = PATH_POINTS[i], b = PATH_POINTS[i + 1];
+    min = Math.min(min, distToSegment(x, y, a.x, a.y, b.x, b.y));
   }
+  return min;
+}
+
+function distanceToRect(x, y, rect) {
+  const cx = Math.max(rect.x, Math.min(x, rect.x + rect.w));
+  const cy = Math.max(rect.y, Math.min(y, rect.y + rect.h));
+  return Math.hypot(x - cx, y - cy);
+}
+
+function canPlaceTowerAt(x, y) {
+  if (x < TOWER_FOOTPRINT_RADIUS || x > COLS * CELL - TOWER_FOOTPRINT_RADIUS) return false;
+  if (y < TOWER_FOOTPRINT_RADIUS || y > ROWS * CELL - TOWER_FOOTPRINT_RADIUS) return false;
+  if (distanceToPath(x, y) < PATH_CLEARANCE) return false;
+  if (mapObstacles.some((o) => distanceToRect(x, y, o) < TOWER_FOOTPRINT_RADIUS)) return false;
+  if (state.towers.some((t) => distance(t.x, t.y, x, y) < TOWER_MIN_SPACING)) return false;
+  return true;
 }
 
 // ---------- Tower & enemy definitions ----------
@@ -1141,31 +1196,34 @@ const TOWER_PATHS = {
   },
 };
 
+// Visual radii halved from their pre-zoom values to match the smaller grid -
+// purely cosmetic, no gameplay math reads these besides drawing (health
+// bars, emoji size).
 const ENEMY_TYPES = {
-  basic: { label: "Bug", emoji: "🐛", hp: 50, speed: 60, reward: 5, lifeDamage: 1, color: "#e05353", radius: 14 },
-  fast: { label: "Glitch", emoji: "⚡", hp: 25, speed: 130, reward: 5, lifeDamage: 1, color: "#ffee58", radius: 12 },
-  tank: { label: "Merge Conflict", emoji: "💀", hp: 160, speed: 35, reward: 12, lifeDamage: 2, color: "#8a4a2b", radius: 17 },
-  boss: { label: "Production Outage", emoji: "🔥", hp: 400, speed: 30, reward: 60, lifeDamage: 5, color: "#ff3b3b", radius: 24 },
-  bossCamo: { label: "Ghost Process", emoji: "👻", hp: 350, speed: 70, reward: 70, lifeDamage: 5, color: "#7c3aed", radius: 23, camo: true },
-  bossTank: { label: "Cascading Failure", emoji: "🌋", hp: 900, speed: 16, reward: 90, lifeDamage: 8, color: "#7f1d1d", radius: 27 },
-  megaboss: { label: "Total System Failure", emoji: "☠️", hp: 3000, speed: 26, reward: 250, lifeDamage: 10, color: "#000000", radius: 32 },
+  basic: { label: "Bug", emoji: "🐛", hp: 50, speed: 60, reward: 5, lifeDamage: 1, color: "#e05353", radius: 7 },
+  fast: { label: "Glitch", emoji: "⚡", hp: 25, speed: 130, reward: 5, lifeDamage: 1, color: "#ffee58", radius: 6 },
+  tank: { label: "Merge Conflict", emoji: "💀", hp: 160, speed: 35, reward: 12, lifeDamage: 2, color: "#8a4a2b", radius: 8.5 },
+  boss: { label: "Production Outage", emoji: "🔥", hp: 400, speed: 30, reward: 60, lifeDamage: 5, color: "#ff3b3b", radius: 12 },
+  bossCamo: { label: "Ghost Process", emoji: "👻", hp: 350, speed: 70, reward: 70, lifeDamage: 5, color: "#7c3aed", radius: 11.5, camo: true },
+  bossTank: { label: "Cascading Failure", emoji: "🌋", hp: 900, speed: 16, reward: 90, lifeDamage: 8, color: "#7f1d1d", radius: 13.5 },
+  megaboss: { label: "Total System Failure", emoji: "☠️", hp: 3000, speed: 26, reward: 250, lifeDamage: 10, color: "#000000", radius: 16 },
   // Late-wave specialists, each resistant to one damage type (see
   // RESISTANCES) so no single tower archetype trivializes everything.
-  legacy: { label: "Legacy Code", emoji: "💾", hp: 90, speed: 45, reward: 10, lifeDamage: 2, color: "#a1887f", radius: 15 },
-  firewalled: { label: "Firewalled", emoji: "🧱", hp: 70, speed: 55, reward: 10, lifeDamage: 1, color: "#5b7fd6", radius: 15 },
-  encrypted: { label: "Encrypted", emoji: "🔒", hp: 60, speed: 50, reward: 14, lifeDamage: 2, color: "#a855f7", radius: 15 },
+  legacy: { label: "Legacy Code", emoji: "💾", hp: 90, speed: 45, reward: 10, lifeDamage: 2, color: "#a1887f", radius: 7.5 },
+  firewalled: { label: "Firewalled", emoji: "🧱", hp: 70, speed: 55, reward: 10, lifeDamage: 1, color: "#5b7fd6", radius: 7.5 },
+  encrypted: { label: "Encrypted", emoji: "🔒", hp: 60, speed: 50, reward: 14, lifeDamage: 2, color: "#a855f7", radius: 7.5 },
   // Untargetable by any tower unless that tower is currently in an active
   // Manager's buff range (see getTowerBuffs/findTargets) - still visible so
   // the player can see them coming, just can't be shot without support.
-  obfuscated: { label: "Obfuscated", emoji: "🌫️", hp: 55, speed: 65, reward: 12, lifeDamage: 1, color: "#94a3b8", radius: 14, camo: true },
+  obfuscated: { label: "Obfuscated", emoji: "🌫️", hp: 55, speed: 65, reward: 12, lifeDamage: 1, color: "#94a3b8", radius: 7, camo: true },
   // On death, splits into splitCount weaker copies (splitHpFrac of its own
   // max hp) unless it's already a split itself - see applyDamage.
-  splitter: { label: "Forked Process", emoji: "🍴", hp: 70, speed: 55, reward: 8, lifeDamage: 1, color: "#fb7185", radius: 15, splitCount: 2, splitHpFrac: 0.4 },
+  splitter: { label: "Forked Process", emoji: "🍴", hp: 70, speed: 55, reward: 8, lifeDamage: 1, color: "#fb7185", radius: 7.5, splitCount: 2, splitHpFrac: 0.4 },
   // Passively heals nearby enemies each second - see updateHealers.
-  healer: { label: "QA Tester", emoji: "🩹", hp: 80, speed: 45, reward: 14, lifeDamage: 1, color: "#34d399", radius: 15, healRange: 90, healPerSecPct: 0.02 },
+  healer: { label: "QA Tester", emoji: "🩹", hp: 80, speed: 45, reward: 14, lifeDamage: 1, color: "#34d399", radius: 7.5, healRange: 90, healPerSecPct: 0.02 },
   // Has a separate regenerating shield on top of its hp - see the shield
   // handling in spawnEnemy/applyDamage/updateShields.
-  shielded: { label: "Hardened Build", emoji: "🛡️", hp: 60, speed: 50, reward: 14, lifeDamage: 1, color: "#60a5fa", radius: 15, shieldFrac: 1.0, shieldRegenDelay: 3, shieldRegenPerSec: 0.3 },
+  shielded: { label: "Hardened Build", emoji: "🛡️", hp: 60, speed: 50, reward: 14, lifeDamage: 1, color: "#60a5fa", radius: 7.5, shieldFrac: 1.0, shieldRegenDelay: 3, shieldRegenPerSec: 0.3 },
 };
 
 // Damage-type resistance: a multiplier applied when that enemy type takes
@@ -1398,6 +1456,7 @@ function normalizePayload(parsed) {
       ownerId: parsed.ownerId,
       achievements: parsed.achievements || {},
       totalBossKills: parsed.totalBossKills || 0,
+      mapLayoutVersion: parsed.mapLayoutVersion,
     };
   }
   return {
@@ -1414,6 +1473,30 @@ function normalizePayload(parsed) {
     achievements: {},
     totalBossKills: 0,
   };
+}
+
+// Bumped when the maps' grid/path/placement fundamentally change shape, so
+// old per-map data (grid-cell tower positions on the old, shorter paths)
+// can't silently end up misplaced on the new layout. Migration keeps only
+// bestWave (progression/leaderboard history, and Singularity's permanent
+// unlock) - everything else in that map's slot resets to a fresh start.
+// Account-wide data (achievements, totalBossKills) is untouched, it isn't
+// nested under maps.
+const MAP_LAYOUT_VERSION = 2;
+
+function migrateMapLayout(stored) {
+  if (stored.mapLayoutVersion === MAP_LAYOUT_VERSION) return stored;
+  const migratedMaps = {};
+  Object.keys(MAP_DEFS).forEach((id) => {
+    migratedMaps[id] = {
+      gold: 150, bestGold: 150, lives: 20, wave: 0, kills: 0, towers: [],
+      difficulty: "normal", medals: { easy: false, normal: false, hard: false },
+      bestWave: stored.maps[id]?.bestWave || 0,
+    };
+  });
+  stored.maps = migratedMaps;
+  stored.mapLayoutVersion = MAP_LAYOUT_VERSION;
+  return stored;
 }
 
 function readStoredPayload() {
@@ -1555,7 +1638,9 @@ function saveGame() {
 }
 
 function loadGame() {
-  const stored = readStoredPayload();
+  let stored = readStoredPayload();
+  stored = migrateMapLayout(stored);
+  localStorage.setItem(TD_SAVE_KEY, JSON.stringify(stored));
   state.mapId = MAP_DEFS[stored.activeMap] ? stored.activeMap : "map1";
   applyMapLayout(state.mapId);
   state.gameSpeed = SPEED_STEPS.includes(stored.gameSpeed) ? stored.gameSpeed : 1;
@@ -1881,6 +1966,11 @@ async function pullCloudSave() {
     winner = cloudStored;
   }
 
+  // A cloud snapshot may predate this update (unmigrated map layout/towers)
+  // even when local storage was already migrated by loadGame() - migrate
+  // whichever payload wins before it's adopted, not just on initial load.
+  winner = migrateMapLayout(winner);
+
   state.ownerId = user.id;
   winner.ownerId = user.id;
   localStorage.setItem(TD_SAVE_KEY, JSON.stringify(winner));
@@ -1944,11 +2034,7 @@ function handlePlacementOrSelection(pos) {
   }
 
   if (!state.selectedTowerType) return;
-  const col = Math.floor(x / CELL);
-  const row = Math.floor(y / CELL);
-  if (col < 0 || col >= COLS || row < 0 || row >= ROWS) return;
-  if (pathCells.has(`${col},${row}`)) return;
-  if (state.towers.some((t) => t.col === col && t.row === row)) return;
+  if (!canPlaceTowerAt(x, y)) return;
 
   const def = TOWER_TYPES[state.selectedTowerType];
   if (def.isLegendary && !def.unlockCheck()) return;
@@ -1957,13 +2043,10 @@ function handlePlacementOrSelection(pos) {
   if (state.gold < cost) return;
 
   state.gold -= cost;
-  const center = cellCenter([col, row]);
   const tower = {
     type: state.selectedTowerType,
-    col,
-    row,
-    x: center.x,
-    y: center.y,
+    x,
+    y,
     cooldown: 0,
     level: 1,
     path: null,
@@ -3222,11 +3305,54 @@ function draw() {
     ctx.stroke();
   }
 
-  // path
-  ctx.fillStyle = mapTheme.pathColor;
-  pathCells.forEach((key) => {
-    const [c, r] = key.split(",").map(Number);
-    ctx.fillRect(c * CELL, r * CELL, CELL, CELL);
+  // path - a stroked corridor along the waypoint polyline rather than filled
+  // grid cells, since placement no longer snaps to cells.
+  ctx.strokeStyle = mapTheme.pathColor;
+  ctx.lineWidth = PATH_VISUAL_WIDTH;
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  PATH_POINTS.forEach((p, i) => {
+    if (i === 0) ctx.moveTo(p.x, p.y);
+    else ctx.lineTo(p.x, p.y);
+  });
+  ctx.stroke();
+
+  // obstacles/walls - static, block tower placement only (see
+  // canPlaceTowerAt); towers can still target/hit through them.
+  mapObstacles.forEach((o) => {
+    if (o.kind === "wall") {
+      ctx.fillStyle = "#4b5563";
+      ctx.fillRect(o.x, o.y, o.w, o.h);
+      ctx.strokeStyle = "#9ca3af";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(o.x, o.y, o.w, o.h);
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(o.x, o.y, o.w, o.h);
+      ctx.clip();
+      ctx.strokeStyle = "rgba(0,0,0,0.35)";
+      ctx.lineWidth = 1;
+      for (let d = -o.h; d < o.w; d += 8) {
+        ctx.beginPath();
+        ctx.moveTo(o.x + d, o.y + o.h);
+        ctx.lineTo(o.x + d + o.h, o.y);
+        ctx.stroke();
+      }
+      ctx.restore();
+    } else {
+      ctx.fillStyle = "#5a4632";
+      ctx.beginPath();
+      ctx.roundRect(o.x, o.y, o.w, o.h, 8);
+      ctx.fill();
+      ctx.strokeStyle = "#8a6d4a";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.font = `${Math.min(o.w, o.h) * 0.7}px sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("🪨", o.x + o.w / 2, o.y + o.h / 2 + 1);
+    }
   });
 
   ctx.textAlign = "center";
@@ -3344,37 +3470,35 @@ function draw() {
     }
   }
 
-  // ghost preview: follows the pointer/finger while a tower type is selected
+  // ghost preview: follows the pointer/finger while a tower type is selected -
+  // free placement now, so it renders right at the pointer instead of
+  // snapping to a cell center.
   if (state.selectedTowerType && previewPos) {
     const def = TOWER_TYPES[state.selectedTowerType];
-    const col = Math.floor(previewPos.x / CELL);
-    const row = Math.floor(previewPos.y / CELL);
-    const inBounds = col >= 0 && col < COLS && row >= 0 && row < ROWS;
-    if (inBounds) {
+    const { x: px, y: py } = previewPos;
+    if (px >= 0 && px <= COLS * CELL && py >= 0 && py <= ROWS * CELL) {
       const valid =
-        !pathCells.has(`${col},${row}`) &&
-        !state.towers.some((t) => t.col === col && t.row === row) &&
+        canPlaceTowerAt(px, py) &&
         state.gold >= def.cost &&
         !(def.unique && countPlacedOfType(state.selectedTowerType) >= tenxMaxCopies());
-      const center = cellCenter([col, row]);
       const previewColor = valid ? def.color : "#ff4444";
 
       ctx.setLineDash([5, 4]);
       ctx.strokeStyle = previewColor;
       ctx.globalAlpha = 0.5;
       ctx.beginPath();
-      ctx.arc(center.x, center.y, def.range, 0, Math.PI * 2);
+      ctx.arc(px, py, def.range, 0, Math.PI * 2);
       ctx.stroke();
       ctx.setLineDash([]);
 
       ctx.fillStyle = previewColor;
       ctx.globalAlpha = valid ? 0.5 : 0.35;
       ctx.beginPath();
-      ctx.arc(center.x, center.y, CELL * 0.34, 0, Math.PI * 2);
+      ctx.arc(px, py, CELL * 0.34, 0, Math.PI * 2);
       ctx.fill();
       ctx.globalAlpha = 0.85;
       ctx.font = `${CELL * 0.4}px sans-serif`;
-      ctx.fillText(def.emoji, center.x, center.y + 1);
+      ctx.fillText(def.emoji, px, py + 1);
       ctx.globalAlpha = 1;
     }
   }
@@ -3458,7 +3582,7 @@ function draw() {
   for (const p of state.projectiles) {
     ctx.fillStyle = p.color;
     ctx.beginPath();
-    ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+    ctx.arc(p.x, p.y, 2, 0, Math.PI * 2);
     ctx.fill();
   }
 
