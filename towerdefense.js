@@ -71,11 +71,63 @@ const MAP_DEFS = {
 let GRID_WAYPOINTS = MAP_DEFS.map1.waypoints;
 let PATH_POINTS = GRID_WAYPOINTS.map(cellCenter);
 let mapObstacles = MAP_DEFS.map1.obstacles;
+// Ground speckle + obstacle blob shapes are randomized once per map load
+// (here) rather than every draw() call, so the texture stays put instead of
+// flickering every frame.
+let grassDecor = [];
 
 function applyMapLayout(mapId) {
   GRID_WAYPOINTS = MAP_DEFS[mapId].waypoints;
   PATH_POINTS = GRID_WAYPOINTS.map(cellCenter);
   mapObstacles = MAP_DEFS[mapId].obstacles || [];
+  generateGrassDecor();
+  prepareObstacleVisuals(mapObstacles);
+}
+
+function generateGrassDecor() {
+  grassDecor = [];
+  const count = 260;
+  for (let i = 0; i < count; i++) {
+    const x = Math.random() * COLS * CELL;
+    const y = Math.random() * ROWS * CELL;
+    if (distanceToPath(x, y) < PATH_VISUAL_WIDTH * 0.75) continue;
+    grassDecor.push({ x, y, r: 1.3 + Math.random() * 2.2, light: Math.random() < 0.5 });
+  }
+}
+
+// Rocks (kind: "wall") and bushes (kind: "obstacle") are each a small
+// cluster of overlapping blobs instead of a flat rectangle - randomized once
+// per obstacle and cached on it, so re-visiting a map doesn't reshuffle them.
+function prepareObstacleVisuals(obstacles) {
+  const bushPalette = ["#4d7c2e", "#5a8f34", "#3f6b26", "#8a6d1f", "#b9862f"];
+  obstacles.forEach((o) => {
+    if (o.blobs) return;
+    o.cx = o.x + o.w / 2;
+    o.cy = o.y + o.h / 2;
+    const spread = Math.min(o.w, o.h) * 0.35;
+    const blobs = [];
+    if (o.kind === "wall") {
+      const count = 3 + Math.floor(Math.random() * 2);
+      for (let i = 0; i < count; i++) {
+        blobs.push({
+          dx: (Math.random() - 0.5) * o.w * 0.55,
+          dy: (Math.random() - 0.5) * o.h * 0.55,
+          r: spread * (0.65 + Math.random() * 0.5),
+        });
+      }
+    } else {
+      const count = 4 + Math.floor(Math.random() * 3);
+      for (let i = 0; i < count; i++) {
+        blobs.push({
+          dx: (Math.random() - 0.5) * o.w * 0.65,
+          dy: (Math.random() - 0.5) * o.h * 0.65,
+          r: spread * (0.55 + Math.random() * 0.5),
+          color: bushPalette[Math.floor(Math.random() * bushPalette.length)],
+        });
+      }
+    }
+    o.blobs = blobs;
+  });
 }
 
 // ---------- Free-placement geometry ----------
@@ -3436,53 +3488,66 @@ function draw() {
     ctx.stroke();
   }
 
-  // path - a stroked corridor along the waypoint polyline rather than filled
-  // grid cells, since placement no longer snaps to cells.
-  ctx.strokeStyle = mapTheme.pathColor;
-  ctx.lineWidth = PATH_VISUAL_WIDTH;
-  ctx.lineJoin = "round";
-  ctx.lineCap = "round";
-  ctx.beginPath();
-  PATH_POINTS.forEach((p, i) => {
-    if (i === 0) ctx.moveTo(p.x, p.y);
-    else ctx.lineTo(p.x, p.y);
+  // ground speckle - a fixed (see generateGrassDecor) scatter of tiny light/
+  // dark flecks so the buildable ground reads as textured terrain instead of
+  // a flat fill.
+  grassDecor.forEach((d) => {
+    ctx.fillStyle = d.light ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.14)";
+    ctx.beginPath();
+    ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
+    ctx.fill();
   });
-  ctx.stroke();
 
-  // obstacles/walls - static, block tower placement only (see
-  // canPlaceTowerAt); towers can still target/hit through them.
+  // path - a bordered, layered corridor along the waypoint polyline (worn
+  // dark edge, mid fill, faint lighter center trail) instead of one flat
+  // stroke, so it reads as a real path rather than a colored lane.
+  const drawPathStroke = (width, style) => {
+    ctx.strokeStyle = style;
+    ctx.lineWidth = width;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    PATH_POINTS.forEach((p, i) => {
+      if (i === 0) ctx.moveTo(p.x, p.y);
+      else ctx.lineTo(p.x, p.y);
+    });
+    ctx.stroke();
+  };
+  drawPathStroke(PATH_VISUAL_WIDTH + 8, "rgba(0,0,0,0.28)");
+  drawPathStroke(PATH_VISUAL_WIDTH, mapTheme.pathColor);
+  drawPathStroke(PATH_VISUAL_WIDTH * 0.35, "rgba(255,255,255,0.07)");
+
+  // obstacles/walls - rendered as clustered blobs (rocks for "wall", bushes
+  // for "obstacle") instead of flat rectangles, using the shapes cached by
+  // prepareObstacleVisuals so they don't reshuffle every frame. Static,
+  // block tower placement only (see canPlaceTowerAt) - towers still
+  // target/hit straight through them.
   mapObstacles.forEach((o) => {
     if (o.kind === "wall") {
-      ctx.fillStyle = "#4b5563";
-      ctx.fillRect(o.x, o.y, o.w, o.h);
-      ctx.strokeStyle = "#9ca3af";
-      ctx.lineWidth = 2;
-      ctx.strokeRect(o.x, o.y, o.w, o.h);
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(o.x, o.y, o.w, o.h);
-      ctx.clip();
-      ctx.strokeStyle = "rgba(0,0,0,0.35)";
-      ctx.lineWidth = 1;
-      for (let d = -o.h; d < o.w; d += 8) {
+      o.blobs.forEach((b) => {
+        const bx = o.cx + b.dx, by = o.cy + b.dy;
+        const grad = ctx.createRadialGradient(bx - b.r * 0.35, by - b.r * 0.35, b.r * 0.1, bx, by, b.r);
+        grad.addColorStop(0, "#9ca3af");
+        grad.addColorStop(1, "#4b5563");
+        ctx.fillStyle = grad;
         ctx.beginPath();
-        ctx.moveTo(o.x + d, o.y + o.h);
-        ctx.lineTo(o.x + d + o.h, o.y);
+        ctx.arc(bx, by, b.r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "#374151";
+        ctx.lineWidth = 1.5;
         ctx.stroke();
-      }
-      ctx.restore();
+      });
     } else {
-      ctx.fillStyle = "#5a4632";
-      ctx.beginPath();
-      ctx.roundRect(o.x, o.y, o.w, o.h, 8);
-      ctx.fill();
-      ctx.strokeStyle = "#8a6d4a";
-      ctx.lineWidth = 2;
-      ctx.stroke();
-      ctx.font = `${Math.min(o.w, o.h) * 0.7}px sans-serif`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText("🪨", o.x + o.w / 2, o.y + o.h / 2 + 1);
+      o.blobs.forEach((b) => {
+        const bx = o.cx + b.dx, by = o.cy + b.dy;
+        ctx.fillStyle = b.color;
+        ctx.beginPath();
+        ctx.arc(bx, by, b.r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(0,0,0,0.25)";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      });
     }
   });
 
