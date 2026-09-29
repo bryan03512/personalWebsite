@@ -17,18 +17,21 @@ const MAP_DEFS = {
     waypoints: [
       [-1, 1], [3, 1], [3, 8], [6, 8], [6, 1], [9, 1], [9, 8], [13, 8],
     ],
+    bgColor: "#060a06", gridColor: "#132313", pathColor: "#12240f",
   },
   map2: {
     name: "CI Pipeline",
     waypoints: [
       [-1, 1], [11, 1], [11, 3], [1, 3], [1, 5], [11, 5], [11, 7], [1, 7], [1, 9], [13, 9],
     ],
+    bgColor: "#050a10", gridColor: "#13202f", pathColor: "#0f1e2c",
   },
   map3: {
     name: "The Monolith",
     waypoints: [
       [-1, 4], [4, 4], [4, 0], [8, 0], [8, 6], [2, 6], [2, 9], [12, 9], [12, 2], [13, 2],
     ],
+    bgColor: "#0a0612", gridColor: "#231334", pathColor: "#1e1130",
   },
 };
 
@@ -101,6 +104,11 @@ const TOWER_TYPES = {
     cost: 140, damage: 8, range: 130, fireRate: 1.0, color: "#7dd3fc", projectileSpeed: 550,
     slowOnHit: { pct: 1.0, duration: 1.2 },
   },
+  tesla: {
+    name: "Tesla", desc: "chains a shock through nearby enemies, weaker each bounce", emoji: "⚡",
+    cost: 180, damage: 20, range: 130, fireRate: 1.2, color: "#fde047", projectileSpeed: 700,
+    chainCount: 3, chainFalloff: 0.6, chainRange: 90,
+  },
   turret: {
     name: "Sentry", desc: "no path - auto-levels for free over time, targets the strongest enemy in range, damage scales exponentially", emoji: "🗼",
     cost: 90, damage: 12, range: 140, fireRate: 1.3, color: "#94a3b8", projectileSpeed: 480,
@@ -113,12 +121,20 @@ const TOWER_TYPES = {
   tenx: {
     name: "10x Engineer", desc: "legendary - unlocked past sprint 100, capped copies grow past 140/200", emoji: "🦸",
     cost: 4000, damage: 140, range: 220, fireRate: 0.55, color: "#fbbf24", projectileSpeed: 900,
-    isLegendary: true, unique: true, unlockCheck: () => state.bestWave > TOWER100_UNLOCK_WAVE,
+    // Re-locks whenever the current sprint drops back below the threshold
+    // (e.g. after a restart) - checks state.wave (live), not state.bestWave
+    // (historical, never decreases), unlike an achievement.
+    isLegendary: true, unique: true, unlockCheck: () => state.wave > TOWER100_UNLOCK_WAVE,
   },
   singularity: {
     name: "Singularity", desc: "beyond legendary - unlocked by beating all 3 maps, can own every path at once (incl. an explosive one), auto-levels for free - stays mid until deep levels, then damage explodes", emoji: "🌌",
     cost: 6000, damage: 180, range: 220, fireRate: 0.5, color: "#f0abfc", projectileSpeed: 950,
-    isLegendary: true, unique: true, multiPath: true, autoLevels: true, autoLevelInterval: 30, unlockCheck: () => hasBeatenAllMaps(),
+    // "Beaten all 3 maps" is inherently historical (you can only be on one
+    // map at a time), but ALSO re-locks with the current map's live sprint,
+    // same principle as 10x Engineer - you have to be currently deep in a
+    // run, not just have once beaten everything long ago.
+    isLegendary: true, unique: true, multiPath: true, autoLevels: true, autoLevelInterval: 30,
+    unlockCheck: () => hasBeatenAllMaps() && state.wave > TOWER100_UNLOCK_WAVE,
   },
 };
 
@@ -136,6 +152,11 @@ const DIFFICULTY_SETTINGS = {
 
 const OVERCLOCK_DURATION = 8;
 const OVERCLOCK_COOLDOWN = 30;
+const FUNDRAISER_DURATION = 10;
+const FUNDRAISER_COOLDOWN = 45;
+const FUNDRAISER_MULT = 2;
+const AIRSTRIKE_COST_BASE = 150;
+const AIRSTRIKE_COOLDOWN = 6;
 const SPEED_STEPS = [1, 2, 5];
 
 // Each tower unlocks a choice between two mutually-exclusive specialization
@@ -789,6 +810,30 @@ const TOWER_PATHS = {
       ],
     },
   },
+  tesla: {
+    overload: {
+      name: "Overload",
+      accentColor: "#facc15",
+      tiers: [
+        { desc: "chains to 1 more enemy, bigger hits", cost: 150, apply: (t) => { t.chainCount = 4; t.pathDamageMult = 1.3; } },
+        { desc: "even more damage, better falloff", cost: 270, apply: (t) => { t.pathDamageMult = 1.6; t.chainFalloff = 0.7; } },
+        { desc: "chains to 2 more enemies than base", cost: 460, apply: (t) => { t.chainCount = 5; t.pathDamageMult = 2.0; } },
+        { desc: "huge damage, better falloff still", cost: 780, apply: (t) => { t.pathDamageMult = 2.6; t.chainFalloff = 0.8; } },
+        { desc: "the whole lane lights up at once", cost: 1300, apply: (t) => { t.chainCount = 7; t.pathDamageMult = 3.4; t.chainFalloff = 0.85; } },
+      ],
+    },
+    resonance: {
+      name: "Resonance",
+      accentColor: "#38bdf8",
+      tiers: [
+        { desc: "much bigger chain range, faster fire rate", cost: 150, apply: (t) => { t.chainRange = 130; t.pathRateMult = 1.3; } },
+        { desc: "even bigger range, chance to crit", cost: 270, apply: (t) => { t.chainRange = 160; t.critChance = 0.15; t.critMult = 1.8; } },
+        { desc: "huge range, bigger crits", cost: 460, apply: (t) => { t.chainRange = 190; t.critChance = 0.22; t.critMult = 2.2; } },
+        { desc: "even huger range, faster still", cost: 780, apply: (t) => { t.chainRange = 220; t.pathRateMult = 1.7; t.critChance = 0.3; } },
+        { desc: "resonates across the entire board", cost: 1300, apply: (t) => { t.chainRange = 260; t.critMult = 3.0; t.bossDamageMult = 1.6; } },
+      ],
+    },
+  },
   tenx: {
     fullstack: {
       name: "Full Stack",
@@ -1098,6 +1143,8 @@ const state = {
   enemies: [],
   projectiles: [],
   explosions: [],
+  floatingTexts: [],
+  chainBolts: [],
   allies: [],
   waveInProgress: false,
   spawnQueue: [],
@@ -1108,6 +1155,10 @@ const state = {
   overclockActive: false,
   overclockTimer: 0,
   overclockCooldown: 0,
+  fundraiserActive: false,
+  fundraiserTimer: 0,
+  fundraiserCooldown: 0,
+  airstrikeCooldown: 0,
   autoRun: false,
   autoRunTimer: 0,
   ownerId: null,
@@ -1150,6 +1201,8 @@ const achievementsContent = document.getElementById("achievementsContent");
 const achievementsClose = document.getElementById("achievementsClose");
 
 const overclockBtn = document.getElementById("overclockBtn");
+const fundraiserBtn = document.getElementById("fundraiserBtn");
+const airstrikeBtn = document.getElementById("airstrikeBtn");
 const speedBtn = document.getElementById("speedBtn");
 const autoRunBtn = document.getElementById("autoRunBtn");
 const towerInfoPanel = document.getElementById("towerInfoPanel");
@@ -1225,6 +1278,23 @@ function updateStats() {
     overclockBtn.textContent = "overclock!";
   }
   overclockBtn.disabled = state.overclockCooldown > 0;
+
+  if (state.fundraiserActive) {
+    fundraiserBtn.textContent = `fundraising (${state.fundraiserTimer.toFixed(1)}s)`;
+  } else if (state.fundraiserCooldown > 0) {
+    fundraiserBtn.textContent = `fundraiser (${Math.ceil(state.fundraiserCooldown)}s)`;
+  } else {
+    fundraiserBtn.textContent = `fundraiser! (${FUNDRAISER_MULT}x credits)`;
+  }
+  fundraiserBtn.disabled = state.fundraiserCooldown > 0;
+
+  const airstrikeCost = airstrikeCurrentCost();
+  if (state.airstrikeCooldown > 0) {
+    airstrikeBtn.textContent = `airstrike (${Math.ceil(state.airstrikeCooldown)}s)`;
+  } else {
+    airstrikeBtn.textContent = `airstrike! (${airstrikeCost}c)`;
+  }
+  airstrikeBtn.disabled = state.airstrikeCooldown > 0 || state.gold < airstrikeCost;
 }
 
 // ---------- Save / load (local + cloud) ----------
@@ -2209,7 +2279,7 @@ towerSellBtn.addEventListener("click", () => state.selectedTower && sellTower(st
 // via hotkey too until their own unlockCheck() passes.
 const TOWER_HOTKEYS = {
   q: "gamer", w: "coder", e: "hacker", r: "manager", t: "farmer",
-  y: "recruiter", u: "quant", i: "freeze", o: "turret", p: "tenx", a: "singularity",
+  y: "recruiter", u: "quant", i: "freeze", o: "turret", p: "tenx", a: "singularity", s: "tesla",
 };
 
 // = deploys the next sprint, - toggles auto-run (neither needs a tower
@@ -2282,7 +2352,7 @@ function getTowerBuffs(tower) {
 function updateEconomy(dt) {
   if (!state.waveInProgress) return; // Consultants only earn while a sprint is active
   for (const t of state.towers) {
-    if (t.isEconomy) state.gold += t.incomePerSec * dt;
+    if (t.isEconomy) state.gold += t.incomePerSec * dt * goldYieldMult();
   }
 }
 
@@ -2444,6 +2514,56 @@ function updateOverclock(dt) {
 }
 
 overclockBtn.addEventListener("click", activateOverclock);
+
+// ---------- Fundraiser ability (temporary credit-yield boost) ----------
+function goldYieldMult() {
+  return state.fundraiserActive ? FUNDRAISER_MULT : 1;
+}
+
+function activateFundraiser() {
+  if (state.fundraiserCooldown > 0 || state.gameOver) return;
+  state.fundraiserActive = true;
+  state.fundraiserTimer = FUNDRAISER_DURATION;
+  state.fundraiserCooldown = FUNDRAISER_COOLDOWN;
+  updateStats();
+}
+
+function updateFundraiser(dt) {
+  if (state.fundraiserActive) {
+    state.fundraiserTimer -= dt;
+    if (state.fundraiserTimer <= 0) state.fundraiserActive = false;
+  }
+  if (state.fundraiserCooldown > 0) {
+    state.fundraiserCooldown = Math.max(0, state.fundraiserCooldown - dt);
+  }
+}
+
+fundraiserBtn.addEventListener("click", activateFundraiser);
+
+// ---------- Airstrike ability (paid, modest damage to every on-screen enemy) ----------
+function airstrikeCurrentCost() {
+  return Math.round(AIRSTRIKE_COST_BASE * (1 + state.wave * 0.05));
+}
+
+function activateAirstrike() {
+  if (state.airstrikeCooldown > 0 || state.gameOver) return;
+  const cost = airstrikeCurrentCost();
+  if (state.gold < cost) return;
+  state.gold -= cost;
+  state.airstrikeCooldown = AIRSTRIKE_COOLDOWN;
+  // Modest, wave-scaled damage - not meant to clear a wave on its own, just
+  // chip everything visible. sourceTower is null (treated as magic/true
+  // damage in applyDamage), so it's a consistent utility regardless of
+  // resistances rather than tied to any one tower's counter mechanic.
+  const dmg = Math.round(40 * (1 + state.wave * 0.18));
+  [...state.enemies].forEach((e) => {
+    if (isEnemyHalfOnScreen(e)) applyDamage(e, dmg, null);
+  });
+  updateStats();
+  saveGame();
+}
+
+airstrikeBtn.addEventListener("click", activateAirstrike);
 
 speedBtn.addEventListener("click", () => {
   const idx = SPEED_STEPS.indexOf(state.gameSpeed);
@@ -2670,10 +2790,20 @@ function updateEnemies(dt) {
 // are skipped entirely unless canSeeCamo is true for this attacker.
 // targetPriority "strongest" (Sentry) picks highest-current-hp first instead
 // of nearest-first - everyone else keeps the default nearest-first behavior.
+// An enemy's center crossing into the canvas rectangle means at least half
+// its circular sprite is already visible - used to keep brand-new spawns
+// (still mostly off-canvas near the entrance) untargetable for a moment, so
+// kills read as something the player actually watched happen instead of an
+// enemy vanishing before it was ever really on screen.
+function isEnemyHalfOnScreen(e) {
+  return e.x >= 0 && e.x <= COLS * CELL && e.y >= 0 && e.y <= ROWS * CELL;
+}
+
 function findTargets(t, count, canSeeCamo, targetPriority) {
   const inRange = [];
   for (const e of state.enemies) {
     if (e.camo && !canSeeCamo) continue;
+    if (!isEnemyHalfOnScreen(e)) continue;
     const d = distance(t.x, t.y, e.x, e.y);
     if (d <= t.range) inRange.push({ e, d });
   }
@@ -2711,6 +2841,9 @@ function updateTowers(dt) {
           damage: dmg,
           isCrit,
           splashRadius: t.splashRadius || 0,
+          chainCount: t.chainCount || 0,
+          chainFalloff: t.chainFalloff || 0.6,
+          chainRange: t.chainRange || 90,
           color: t.color,
           sourceTower: t,
         });
@@ -2767,7 +2900,7 @@ function applyDamage(enemy, amount, sourceTower) {
     const idx = state.enemies.indexOf(enemy);
     if (idx !== -1) {
       state.enemies.splice(idx, 1);
-      state.gold += enemy.reward;
+      state.gold += enemy.reward * goldYieldMult();
       if (sourceTower?.bonusGoldPerKill) state.gold += sourceTower.bonusGoldPerKill;
       state.kills += 1;
       if (enemy.isBoss) state.totalBossKills = (state.totalBossKills || 0) + 1;
@@ -2803,7 +2936,9 @@ function updateProjectiles(dt) {
     const d = distance(p.x, p.y, p.target.x, p.target.y);
     const step = p.speed * dt;
     if (step >= d) {
-      if (p.splashRadius > 0) {
+      if (p.chainCount > 0) {
+        resolveChainHit(p);
+      } else if (p.splashRadius > 0) {
         const ix = p.target.x;
         const iy = p.target.y;
         spawnExplosion(ix, iy, p.splashRadius, p.color);
@@ -2812,14 +2947,48 @@ function updateProjectiles(dt) {
             applyDamage(e, p.damage, p.sourceTower);
           }
         });
+        if (p.isCrit) spawnFloatingText(ix, iy - 20, "CRIT!", "#ffee58");
       } else {
         applyDamage(p.target, p.damage, p.sourceTower);
+        if (p.isCrit) spawnFloatingText(p.target.x, p.target.y - 20, "CRIT!", "#ffee58");
       }
       state.projectiles.splice(i, 1);
     } else {
       p.x += ((p.target.x - p.x) / d) * step;
       p.y += ((p.target.y - p.y) / d) * step;
     }
+  }
+}
+
+// Tesla's chain lightning: hits the primary target, then bounces to the
+// nearest not-yet-hit enemy within chainRange of the PREVIOUS hit (not the
+// tower), each bounce weaker by chainFalloff. Stops early if nothing else is
+// in range - chainCount is a cap, not a guarantee.
+function resolveChainHit(p) {
+  let dmg = p.damage;
+  const hit = new Set([p.target]);
+  applyDamage(p.target, dmg, p.sourceTower);
+  if (p.isCrit) spawnFloatingText(p.target.x, p.target.y - 20, "CRIT!", "#ffee58");
+  let prevX = p.target.x;
+  let prevY = p.target.y;
+  for (let i = 0; i < p.chainCount; i++) {
+    dmg *= p.chainFalloff;
+    let next = null;
+    let bestDist = Infinity;
+    for (const e of state.enemies) {
+      if (hit.has(e) || !isEnemyHalfOnScreen(e)) continue;
+      const d = distance(prevX, prevY, e.x, e.y);
+      if (d <= p.chainRange && d < bestDist) {
+        bestDist = d;
+        next = e;
+      }
+    }
+    if (!next) break;
+    hit.add(next);
+    spawnChainBolt(prevX, prevY, next.x, next.y, p.color);
+    applyDamage(next, dmg, p.sourceTower);
+    prevX = next.x;
+    prevY = next.y;
   }
 }
 
@@ -2833,6 +3002,33 @@ function updateExplosions(dt) {
     const ex = state.explosions[i];
     ex.age += dt;
     if (ex.age >= ex.duration) state.explosions.splice(i, 1);
+  }
+}
+
+// ---------- Floating combat text (visual only, e.g. "CRIT!") ----------
+function spawnFloatingText(x, y, text, color) {
+  state.floatingTexts.push({ x, y, text, color, age: 0, duration: 0.7 });
+}
+
+function updateFloatingTexts(dt) {
+  for (let i = state.floatingTexts.length - 1; i >= 0; i--) {
+    const f = state.floatingTexts[i];
+    f.age += dt;
+    f.y -= 30 * dt;
+    if (f.age >= f.duration) state.floatingTexts.splice(i, 1);
+  }
+}
+
+// ---------- Chain lightning bolts (visual only - Tesla) ----------
+function spawnChainBolt(x1, y1, x2, y2, color) {
+  state.chainBolts.push({ x1, y1, x2, y2, color, age: 0, duration: 0.15 });
+}
+
+function updateChainBolts(dt) {
+  for (let i = state.chainBolts.length - 1; i >= 0; i--) {
+    const b = state.chainBolts[i];
+    b.age += dt;
+    if (b.age >= b.duration) state.chainBolts.splice(i, 1);
   }
 }
 
@@ -2868,8 +3064,15 @@ function triggerGameOver() {
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+  // Each map has its own bg/grid/path colors for a distinct look - falls
+  // back to Main Branch's colors if the active map is somehow unknown.
+  const mapTheme = MAP_DEFS[state.mapId] || MAP_DEFS.map1;
+
+  ctx.fillStyle = mapTheme.bgColor;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
   // grid
-  ctx.strokeStyle = "#132313";
+  ctx.strokeStyle = mapTheme.gridColor;
   ctx.lineWidth = 1;
   for (let c = 0; c <= COLS; c++) {
     ctx.beginPath();
@@ -2885,7 +3088,7 @@ function draw() {
   }
 
   // path
-  ctx.fillStyle = "#12240f";
+  ctx.fillStyle = mapTheme.pathColor;
   pathCells.forEach((key) => {
     const [c, r] = key.split(",").map(Number);
     ctx.fillRect(c * CELL, r * CELL, CELL, CELL);
@@ -3140,6 +3343,32 @@ function draw() {
     ctx.stroke();
     ctx.globalAlpha = 1;
   }
+
+  // floating combat text (e.g. "CRIT!") - drifts up and fades out
+  for (const f of state.floatingTexts) {
+    const t = f.age / f.duration;
+    ctx.globalAlpha = 1 - t;
+    ctx.fillStyle = f.color;
+    ctx.font = "bold 15px sans-serif";
+    ctx.fillText(f.text, f.x, f.y);
+    ctx.globalAlpha = 1;
+  }
+
+  // chain lightning bolts (Tesla) - a quick jagged flash between hits
+  for (const b of state.chainBolts) {
+    const t = b.age / b.duration;
+    ctx.globalAlpha = 1 - t;
+    ctx.strokeStyle = b.color;
+    ctx.lineWidth = 2;
+    const mx = (b.x1 + b.x2) / 2 + (Math.random() - 0.5) * 12;
+    const my = (b.y1 + b.y2) / 2 + (Math.random() - 0.5) * 12;
+    ctx.beginPath();
+    ctx.moveTo(b.x1, b.y1);
+    ctx.lineTo(mx, my);
+    ctx.lineTo(b.x2, b.y2);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
 }
 
 // ---------- Main loop ----------
@@ -3162,7 +3391,10 @@ function loop(now) {
     updateAuras(dt);
     updateProjectiles(dt);
     updateExplosions(dt);
+    updateFloatingTexts(dt);
+    updateChainBolts(dt);
     updateOverclock(dt);
+    updateFundraiser(dt);
     updateStats();
   }
   draw();
@@ -3183,6 +3415,8 @@ function resetTransientState() {
   state.enemies = [];
   state.projectiles = [];
   state.explosions = [];
+  state.floatingTexts = [];
+  state.chainBolts = [];
   state.allies = [];
   state.waveInProgress = false;
   state.spawnQueue = [];
@@ -3193,6 +3427,10 @@ function resetTransientState() {
   state.overclockActive = false;
   state.overclockTimer = 0;
   state.overclockCooldown = 0;
+  state.fundraiserActive = false;
+  state.fundraiserTimer = 0;
+  state.fundraiserCooldown = 0;
+  state.airstrikeCooldown = 0;
   state.autoRun = false;
   state.autoRunTimer = 0;
   gameOverOverlay.classList.remove("visible");
