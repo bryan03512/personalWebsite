@@ -129,12 +129,14 @@ const TOWER_TYPES = {
   singularity: {
     name: "Singularity", desc: "beyond legendary - unlocked by beating all 3 maps, can own every path at once (incl. an explosive one), auto-levels for free - stays mid until deep levels, then damage explodes", emoji: "🌌",
     cost: 6000, damage: 180, range: 220, fireRate: 0.5, color: "#f0abfc", projectileSpeed: 950,
-    // "Beaten all 3 maps" is inherently historical (you can only be on one
-    // map at a time), but ALSO re-locks with the current map's live sprint,
-    // same principle as 10x Engineer - you have to be currently deep in a
-    // run, not just have once beaten everything long ago.
+    // Unlike 10x Engineer, this does NOT re-lock based on the current live
+    // sprint - beating all 3 maps once is a permanent, historical unlock, so
+    // it's usable from sprint 1 onward afterward. Balance instead comes from
+    // its own path tiers being expensive (T5 costs 100x), so it stays a
+    // mid-power option in the early/mid game and only becomes a standout once
+    // you can afford to deeply invest in a path.
     isLegendary: true, unique: true, multiPath: true, autoLevels: true, autoLevelInterval: 30,
-    unlockCheck: () => hasBeatenAllMaps() && state.wave > TOWER100_UNLOCK_WAVE,
+    unlockCheck: () => hasBeatenAllMaps(),
   },
 };
 
