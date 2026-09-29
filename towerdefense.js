@@ -124,24 +124,39 @@ function canPlaceTowerAt(x, y) {
   return true;
 }
 
+// A sentinel range value for towers with unlimited range (currently just the
+// Sniper) - not literal Infinity, since that crashes canvas arc() calls
+// wherever a range circle gets drawn. Far past the map's ~984px diagonal, so
+// it's functionally always-in-range without being non-finite.
+const GLOBAL_RANGE = 9999;
+// 1/3 of the map's shorter dimension - the ceiling every tower's fully
+// computed range (base * level * path * buffs) gets clamped to, unless the
+// tower is explicitly flagged isGlobalRange (the Sniper's whole gimmick).
+const MAP_RANGE_CAP = Math.min(COLS * CELL, ROWS * CELL) / 3;
+
 // ---------- Tower & enemy definitions ----------
 const TOWER_TYPES = {
+  // Ranges cut ~25% across the board (was 120/150/130/140/130/130/140/220/220)
+  // so map positioning actually matters again - Sniper is the deliberate
+  // exception, trading a slow fire rate and steep cost for seeing the whole
+  // board from a single placement.
   gamer: {
     name: "Gamer", desc: "fast reflexes, rapid fire", emoji: "🎮",
-    cost: 50, damage: 10, range: 120, fireRate: 0.6, color: "#39ff14", projectileSpeed: 500,
+    cost: 50, damage: 10, range: 90, fireRate: 0.6, color: "#39ff14", projectileSpeed: 500,
   },
   coder: {
-    name: "Coder", desc: "precise fix, long range", emoji: "💻",
-    cost: 100, damage: 35, range: 250, fireRate: 1.5, color: "#00e5ff", projectileSpeed: 700,
+    name: "Sniper", desc: "one precise shot, anywhere on the board - slow, but never needs repositioning", emoji: "🎯",
+    cost: 260, damage: 60, range: GLOBAL_RANGE, fireRate: 2.5, color: "#00e5ff", projectileSpeed: 900,
+    isGlobalRange: true,
   },
   hacker: {
     name: "Hacker", desc: "slow, heavy AoE exploit", emoji: "👾",
-    cost: 170, damage: 55, range: 150, fireRate: 2.2, color: "#ff4fd8", projectileSpeed: 400, splashRadius: 65,
+    cost: 170, damage: 55, range: 113, fireRate: 2.2, color: "#ff4fd8", projectileSpeed: 400, splashRadius: 65,
     damageType: "explosive",
   },
   manager: {
     name: "Manager", desc: "no damage - boosts nearby devs", emoji: "👔",
-    cost: 120, damage: 0, range: 130, fireRate: Infinity, color: "#ffd166", projectileSpeed: 0,
+    cost: 120, damage: 0, range: 98, fireRate: Infinity, color: "#ffd166", projectileSpeed: 0,
     isSupport: true, buffDamagePct: 0.2, buffRatePct: 0.2,
   },
   farmer: {
@@ -156,22 +171,22 @@ const TOWER_TYPES = {
   },
   quant: {
     name: "Quant", desc: "arcane exploits - true damage, ignores all resistances", emoji: "🔮",
-    cost: 220, damage: 0.018, range: 140, fireRate: 1.8, color: "#a78bfa", projectileSpeed: 550,
+    cost: 220, damage: 0.018, range: 105, fireRate: 1.8, color: "#a78bfa", projectileSpeed: 550,
     damageType: "magic", percentDamage: true,
   },
   freeze: {
     name: "Freeze", desc: "chills on every hit - a full stop instead of a slow", emoji: "🧊",
-    cost: 140, damage: 8, range: 130, fireRate: 1.0, color: "#7dd3fc", projectileSpeed: 550,
+    cost: 140, damage: 8, range: 98, fireRate: 1.0, color: "#7dd3fc", projectileSpeed: 550,
     slowOnHit: { pct: 1.0, duration: 1.2 },
   },
   tesla: {
     name: "Tesla", desc: "chains a shock through nearby enemies, weaker each bounce", emoji: "⚡",
-    cost: 180, damage: 20, range: 130, fireRate: 1.2, color: "#fde047", projectileSpeed: 700,
+    cost: 180, damage: 20, range: 98, fireRate: 1.2, color: "#fde047", projectileSpeed: 700,
     chainCount: 3, chainFalloff: 0.6, chainRange: 90,
   },
   turret: {
     name: "Sentry", desc: "no path - auto-levels for free over time, targets the strongest enemy in range, damage scales exponentially", emoji: "🗼",
-    cost: 90, damage: 12, range: 140, fireRate: 1.3, color: "#94a3b8", projectileSpeed: 480,
+    cost: 90, damage: 12, range: 105, fireRate: 1.3, color: "#94a3b8", projectileSpeed: 480,
     isSentry: true, autoLevels: true, autoLevelInterval: 20, targetPriority: "strongest",
   },
   // Secret capstone towers - excluded from buildTowerButtons (and therefore
@@ -180,7 +195,7 @@ const TOWER_TYPES = {
   // tenxMaxCopies().
   tenx: {
     name: "10x Engineer", desc: "legendary - unlocked past sprint 100, capped copies grow past 140/200", emoji: "🦸",
-    cost: 4000, damage: 140, range: 220, fireRate: 0.55, color: "#fbbf24", projectileSpeed: 900,
+    cost: 4000, damage: 140, range: 165, fireRate: 0.55, color: "#fbbf24", projectileSpeed: 900,
     // Re-locks whenever the current sprint drops back below the threshold
     // (e.g. after a restart) - checks state.wave (live), not state.bestWave
     // (historical, never decreases), unlike an achievement.
@@ -188,7 +203,7 @@ const TOWER_TYPES = {
   },
   singularity: {
     name: "Singularity", desc: "beyond legendary - unlocked by beating all 3 maps, can own every path at once (incl. an explosive one), auto-levels for free - stays mid until deep levels, then damage explodes", emoji: "🌌",
-    cost: 6000, damage: 180, range: 220, fireRate: 0.5, color: "#f0abfc", projectileSpeed: 950,
+    cost: 6000, damage: 180, range: 165, fireRate: 0.5, color: "#f0abfc", projectileSpeed: 950,
     // Unlike 10x Engineer, this does NOT re-lock based on the current live
     // sprint - beating all 3 maps once is a permanent, historical unlock, so
     // it's usable from sprint 1 onward afterward. Balance instead comes from
@@ -345,24 +360,24 @@ const TOWER_PATHS = {
       accentColor: "#ffd700",
       tiers: [
         {
-          desc: "huge range & damage, even slower", cost: 140,
-          apply: (t) => { t.pathDamageMult = 1.6; t.pathRangeMult = 1.4; t.pathRateMult = 0.7; },
+          desc: "huge damage, even slower", cost: 140,
+          apply: (t) => { t.pathDamageMult = 1.6; t.pathRateMult = 0.7; },
         },
         {
           desc: "bigger hits, chance to crit for 2.5x", cost: 260,
-          apply: (t) => { t.pathDamageMult = 2.3; t.pathRangeMult = 1.7; t.pathRateMult = 0.7; t.critChance = 0.2; t.critMult = 2.5; },
+          apply: (t) => { t.pathDamageMult = 2.3; t.pathRateMult = 0.7; t.critChance = 0.2; t.critMult = 2.5; },
         },
         {
-          desc: "massive range/damage, extra dmg vs bosses", cost: 450,
-          apply: (t) => { t.pathDamageMult = 3.2; t.pathRangeMult = 2.0; t.pathRateMult = 0.7; t.critChance = 0.3; t.critMult = 3.0; t.bossDamageMult = 1.5; },
+          desc: "massive damage, extra dmg vs bosses", cost: 450,
+          apply: (t) => { t.pathDamageMult = 3.2; t.pathRateMult = 0.7; t.critChance = 0.3; t.critMult = 3.0; t.bossDamageMult = 1.5; },
         },
         {
-          desc: "even more range/damage, bigger dmg vs bosses", cost: 765,
-          apply: (t) => { t.pathDamageMult = 4.2; t.pathRangeMult = 2.4; t.pathRateMult = 0.7; t.critChance = 0.35; t.critMult = 3.5; t.bossDamageMult = 2.0; },
+          desc: "even more damage, bigger dmg vs bosses", cost: 765,
+          apply: (t) => { t.pathDamageMult = 4.2; t.pathRateMult = 0.7; t.critChance = 0.35; t.critMult = 3.5; t.bossDamageMult = 2.0; },
         },
         {
-          desc: "sees the whole board - annihilates everything (T5 - a major investment)", cost: 1300,
-          apply: (t) => { t.pathDamageMult = 8.0; t.pathRangeMult = 3.6; t.pathRateMult = 0.7; t.critChance = 0.55; t.critMult = 5.5; t.bossDamageMult = 3.8; t.tankDamageMult = 2.6; },
+          desc: "one shot, one kill - annihilates everything (T5 - a major investment)", cost: 1300,
+          apply: (t) => { t.pathDamageMult = 8.0; t.pathRateMult = 0.7; t.critChance = 0.55; t.critMult = 5.5; t.bossDamageMult = 3.8; t.tankDamageMult = 2.6; },
         },
       ],
     },
@@ -395,16 +410,16 @@ const TOWER_PATHS = {
       tiers: [
         { desc: "true damage - ignores all resistances", cost: 140, apply: (t) => { t.damageType = "magic"; t.pathDamageMult = 1.3; } },
         {
-          desc: "bigger true damage, wider range", cost: 260,
-          apply: (t) => { t.pathDamageMult = 1.7; t.pathRangeMult = 1.3; },
+          desc: "bigger true damage", cost: 260,
+          apply: (t) => { t.pathDamageMult = 1.7; },
         },
         {
           desc: "even bigger true damage, chance to crit 2x", cost: 450,
           apply: (t) => { t.pathDamageMult = 2.2; t.critChance = 0.2; t.critMult = 2.0; },
         },
         {
-          desc: "massive true damage, wider range still", cost: 765,
-          apply: (t) => { t.pathDamageMult = 2.8; t.pathRangeMult = 1.6; },
+          desc: "massive true damage", cost: 765,
+          apply: (t) => { t.pathDamageMult = 2.8; },
         },
         {
           desc: "rewritten from scratch - nothing resists this anymore (T5 - a major investment)", cost: 1300,
@@ -1783,7 +1798,7 @@ pauseRestartBtn.addEventListener("click", () => {
 // get added. The secret 10x Engineer stays excluded until unlocked, same
 // as the tower list itself.
 const DAMAGE_TYPE_INFO = [
-  { emoji: "⚔️", name: "Normal", desc: "the default - most towers (Gamer, Coder, Recruiter's warriors) deal this." },
+  { emoji: "⚔️", name: "Normal", desc: "the default - most towers (Gamer, Sniper, Recruiter's warriors) deal this." },
   { emoji: "💥", name: "Explosive", desc: "Hacker's splash damage. Strong vs Legacy Code, wasted on Firewalled." },
   { emoji: "🔮", name: "Magic", desc: "Quant, and 10x Engineer's Distributed Systems path at T4+. Ignores every resistance - the only reliable answer to Encrypted." },
 ];
@@ -2196,6 +2211,11 @@ function recomputeTowerStats(t) {
     t.fireRate = def.fireRate / (t.pathRateMult || 1);
     t.splashRadius = (def.splashRadius || 0) * (t.pathSplashMult || 1);
   }
+
+  // Applied last, after every branch above has had its say on t.range - caps
+  // any tower's fully-computed range to 1/3 of the map's shorter dimension,
+  // unless it's explicitly a global-range tower (the Sniper).
+  if (!def.isGlobalRange) t.range = Math.min(t.range, MAP_RANGE_CAP);
 }
 
 // Visual milestones: 0 = base, 1 = after 1st upgrade (level 2), 2 = after
@@ -2306,9 +2326,9 @@ function refreshTowerInfoPanel() {
   } else if (t.isRecruiter) {
     statsLine = `deploys ${t.allyCount} warrior${t.allyCount === 1 ? "" : "s"} for ${t.allyDuration.toFixed(1)}s every ${t.deployInterval.toFixed(1)}s`;
   } else if (t.percentDamage) {
-    statsLine = `dmg ${(t.damage * 100).toFixed(1)}% max hp | range ${Math.round(t.range)}`;
+    statsLine = `dmg ${(t.damage * 100).toFixed(1)}% max hp | range ${def.isGlobalRange ? "∞" : Math.round(t.range)}`;
   } else {
-    statsLine = `dmg ${Math.round(t.damage)} | range ${Math.round(t.range)}`;
+    statsLine = `dmg ${Math.round(t.damage)} | range ${def.isGlobalRange ? "∞" : Math.round(t.range)}`;
   }
   if (t.autoLevels) {
     statsLine += ` | auto-levels in ${Math.ceil(t.autoLevelCooldown ?? t.autoLevelInterval)}s`;
@@ -3483,14 +3503,34 @@ function draw() {
     }
 
     if (t === state.selectedTower) {
-      ctx.setLineDash([5, 4]);
-      ctx.strokeStyle = t.color;
-      ctx.globalAlpha = 0.6;
-      ctx.beginPath();
-      ctx.arc(t.x, t.y, t.range, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.globalAlpha = 1;
+      // A global-range tower's range circle would be thousands of pixels
+      // wide (effectively just a straight line across the canvas) - show a
+      // few short radiating ticks around it instead of a circle that huge.
+      if (TOWER_TYPES[t.type].isGlobalRange) {
+        ctx.strokeStyle = t.color;
+        ctx.globalAlpha = 0.7;
+        ctx.lineWidth = 2;
+        const tickCount = 12;
+        for (let i = 0; i < tickCount; i++) {
+          const ang = (Math.PI * 2 * i) / tickCount;
+          const inner = CELL * 0.55;
+          const outer = CELL * 0.85;
+          ctx.beginPath();
+          ctx.moveTo(t.x + Math.cos(ang) * inner, t.y + Math.sin(ang) * inner);
+          ctx.lineTo(t.x + Math.cos(ang) * outer, t.y + Math.sin(ang) * outer);
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+      } else {
+        ctx.setLineDash([5, 4]);
+        ctx.strokeStyle = t.color;
+        ctx.globalAlpha = 0.6;
+        ctx.beginPath();
+        ctx.arc(t.x, t.y, t.range, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.globalAlpha = 1;
+      }
       ctx.strokeStyle = "#ffffff";
       ctx.lineWidth = 2;
       ctx.beginPath();
@@ -3594,13 +3634,30 @@ function draw() {
         !(def.unique && countPlacedOfType(state.selectedTowerType) >= tenxMaxCopies());
       const previewColor = valid ? def.color : "#ff4444";
 
-      ctx.setLineDash([5, 4]);
-      ctx.strokeStyle = previewColor;
-      ctx.globalAlpha = 0.5;
-      ctx.beginPath();
-      ctx.arc(px, py, def.range, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.setLineDash([]);
+      if (def.isGlobalRange) {
+        ctx.strokeStyle = previewColor;
+        ctx.globalAlpha = 0.6;
+        ctx.lineWidth = 2;
+        const tickCount = 12;
+        for (let i = 0; i < tickCount; i++) {
+          const ang = (Math.PI * 2 * i) / tickCount;
+          const inner = CELL * 0.55;
+          const outer = CELL * 0.85;
+          ctx.beginPath();
+          ctx.moveTo(px + Math.cos(ang) * inner, py + Math.sin(ang) * inner);
+          ctx.lineTo(px + Math.cos(ang) * outer, py + Math.sin(ang) * outer);
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+      } else {
+        ctx.setLineDash([5, 4]);
+        ctx.strokeStyle = previewColor;
+        ctx.globalAlpha = 0.5;
+        ctx.beginPath();
+        ctx.arc(px, py, def.range, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
 
       ctx.fillStyle = previewColor;
       ctx.globalAlpha = valid ? 0.5 : 0.35;
