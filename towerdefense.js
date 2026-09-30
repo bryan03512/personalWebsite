@@ -1551,6 +1551,10 @@ const restartBtn = document.getElementById("restartBtn");
 const changeMapBtn = document.getElementById("changeMapBtn");
 const mapPickerOverlay = document.getElementById("mapPickerOverlay");
 const mapPickerList = document.getElementById("mapPickerList");
+const mapConfirmOverlay = document.getElementById("mapConfirmOverlay");
+const mapConfirmTitle = document.getElementById("mapConfirmTitle");
+const mapConfirmMessage = document.getElementById("mapConfirmMessage");
+const mapConfirmButtons = document.getElementById("mapConfirmButtons");
 const pauseBtn = document.getElementById("pauseBtn");
 const pauseOverlay = document.getElementById("pauseOverlay");
 const resumeBtn = document.getElementById("resumeBtn");
@@ -1684,17 +1688,18 @@ function updateStats() {
 // "your best across any map".
 const TD_SAVE_KEY = "towerDefenseSave";
 
-function currentMapSlot() {
+// The live, in-progress save for whatever (map, difficulty) is currently
+// active - nested under maps.<mapId>.saves.<difficulty>. bestWave/bestGold/
+// medals live one level up (on the map slot itself, see saveGame) since
+// they're permanent lifetime facts about the map, not tied to any one
+// difficulty's save and never wiped by starting a new game on it.
+function currentDifficultySave() {
   return {
     gold: state.gold,
-    bestGold: state.bestGold,
     lives: state.lives,
     wave: state.wave,
-    bestWave: state.bestWave,
     kills: state.kills,
     towers: state.towers,
-    difficulty: state.difficulty,
-    medals: state.medals,
   };
 }
 
@@ -1731,23 +1736,40 @@ function normalizePayload(parsed) {
   };
 }
 
-// Bumped when the maps' grid/path/placement fundamentally change shape, so
-// old per-map data (grid-cell tower positions on the old, shorter paths)
-// can't silently end up misplaced on the new layout. Migration keeps only
-// bestWave (progression/leaderboard history, and Singularity's permanent
-// unlock) - everything else in that map's slot resets to a fresh start.
-// Account-wide data (achievements, totalBossKills) is untouched, it isn't
-// nested under maps.
-const MAP_LAYOUT_VERSION = 2;
+// Bumped whenever the maps' grid/path/placement OR the save shape itself
+// fundamentally changes, so old per-map data can't silently end up
+// misplaced/misinterpreted. Migration always keeps bestWave/bestGold/medals
+// (progression/leaderboard history, Singularity's permanent unlock, earned
+// medals) - never wiped. v3 restructured a map's slot from one flat
+// gold/wave/towers save into one save PER DIFFICULTY (maps.<id>.saves.<diff>)
+// - an old flat save's live progress is carried into the difficulty it was
+// already set to (falling back to normal) rather than discarded, since
+// there's no ambiguity about which difficulty it belonged to.
+const MAP_LAYOUT_VERSION = 3;
 
 function migrateMapLayout(stored) {
   if (stored.mapLayoutVersion === MAP_LAYOUT_VERSION) return stored;
   const migratedMaps = {};
   Object.keys(MAP_DEFS).forEach((id) => {
+    const old = stored.maps[id];
+    const oldDiff = old?.difficulty && DIFFICULTY_SETTINGS[old.difficulty] ? old.difficulty : "normal";
+    const hadLiveRun = old && (old.wave > 0 || (Array.isArray(old.towers) && old.towers.length > 0));
+    const saves = {};
+    if (hadLiveRun) {
+      saves[oldDiff] = {
+        gold: typeof old.gold === "number" ? old.gold : STARTING_GOLD,
+        lives: typeof old.lives === "number" ? old.lives : STARTING_LIVES,
+        wave: old.wave || 0,
+        kills: old.kills || 0,
+        towers: Array.isArray(old.towers) ? old.towers : [],
+      };
+    }
     migratedMaps[id] = {
-      gold: STARTING_GOLD, bestGold: STARTING_GOLD, lives: STARTING_LIVES, wave: 0, kills: 0, towers: [],
-      difficulty: "normal", medals: { easy: false, normal: false, hard: false },
-      bestWave: stored.maps[id]?.bestWave || 0,
+      bestWave: old?.bestWave || 0,
+      bestGold: old?.bestGold || STARTING_GOLD,
+      medals: old?.medals || { easy: false, normal: false, hard: false },
+      activeDifficulty: hadLiveRun ? oldDiff : null,
+      saves,
     };
   });
   stored.maps = migratedMaps;
@@ -1849,24 +1871,29 @@ function checkMedals() {
   saveGame();
 }
 
-// Applies one map's saved slot onto the live (currently active) state -
-// used both on ordinary load and after switching maps.
-function applyMapDataToState(mapData) {
-  if (!mapData) return;
-  if (typeof mapData.gold === "number") state.gold = mapData.gold;
-  if (typeof mapData.lives === "number") state.lives = mapData.lives;
-  if (typeof mapData.wave === "number") state.wave = mapData.wave;
-  if (typeof mapData.bestWave === "number") state.bestWave = mapData.bestWave;
-  if (typeof mapData.kills === "number") state.kills = mapData.kills;
-  if (typeof mapData.bestGold === "number") state.bestGold = mapData.bestGold;
-  if (typeof mapData.difficulty === "string" && DIFFICULTY_SETTINGS[mapData.difficulty]) {
-    state.difficulty = mapData.difficulty;
-  }
-  state.medals = { easy: false, normal: false, hard: false, ...(mapData.medals || {}) };
+// Applies one map's saved slot (bestWave/bestGold/medals - permanent, plus
+// whichever difficulty's save exists) onto the live (currently active)
+// state - used on ordinary load and after entering a map/difficulty.
+// Caller is responsible for having already reset to fresh defaults first
+// (see resetTransientState in enterMap) - a mapSlot with no save yet for
+// this difficulty just leaves those fresh defaults in place.
+function applyMapDataToState(mapSlot, difficulty) {
+  state.difficulty = difficulty;
+  if (!mapSlot) return;
+  if (typeof mapSlot.bestWave === "number") state.bestWave = mapSlot.bestWave;
+  if (typeof mapSlot.bestGold === "number") state.bestGold = mapSlot.bestGold;
+  state.medals = { easy: false, normal: false, hard: false, ...(mapSlot.medals || {}) };
+
+  const save = mapSlot.saves?.[difficulty];
+  if (!save) return;
+  if (typeof save.gold === "number") state.gold = save.gold;
+  if (typeof save.lives === "number") state.lives = save.lives;
+  if (typeof save.wave === "number") state.wave = save.wave;
+  if (typeof save.kills === "number") state.kills = save.kills;
   // Guard against a stale/incomplete snapshot (e.g. a cloud push that lost a
   // race with navigating away mid-round) silently deleting placed towers -
   // never adopt an incoming towers list that's smaller than what's already here.
-  if (Array.isArray(mapData.towers) && mapData.towers.length >= state.towers.length) {
+  if (Array.isArray(save.towers) && save.towers.length >= state.towers.length) {
     // flashUntil is a performance.now() timestamp from whatever session saved
     // this - meaningless (and potentially crash-inducing, see draw()) now.
     // recomputeTowerStats refreshes any derived field the game code has
@@ -1874,7 +1901,7 @@ function applyMapDataToState(mapData) {
     // the Recruiter rework) - without this, a tower saved under older code
     // keeps missing fields forever, which silently breaks as NaN math
     // rather than an obvious error.
-    state.towers = mapData.towers.map((t) => ({ ...t, flashUntil: 0 }));
+    state.towers = save.towers.map((t) => ({ ...t, flashUntil: 0 }));
     state.towers.forEach(recomputeTowerStats);
   }
 }
@@ -1882,7 +1909,18 @@ function applyMapDataToState(mapData) {
 function saveGame() {
   state.lastSaveTime = Date.now();
   const stored = readStoredPayload();
-  stored.maps[state.mapId] = currentMapSlot();
+  const mapSlot = stored.maps[state.mapId] || {
+    bestWave: 0, bestGold: STARTING_GOLD,
+    medals: { easy: false, normal: false, hard: false },
+    activeDifficulty: null, saves: {},
+  };
+  mapSlot.saves = mapSlot.saves || {};
+  mapSlot.saves[state.difficulty] = currentDifficultySave();
+  mapSlot.activeDifficulty = state.difficulty;
+  mapSlot.bestWave = Math.max(mapSlot.bestWave || 0, state.wave);
+  mapSlot.bestGold = Math.max(mapSlot.bestGold || 0, state.gold);
+  mapSlot.medals = state.medals;
+  stored.maps[state.mapId] = mapSlot;
   stored.activeMap = state.mapId;
   stored.gameSpeed = state.gameSpeed;
   stored.lastSaveTime = state.lastSaveTime;
@@ -1909,44 +1947,124 @@ function loadGame() {
   state.ownerId = typeof stored.ownerId === "string" ? stored.ownerId : null;
   state.achievements = { ...stored.achievements };
   state.totalBossKills = stored.totalBossKills || 0;
-  applyMapDataToState(stored.maps[state.mapId]);
+  const mapSlot = stored.maps[state.mapId];
+  const diff = mapSlot?.activeDifficulty && DIFFICULTY_SETTINGS[mapSlot.activeDifficulty] ? mapSlot.activeDifficulty : "normal";
+  applyMapDataToState(mapSlot, diff);
 }
 
-// Switches the active map: saves the map being left, then loads (or starts
-// fresh on) the target map. Always saves first even when re-selecting the
+// Enters a (map, difficulty) combo: saves whatever's being left, then loads
+// (or starts fresh on, if wipe is true or nothing's saved there yet) that
+// map+difficulty's own save. Always saves first even when re-entering the
 // current map, so the picker never discards up-to-3-seconds of unsaved
-// progress by reading a stale snapshot.
-function switchMap(newMapId) {
-  if (!MAP_DEFS[newMapId]) return;
+// progress by reading a stale snapshot. wipe=true deletes any existing save
+// for that difficulty before loading - the caller (confirmWipeSave) is
+// responsible for having confirmed that with the player first.
+function enterMap(mapId, diffId, wipe) {
+  if (!MAP_DEFS[mapId] || !DIFFICULTY_SETTINGS[diffId]) return;
   saveGame();
   const stored = readStoredPayload();
+  let mapSlot = stored.maps[mapId];
+  if (!mapSlot) {
+    mapSlot = { bestWave: 0, bestGold: STARTING_GOLD, medals: { easy: false, normal: false, hard: false }, activeDifficulty: null, saves: {} };
+    stored.maps[mapId] = mapSlot;
+  }
+  mapSlot.saves = mapSlot.saves || {};
+  if (wipe) delete mapSlot.saves[diffId];
+  localStorage.setItem(TD_SAVE_KEY, JSON.stringify(stored));
+  scheduleCloudSync();
+
   const preservedGameSpeed = state.gameSpeed; // gameSpeed is a global preference, not per-map
-  state.mapId = newMapId;
-  applyMapLayout(newMapId);
+  state.mapId = mapId;
+  applyMapLayout(mapId);
   resetTransientState();
   state.gameSpeed = preservedGameSpeed;
   syncSpeedButton();
   state.bestWave = 0;
-  state.bestGold = 200;
-  state.difficulty = "normal";
-  applyMapDataToState(stored.maps[newMapId]);
+  state.bestGold = STARTING_GOLD;
+  applyMapDataToState(mapSlot, diffId);
   updateStats();
   saveGame();
+  mapPickerOverlay.hidden = true;
 }
 
-// Sets a map's difficulty directly in storage, without needing to switch to
-// it first - used by the picker's per-map difficulty buttons. Keeps live
-// state in sync if that happens to be the currently active map.
-function setMapDifficulty(mapId, diffId) {
-  if (!DIFFICULTY_SETTINGS[diffId]) return;
+// ---------- Map picker: entry confirmation ----------
+// A themed 1-2 button confirm dialog (see #mapConfirmOverlay), reused for
+// every "you're about to touch a save" moment in the picker instead of the
+// browser's native confirm(). options: [{label, action, danger}].
+function showMapConfirm({ title, message, options }) {
+  mapConfirmTitle.textContent = title;
+  mapConfirmMessage.textContent = message;
+  mapConfirmButtons.innerHTML = "";
+  options.forEach((opt) => {
+    const btn = document.createElement("button");
+    btn.className = "btn" + (opt.danger ? " tower-sell-btn" : "");
+    btn.textContent = opt.label;
+    btn.addEventListener("click", () => {
+      mapConfirmOverlay.hidden = true;
+      opt.action();
+    });
+    mapConfirmButtons.appendChild(btn);
+  });
+  mapConfirmOverlay.hidden = false;
+}
+
+// The map name button's quick-resume path: no prompt if you've already got
+// an active difficulty there (nothing at risk, just continuing) - otherwise
+// falls through to the same "start a new game?" confirmation as clicking
+// Normal directly, since there's nothing to resume yet either way.
+function onMapNameClick(mapId) {
   const stored = readStoredPayload();
-  if (!stored.maps[mapId]) {
-    stored.maps[mapId] = { gold: STARTING_GOLD, bestGold: STARTING_GOLD, lives: STARTING_LIVES, wave: 0, bestWave: 0, kills: 0, towers: [] };
+  const activeDiff = stored.maps[mapId]?.activeDifficulty;
+  if (activeDiff && DIFFICULTY_SETTINGS[activeDiff]) {
+    enterMap(mapId, activeDiff, false);
+  } else {
+    onDifficultyClick(mapId, "normal");
   }
-  stored.maps[mapId].difficulty = diffId;
-  localStorage.setItem(TD_SAVE_KEY, JSON.stringify(stored));
-  scheduleCloudSync();
-  if (state.mapId === mapId) state.difficulty = diffId;
+}
+
+// A difficulty button's click: if that difficulty already has a save on
+// this map, offers load-vs-start-new; if not, confirms starting a fresh one
+// (per explicit preference - even though nothing's at risk yet, still asks).
+function onDifficultyClick(mapId, diffId) {
+  const stored = readStoredPayload();
+  const hasSave = !!stored.maps[mapId]?.saves?.[diffId];
+  const mapName = MAP_DEFS[mapId].name;
+  const diffLabel = DIFFICULTY_SETTINGS[diffId].label;
+  if (hasSave) {
+    showMapConfirm({
+      title: `${mapName} - ${diffLabel}`,
+      message: `You have a save on ${diffLabel} for this map. Load it, or start a new game?`,
+      options: [
+        { label: "Load saved game", action: () => enterMap(mapId, diffId, false) },
+        { label: "Create new", action: () => confirmWipeSave(mapId, diffId) },
+        { label: "Cancel", action: () => {} },
+      ],
+    });
+  } else {
+    showMapConfirm({
+      title: `${mapName} - ${diffLabel}`,
+      message: `Start a new game on ${diffLabel}?`,
+      options: [
+        { label: "Start new game", action: () => enterMap(mapId, diffId, true) },
+        { label: "Cancel", action: () => {} },
+      ],
+    });
+  }
+}
+
+// The destructive path (overwriting an existing save) gets one more explicit
+// confirmation beyond the load-vs-new choice, since it can't be undone.
+function confirmWipeSave(mapId, diffId) {
+  const mapName = MAP_DEFS[mapId].name;
+  const diffLabel = DIFFICULTY_SETTINGS[diffId].label;
+  showMapConfirm({
+    title: "Are you sure?",
+    message: `This deletes your existing ${diffLabel} save on ${mapName} and starts a fresh game. This can't be undone.`,
+    options: [
+      { label: "Delete & start new", action: () => enterMap(mapId, diffId, true), danger: true },
+      { label: "Cancel", action: () => {} },
+    ],
+  });
 }
 
 // ---------- Map picker ----------
@@ -1954,36 +2072,52 @@ function renderMapPicker() {
   const stored = readStoredPayload();
   mapPickerList.innerHTML = "";
   Object.entries(MAP_DEFS).forEach(([id, def]) => {
-    const mapData = stored.maps[id];
-    const meta = mapData
-      ? `best sprint ${mapData.bestWave || 0} | best credits ${Math.floor(mapData.bestGold || 0)}`
+    const mapSlot = stored.maps[id];
+    const activeDiff = mapSlot?.activeDifficulty && DIFFICULTY_SETTINGS[mapSlot.activeDifficulty] ? mapSlot.activeDifficulty : null;
+    const activeSave = activeDiff ? mapSlot.saves?.[activeDiff] : null;
+    // The main line shows the CURRENT (in-progress) sprint/credits for
+    // whichever difficulty was last played here, not the lifetime best -
+    // best moves to a small aside instead (see .map-picker-best).
+    const current = activeSave
+      ? `${DIFFICULTY_SETTINGS[activeDiff].label}: sprint ${activeSave.wave || 0} | ${Math.floor(activeSave.gold || 0)}c`
       : "not started yet";
-    const currentDiff = mapData?.difficulty && DIFFICULTY_SETTINGS[mapData.difficulty] ? mapData.difficulty : "normal";
-    const medals = { easy: false, normal: false, hard: false, ...(mapData?.medals || {}) };
+    const best = `best\nsprint ${mapSlot?.bestWave || 0}\n${Math.floor(mapSlot?.bestGold || 0)}c`;
+    const medals = { easy: false, normal: false, hard: false, ...(mapSlot?.medals || {}) };
     const mastered = medals.easy && medals.normal && medals.hard;
 
     const card = document.createElement("div");
     card.className = "map-picker-card" + (mastered ? " map-picker-card-mastered" : "");
 
+    const headerRow = document.createElement("div");
+    headerRow.className = "map-picker-header-row";
+
     const btn = document.createElement("button");
     btn.className = "btn map-picker-btn";
-    btn.innerHTML = `<span class="map-picker-name">${def.name}</span><span class="map-picker-meta">${meta}</span>`;
-    btn.addEventListener("click", () => {
-      switchMap(id);
-      mapPickerOverlay.hidden = true;
-    });
-    card.appendChild(btn);
+    btn.innerHTML = `<span class="map-picker-name">${def.name}</span><span class="map-picker-meta">${current}</span>`;
+    btn.addEventListener("click", () => onMapNameClick(id));
+    headerRow.appendChild(btn);
+
+    const bestEl = document.createElement("div");
+    bestEl.className = "map-picker-best";
+    bestEl.textContent = best;
+    bestEl.style.whiteSpace = "pre-line";
+    headerRow.appendChild(bestEl);
+
+    card.appendChild(headerRow);
 
     const diffRow = document.createElement("div");
     diffRow.className = "map-picker-diff-row";
     Object.entries(DIFFICULTY_SETTINGS).forEach(([diffId, diffDef]) => {
+      const hasSave = !!mapSlot?.saves?.[diffId];
       const diffBtn = document.createElement("button");
-      diffBtn.className = "btn map-picker-diff-btn" + (diffId === currentDiff ? " active" : "");
+      diffBtn.className = "btn map-picker-diff-btn"
+        + (diffId === activeDiff ? " active" : "")
+        + (hasSave ? " has-save" : "");
       diffBtn.textContent = diffDef.label;
+      diffBtn.title = hasSave ? `${diffDef.label}: has a save` : `${diffDef.label}: not started`;
       diffBtn.addEventListener("click", (e) => {
         e.stopPropagation();
-        setMapDifficulty(id, diffId);
-        renderMapPicker();
+        onDifficultyClick(id, diffId);
       });
       diffRow.appendChild(diffBtn);
     });
@@ -2247,7 +2381,9 @@ async function pullCloudSave() {
   state.achievements = { ...winner.achievements };
   state.totalBossKills = winner.totalBossKills || 0;
   state.towers = [];
-  applyMapDataToState(winner.maps[state.mapId]);
+  const winnerMapSlot = winner.maps[state.mapId];
+  const winnerDiff = winnerMapSlot?.activeDifficulty && DIFFICULTY_SETTINGS[winnerMapSlot.activeDifficulty] ? winnerMapSlot.activeDifficulty : "normal";
+  applyMapDataToState(winnerMapSlot, winnerDiff);
 
   saveGame();
   updateStats();

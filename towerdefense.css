@@ -492,6 +492,23 @@ canvas {
   width: 100%;
 }
 
+.map-confirm-overlay {
+  z-index: 350;
+}
+
+.map-confirm-message {
+  margin: 0 0 4px;
+  font-size: 0.85rem;
+  color: var(--text);
+  line-height: 1.4;
+}
+
+.map-confirm-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .map-picker-overlay {
   position: fixed;
   inset: 0;
@@ -556,6 +573,15 @@ canvas {
   color: var(--green-faint);
 }
 
+.map-picker-best {
+  font-size: 0.65rem;
+  color: var(--green-faint);
+  opacity: 0.75;
+  text-align: right;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+
 .map-picker-card {
   display: flex;
   flex-direction: column;
@@ -580,6 +606,24 @@ canvas {
 .map-picker-diff-btn.active {
   background: var(--green);
   color: #04150a;
+}
+
+.map-picker-diff-btn.has-save:not(.active)::after {
+  content: " •";
+  color: var(--cyan);
+}
+
+.map-picker-header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.map-picker-header-row .map-picker-btn {
+  width: auto;
+  flex: 1;
+  min-width: 0;
 }
 
 .map-picker-medal-row {
