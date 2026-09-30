@@ -1481,6 +1481,7 @@ function buildTowerButtons() {
     // the roster grows.
     btn.innerHTML = `<span class="emoji">${def.emoji}</span><span class="info"><span class="name">${def.name}</span></span><span class="cost">${def.cost}c</span>`;
     btn.addEventListener("click", () => {
+      pasteArmed = false;
       state.selectedTowerType = state.selectedTowerType === key ? null : key;
       refreshTowerButtons();
     });
@@ -2172,11 +2173,90 @@ function canvasPosFromEvent(evt) {
 // updated on hover (mouse) and on touch-drag (no hover concept on touch).
 let previewPos = null;
 
+// ---------- Copy/paste a tower (ctrl+c / ctrl+v) ----------
+// towerClipboard holds a full blueprint (every field of the copied tower
+// except its position and transient/runtime bits) plus the exact credits it
+// took to build that tower (totalInvested - placement + every upgrade +
+// every path tier, see the fix to buyPathTier below). Pasting is priced at
+// that same total, not the tower's base shop cost, so duplicating a
+// heavily-leveled tower costs exactly as much as building it from scratch
+// did the first time.
+let towerClipboard = null;
+let pasteArmed = false;
+
+function copySelectedTower() {
+  const t = state.selectedTower;
+  if (!t) return;
+  const { x, y, cooldown, flashUntil, visualStage, totalDamageDealt, totalInvested, ...blueprint } = t;
+  towerClipboard = { blueprint, cost: totalInvested };
+  const def = TOWER_TYPES[t.type];
+  medalToast.textContent = `copied ${def.emoji} ${def.name} (Lv.${t.level}) - paste costs ${Math.round(totalInvested)}c`;
+  medalToast.classList.add("visible");
+  clearTimeout(medalToastTimer);
+  medalToastTimer = setTimeout(() => medalToast.classList.remove("visible"), 3000);
+}
+
+function armPaste() {
+  if (!towerClipboard) return;
+  state.selectedTower = null;
+  state.selectedTowerType = null;
+  pasteArmed = true;
+  hideTowerInfoPanel();
+  refreshTowerButtons();
+}
+
+// Mirrors the level/path-chosen thresholds markVisualMilestone normally
+// reaches incrementally, so a pasted tower shows the correct ring/badge
+// immediately instead of building back up to it.
+function visualStageForBlueprint(bp) {
+  const hasPath = bp.path || (bp.pathTiers && Object.values(bp.pathTiers).some((n) => n > 0));
+  if (hasPath) return 3;
+  if (bp.level >= 3) return 2;
+  if (bp.level >= 2) return 1;
+  return 0;
+}
+
+function commitPaste(x, y) {
+  if (!towerClipboard) {
+    pasteArmed = false;
+    return;
+  }
+  if (!canPlaceTowerAt(x, y)) return;
+  const bp = towerClipboard.blueprint;
+  const def = TOWER_TYPES[bp.type];
+  if (def.isLegendary && !def.unlockCheck()) return;
+  if (def.unique && countPlacedOfType(bp.type) >= tenxMaxCopies()) return;
+  const cost = towerClipboard.cost;
+  if (state.gold < cost) return;
+
+  state.gold -= cost;
+  const tower = {
+    ...bp,
+    x,
+    y,
+    cooldown: 0,
+    totalDamageDealt: 0,
+    totalInvested: cost,
+    flashUntil: performance.now() + 400,
+    visualStage: visualStageForBlueprint(bp),
+  };
+  recomputeTowerStats(tower);
+  state.towers.push(tower);
+  updateStats();
+  saveGame();
+}
+
 function handlePlacementOrSelection(pos) {
   const { x, y } = pos;
   const hitTower = state.towers.find((t) => distance(t.x, t.y, x, y) <= CELL * 0.36);
   if (hitTower) {
+    pasteArmed = false;
     selectTower(hitTower);
+    return;
+  }
+
+  if (pasteArmed) {
+    commitPaste(x, y);
     return;
   }
 
@@ -2386,6 +2466,7 @@ function buyPathTier(t, pathId) {
     if (t.level < PATH_TIER_LEVELS[nextTierIndex] || state.gold < cost) return;
 
     state.gold -= cost;
+    t.totalInvested += cost;
     t.pathTiers[pathId] = nextTierIndex + 1;
     tier.apply(t);
     recomputeSingularityMultiPath(t);
@@ -2407,6 +2488,7 @@ function buyPathTier(t, pathId) {
   if (t.level < PATH_TIER_LEVELS[nextTierIndex] || state.gold < cost) return;
 
   state.gold -= cost;
+  t.totalInvested += cost;
   t.path = pathId;
   t.pathTier = nextTierIndex + 1;
   tier.apply(t);
@@ -2661,6 +2743,20 @@ const TOWER_HOTKEYS = {
 document.addEventListener("keydown", (e) => {
   const tag = document.activeElement?.tagName;
   if (tag === "INPUT" || tag === "TEXTAREA") return;
+
+  // ctrl+c copies the selected tower's full build (level/path/tiers) to a
+  // clipboard; ctrl+v arms placement of that exact build elsewhere on the
+  // board, priced at what it actually cost to build the first time.
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "c") {
+    e.preventDefault();
+    copySelectedTower();
+    return;
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "v") {
+    e.preventDefault();
+    armPaste();
+    return;
+  }
 
   const hotkeyType = TOWER_HOTKEYS[e.key.toLowerCase()];
   if (hotkeyType) {
@@ -3601,6 +3697,48 @@ function drawBolt(x, y, dx, dy, len, color) {
   drawLightning(x - ux * len * 0.5, y - uy * len * 0.5, x + ux * len * 0.5, y + uy * len * 0.5, color, 3);
 }
 
+// Ghost preview shared by both normal shop placement and pasted-tower
+// placement (see the ctrl+c/ctrl+v feature) - draws the range indicator
+// (a circle, or radiating ticks for a global-range tower) plus the body/
+// emoji at the pointer, red instead of the tower's own color when invalid.
+function drawPlacementGhost(px, py, { color, emoji, range, isGlobalRange, valid }) {
+  const previewColor = valid ? color : "#ff4444";
+  if (isGlobalRange) {
+    ctx.strokeStyle = previewColor;
+    ctx.globalAlpha = 0.6;
+    ctx.lineWidth = 2;
+    const tickCount = 12;
+    for (let i = 0; i < tickCount; i++) {
+      const ang = (Math.PI * 2 * i) / tickCount;
+      const inner = CELL * 0.55;
+      const outer = CELL * 0.85;
+      ctx.beginPath();
+      ctx.moveTo(px + Math.cos(ang) * inner, py + Math.sin(ang) * inner);
+      ctx.lineTo(px + Math.cos(ang) * outer, py + Math.sin(ang) * outer);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  } else {
+    ctx.setLineDash([5, 4]);
+    ctx.strokeStyle = previewColor;
+    ctx.globalAlpha = 0.5;
+    ctx.beginPath();
+    ctx.arc(px, py, range, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  ctx.fillStyle = previewColor;
+  ctx.globalAlpha = valid ? 0.5 : 0.35;
+  ctx.beginPath();
+  ctx.arc(px, py, CELL * 0.34, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = 0.85;
+  ctx.font = `${CELL * 0.4}px sans-serif`;
+  ctx.fillText(emoji, px, py + 1);
+  ctx.globalAlpha = 1;
+}
+
 // ---------- Rendering ----------
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -3826,53 +3964,29 @@ function draw() {
     }
   }
 
-  // ghost preview: follows the pointer/finger while a tower type is selected -
-  // free placement now, so it renders right at the pointer instead of
-  // snapping to a cell center.
-  if (state.selectedTowerType && previewPos) {
-    const def = TOWER_TYPES[state.selectedTowerType];
+  // ghost preview: follows the pointer/finger while a tower type is selected,
+  // or while a copied tower is armed to paste (see the ctrl+c/ctrl+v
+  // feature) - free placement, so it renders right at the pointer instead
+  // of snapping to a cell center.
+  if ((state.selectedTowerType || pasteArmed) && previewPos) {
     const { x: px, y: py } = previewPos;
     if (px >= 0 && px <= COLS * CELL && py >= 0 && py <= ROWS * CELL) {
-      const valid =
-        canPlaceTowerAt(px, py) &&
-        state.gold >= def.cost &&
-        !(def.unique && countPlacedOfType(state.selectedTowerType) >= tenxMaxCopies());
-      const previewColor = valid ? def.color : "#ff4444";
-
-      if (def.isGlobalRange) {
-        ctx.strokeStyle = previewColor;
-        ctx.globalAlpha = 0.6;
-        ctx.lineWidth = 2;
-        const tickCount = 12;
-        for (let i = 0; i < tickCount; i++) {
-          const ang = (Math.PI * 2 * i) / tickCount;
-          const inner = CELL * 0.55;
-          const outer = CELL * 0.85;
-          ctx.beginPath();
-          ctx.moveTo(px + Math.cos(ang) * inner, py + Math.sin(ang) * inner);
-          ctx.lineTo(px + Math.cos(ang) * outer, py + Math.sin(ang) * outer);
-          ctx.stroke();
-        }
-        ctx.globalAlpha = 1;
-      } else {
-        ctx.setLineDash([5, 4]);
-        ctx.strokeStyle = previewColor;
-        ctx.globalAlpha = 0.5;
-        ctx.beginPath();
-        ctx.arc(px, py, def.range, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.setLineDash([]);
+      if (pasteArmed && towerClipboard) {
+        const bp = towerClipboard.blueprint;
+        const def = TOWER_TYPES[bp.type];
+        const valid =
+          canPlaceTowerAt(px, py) &&
+          state.gold >= towerClipboard.cost &&
+          !(def.unique && countPlacedOfType(bp.type) >= tenxMaxCopies());
+        drawPlacementGhost(px, py, { color: bp.color, emoji: bp.emoji, range: bp.range, isGlobalRange: def.isGlobalRange, valid });
+      } else if (state.selectedTowerType) {
+        const def = TOWER_TYPES[state.selectedTowerType];
+        const valid =
+          canPlaceTowerAt(px, py) &&
+          state.gold >= def.cost &&
+          !(def.unique && countPlacedOfType(state.selectedTowerType) >= tenxMaxCopies());
+        drawPlacementGhost(px, py, { color: def.color, emoji: def.emoji, range: def.range, isGlobalRange: def.isGlobalRange, valid });
       }
-
-      ctx.fillStyle = previewColor;
-      ctx.globalAlpha = valid ? 0.5 : 0.35;
-      ctx.beginPath();
-      ctx.arc(px, py, CELL * 0.34, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 0.85;
-      ctx.font = `${CELL * 0.4}px sans-serif`;
-      ctx.fillText(def.emoji, px, py + 1);
-      ctx.globalAlpha = 1;
     }
   }
 
