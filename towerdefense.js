@@ -1322,18 +1322,20 @@ const TOWER_PATHS = {
 // purely cosmetic, no gameplay math reads these besides drawing (health
 // bars, emoji size).
 // splitsTo: on death, spawns `count` of a specific DIFFERENT, weaker enemy
-// type (not a weaker copy of itself) - e.g. a Glitch dying turns into 2
-// Bugs. Each type points to exactly one rung down a fixed weakness chain
+// type (not a weaker copy of itself) - e.g. a Glitch dying turns into 1
+// Bug. Each type points to exactly one rung down a fixed weakness chain
 // (roughly the same order buildWave introduces them: encrypted > shielded >
 // firewalled > healer > obfuscated > legacy > splitter > tank > fast >
 // basic), terminating at Bug, which has no further split. Since the chain
 // only ever points to a strictly weaker type and never loops, it can't run
-// away - see spawnWeakerEnemy/applyDamage.
+// away - see spawnWeakerEnemy/applyDamage. Bosses and the stronger half of
+// the regular roster (healer/firewalled/shielded/encrypted) split into 3;
+// the weaker half (fast/tank/splitter/legacy/obfuscated) splits into just 1.
 const ENEMY_TYPES = {
   basic: { label: "Bug", emoji: "🐛", hp: 50, speed: 60, reward: 5, lifeDamage: 1, color: "#e05353", radius: 7 },
-  fast: { label: "Glitch", emoji: "⚡", hp: 25, speed: 130, reward: 5, lifeDamage: 1, color: "#ffee58", radius: 6, splitsTo: { type: "basic", count: 2 } },
-  tank: { label: "Merge Conflict", emoji: "💀", hp: 160, speed: 35, reward: 12, lifeDamage: 2, color: "#8a4a2b", radius: 8.5, splitsTo: { type: "fast", count: 2 } },
-  boss: { label: "Production Outage", emoji: "🔥", hp: 400, speed: 30, reward: 60, lifeDamage: 5, color: "#ff3b3b", radius: 12, splitsTo: { type: "bossCamo", count: 2 } },
+  fast: { label: "Glitch", emoji: "⚡", hp: 25, speed: 130, reward: 5, lifeDamage: 1, color: "#ffee58", radius: 6, splitsTo: { type: "basic", count: 1 } },
+  tank: { label: "Merge Conflict", emoji: "💀", hp: 160, speed: 35, reward: 12, lifeDamage: 2, color: "#8a4a2b", radius: 8.5, splitsTo: { type: "fast", count: 1 } },
+  boss: { label: "Production Outage", emoji: "🔥", hp: 400, speed: 30, reward: 60, lifeDamage: 5, color: "#ff3b3b", radius: 12, splitsTo: { type: "bossCamo", count: 3 } },
   // The weakest of the 4 original bosses (lowest hp) - splits heterogeneous
   // into 3 of the strongest regular enemy (Merge Conflict/tank) rather than
   // continuing the boss chain further down. Uses the one-time splitInto
@@ -1343,8 +1345,8 @@ const ENEMY_TYPES = {
     label: "Ghost Process", emoji: "👻", hp: 350, speed: 70, reward: 70, lifeDamage: 5, color: "#7c3aed", radius: 11.5, camo: true,
     splitInto: [{ type: "tank", count: 3 }],
   },
-  bossTank: { label: "Cascading Failure", emoji: "🌋", hp: 900, speed: 16, reward: 90, lifeDamage: 8, color: "#7f1d1d", radius: 13.5, splitsTo: { type: "boss", count: 2 } },
-  megaboss: { label: "Total System Failure", emoji: "☠️", hp: 3000, speed: 26, reward: 250, lifeDamage: 10, color: "#000000", radius: 16, splitsTo: { type: "bossTank", count: 2 } },
+  bossTank: { label: "Cascading Failure", emoji: "🌋", hp: 900, speed: 16, reward: 90, lifeDamage: 8, color: "#7f1d1d", radius: 13.5, splitsTo: { type: "boss", count: 3 } },
+  megaboss: { label: "Total System Failure", emoji: "☠️", hp: 3000, speed: 26, reward: 250, lifeDamage: 10, color: "#000000", radius: 16, splitsTo: { type: "bossTank", count: 3 } },
   // A 4-tier boss family, unlocked one tier at a time from wave 20/60/80/100
   // (see splitBossQueueFor). Each tier's death instantly spawns its ENTIRE
   // splitInto list at once (not a recursive chain reaction) - killing a
@@ -1367,19 +1369,19 @@ const ENEMY_TYPES = {
   },
   // Late-wave specialists, each resistant to one damage type (see
   // RESISTANCES) so no single tower archetype trivializes everything.
-  legacy: { label: "Legacy Code", emoji: "💾", hp: 90, speed: 45, reward: 10, lifeDamage: 2, color: "#a1887f", radius: 7.5, splitsTo: { type: "splitter", count: 2 } },
-  firewalled: { label: "Firewalled", emoji: "🧱", hp: 70, speed: 55, reward: 10, lifeDamage: 1, color: "#5b7fd6", radius: 7.5, splitsTo: { type: "healer", count: 2 } },
-  encrypted: { label: "Encrypted", emoji: "🔒", hp: 60, speed: 50, reward: 14, lifeDamage: 2, color: "#a855f7", radius: 7.5, splitsTo: { type: "shielded", count: 2 } },
+  legacy: { label: "Legacy Code", emoji: "💾", hp: 90, speed: 45, reward: 10, lifeDamage: 2, color: "#a1887f", radius: 7.5, splitsTo: { type: "splitter", count: 1 } },
+  firewalled: { label: "Firewalled", emoji: "🧱", hp: 70, speed: 55, reward: 10, lifeDamage: 1, color: "#5b7fd6", radius: 7.5, splitsTo: { type: "healer", count: 3 } },
+  encrypted: { label: "Encrypted", emoji: "🔒", hp: 60, speed: 50, reward: 14, lifeDamage: 2, color: "#a855f7", radius: 7.5, splitsTo: { type: "shielded", count: 3 } },
   // Untargetable by any tower unless that tower is currently in an active
   // Manager's buff range (see getTowerBuffs/findTargets) - still visible so
   // the player can see them coming, just can't be shot without support.
-  obfuscated: { label: "Obfuscated", emoji: "🌫️", hp: 55, speed: 65, reward: 12, lifeDamage: 1, color: "#94a3b8", radius: 7, camo: true, splitsTo: { type: "legacy", count: 2 } },
-  splitter: { label: "Forked Process", emoji: "🍴", hp: 70, speed: 55, reward: 8, lifeDamage: 1, color: "#fb7185", radius: 7.5, splitsTo: { type: "tank", count: 2 } },
+  obfuscated: { label: "Obfuscated", emoji: "🌫️", hp: 55, speed: 65, reward: 12, lifeDamage: 1, color: "#94a3b8", radius: 7, camo: true, splitsTo: { type: "legacy", count: 1 } },
+  splitter: { label: "Forked Process", emoji: "🍴", hp: 70, speed: 55, reward: 8, lifeDamage: 1, color: "#fb7185", radius: 7.5, splitsTo: { type: "tank", count: 1 } },
   // Passively heals nearby enemies each second - see updateHealers.
-  healer: { label: "QA Tester", emoji: "🩹", hp: 80, speed: 45, reward: 14, lifeDamage: 1, color: "#34d399", radius: 7.5, healRange: 90, healPerSecPct: 0.02, splitsTo: { type: "obfuscated", count: 2 } },
+  healer: { label: "QA Tester", emoji: "🩹", hp: 80, speed: 45, reward: 14, lifeDamage: 1, color: "#34d399", radius: 7.5, healRange: 90, healPerSecPct: 0.02, splitsTo: { type: "obfuscated", count: 3 } },
   // Has a separate regenerating shield on top of its hp - see the shield
   // handling in spawnEnemy/applyDamage/updateShields.
-  shielded: { label: "Hardened Build", emoji: "🛡️", hp: 60, speed: 50, reward: 14, lifeDamage: 1, color: "#60a5fa", radius: 7.5, shieldFrac: 1.0, shieldRegenDelay: 3, shieldRegenPerSec: 0.3, splitsTo: { type: "firewalled", count: 2 } },
+  shielded: { label: "Hardened Build", emoji: "🛡️", hp: 60, speed: 50, reward: 14, lifeDamage: 1, color: "#60a5fa", radius: 7.5, shieldFrac: 1.0, shieldRegenDelay: 3, shieldRegenPerSec: 0.3, splitsTo: { type: "firewalled", count: 3 } },
 };
 
 // Damage-type resistance: a multiplier applied when that enemy type takes
