@@ -134,12 +134,12 @@ function prepareObstacleVisuals(obstacles) {
 // Replaces the old "one tower per grid cell, never on a path cell" rule.
 // Towers can go anywhere on the canvas as long as they clear the path,
 // obstacles, the canvas edge, and other towers by these margins - all
-// derived from TOWER_BODY_RADIUS (the actual drawn tower circle, see
-// CELL * 0.34 in draw()) so the invalid/red preview lines up with what the
-// tower visually looks like, instead of an arbitrary bigger padding that
-// flags a placement as blocked well before it actually touches anything.
+// derived from TOWER_BODY_RADIUS (the actual drawn tower circle, see draw())
+// so the invalid/red preview lines up with what the tower visually looks
+// like, instead of an arbitrary bigger padding that flags a placement as
+// blocked well before it actually touches anything.
 const PATH_VISUAL_WIDTH = 46; // rendered path corridor width
-const TOWER_BODY_RADIUS = CELL * 0.34;
+const TOWER_BODY_RADIUS = CELL * 0.42; // bumped from 0.34 - towers a bit bigger
 const TOWER_FOOTPRINT_RADIUS = TOWER_BODY_RADIUS; // clearance needed from the canvas edge/obstacles
 const TOWER_MIN_SPACING = TOWER_BODY_RADIUS * 2; // two tower circles just touching, not overlapping
 const PATH_CLEARANCE = TOWER_BODY_RADIUS + PATH_VISUAL_WIDTH / 2; // tower edge just clears the path corridor edge
@@ -2260,7 +2260,7 @@ function commitPaste(x, y) {
 
 function handlePlacementOrSelection(pos) {
   const { x, y } = pos;
-  const hitTower = state.towers.find((t) => distance(t.x, t.y, x, y) <= CELL * 0.36);
+  const hitTower = state.towers.find((t) => distance(t.x, t.y, x, y) <= TOWER_BODY_RADIUS + 2);
   if (hitTower) {
     pasteArmed = false;
     selectTower(hitTower);
@@ -3813,10 +3813,10 @@ function drawPlacementGhost(px, py, { color, emoji, range, isGlobalRange, valid 
   ctx.fillStyle = previewColor;
   ctx.globalAlpha = valid ? 0.5 : 0.35;
   ctx.beginPath();
-  ctx.arc(px, py, CELL * 0.34, 0, Math.PI * 2);
+  ctx.arc(px, py, TOWER_BODY_RADIUS, 0, Math.PI * 2);
   ctx.fill();
   ctx.globalAlpha = 0.85;
-  ctx.font = `${CELL * 0.4}px sans-serif`;
+  ctx.font = `${CELL * 0.48}px sans-serif`;
   ctx.fillText(emoji, px, py + 1);
   ctx.globalAlpha = 1;
 }
@@ -3959,7 +3959,7 @@ function draw() {
       ctx.strokeStyle = "#ffffff";
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.arc(t.x, t.y, CELL * 0.42, 0, Math.PI * 2);
+      ctx.arc(t.x, t.y, TOWER_BODY_RADIUS + 8, 0, Math.PI * 2);
       ctx.stroke();
     }
 
@@ -3972,15 +3972,15 @@ function draw() {
     ctx.fillStyle = bodyColor;
     ctx.globalAlpha = pathColor ? 0.4 : 0.25;
     ctx.beginPath();
-    ctx.arc(t.x, t.y, CELL * 0.34, 0, Math.PI * 2);
+    ctx.arc(t.x, t.y, TOWER_BODY_RADIUS, 0, Math.PI * 2);
     ctx.fill();
     ctx.globalAlpha = 1;
     ctx.strokeStyle = bodyColor;
     ctx.lineWidth = pathColor ? 3 : 2;
     ctx.beginPath();
-    ctx.arc(t.x, t.y, CELL * 0.34, 0, Math.PI * 2);
+    ctx.arc(t.x, t.y, TOWER_BODY_RADIUS, 0, Math.PI * 2);
     ctx.stroke();
-    ctx.font = `${CELL * 0.4}px sans-serif`;
+    ctx.font = `${CELL * 0.48}px sans-serif`;
     ctx.fillText(t.emoji, t.x, t.y + 1);
 
     // visual evolution: a growing, more elaborate ring per upgrade milestone
@@ -3989,14 +3989,14 @@ function draw() {
       ctx.strokeStyle = "#cfd8dc";
       ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.arc(t.x, t.y, CELL * 0.34 + 4, 0, Math.PI * 2);
+      ctx.arc(t.x, t.y, TOWER_BODY_RADIUS + 4, 0, Math.PI * 2);
       ctx.stroke();
     }
     if (stage >= 2) {
       ctx.strokeStyle = "#ffd700";
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.arc(t.x, t.y, CELL * 0.34 + 7, 0, Math.PI * 2);
+      ctx.arc(t.x, t.y, TOWER_BODY_RADIUS + 7, 0, Math.PI * 2);
       ctx.stroke();
     }
     if (stage >= 3 && pathColor) {
@@ -4006,7 +4006,7 @@ function draw() {
       ctx.strokeStyle = pathColor;
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.arc(t.x, t.y, CELL * 0.34 + 10, 0, Math.PI * 2);
+      ctx.arc(t.x, t.y, TOWER_BODY_RADIUS + 10, 0, Math.PI * 2);
       ctx.stroke();
       ctx.setLineDash([]);
 
@@ -4040,7 +4040,7 @@ function draw() {
       ctx.strokeStyle = "#ffffff";
       ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.arc(t.x, t.y, CELL * 0.3 + p * 22, 0, Math.PI * 2);
+      ctx.arc(t.x, t.y, TOWER_BODY_RADIUS - 3 + p * 22, 0, Math.PI * 2);
       ctx.stroke();
       ctx.globalAlpha = 1;
     }
