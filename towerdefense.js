@@ -3410,10 +3410,38 @@ const ENEMY_MAX_OVERLAP_PCT = 0.7;
 // the road instead of spilling out into the surrounding terrain.
 const ENEMY_MAX_PATH_OFFSET = PATH_VISUAL_WIDTH / 2;
 
+// The enemy's current unit direction toward its next waypoint - used so
+// separation can never shove it backward along the path (only sideways).
+function enemyForwardDir(e) {
+  const target = PATH_POINTS[e.segment];
+  if (!target) return { x: 0, y: 0 };
+  const dx = target.x - e.x, dy = target.y - e.y;
+  const len = Math.hypot(dx, dy) || 1;
+  return { x: dx / len, y: dy / len };
+}
+
+// Applies a separation push to e, but strips out any component that points
+// backward relative to e's own forward direction - crowding can shoulder an
+// enemy sideways within the corridor, never stall or reverse it. Without
+// this, a big enough crowd converging on a corner could push back on each
+// other exactly as hard as they walk forward every frame, gridlocking in
+// place indefinitely instead of just reading as a dense, still-moving jam.
+function applyLateralPush(e, pushX, pushY) {
+  const fwd = enemyForwardDir(e);
+  const backwardAmount = pushX * fwd.x + pushY * fwd.y;
+  if (backwardAmount < 0) {
+    e.x += pushX - backwardAmount * fwd.x;
+    e.y += pushY - backwardAmount * fwd.y;
+  } else {
+    e.x += pushX;
+    e.y += pushY;
+  }
+}
+
 // Pushes any two enemy circles overlapping more than ENEMY_MAX_OVERLAP_PCT
-// apart along the line between their centers, split evenly, then clamps
-// every enemy back onto the path corridor if that push (or a crowd of
-// neighbors) shoved it too far off-line. Run every frame after movement.
+// apart (laterally only, see applyLateralPush), then clamps every enemy
+// back onto the path corridor if that push (or a crowd of neighbors) shoved
+// it too far off-line. Run every frame after movement.
 function separateEnemies() {
   const list = state.enemies;
   for (let i = 0; i < list.length; i++) {
@@ -3427,8 +3455,8 @@ function separateEnemies() {
       } else if (dist < minDist) {
         const push = (minDist - dist) / 2;
         const ux = dx / dist, uy = dy / dist;
-        a.x -= ux * push; a.y -= uy * push;
-        b.x += ux * push; b.y += uy * push;
+        applyLateralPush(a, -ux * push, -uy * push);
+        applyLateralPush(b, ux * push, uy * push);
       }
     }
   }
