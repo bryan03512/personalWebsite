@@ -3483,6 +3483,7 @@ function applyDamage(enemy, amount, sourceTower) {
     if (idx !== -1) {
       state.enemies.splice(idx, 1);
       spawnDeathBurst(enemy.x, enemy.y, enemy.color);
+      playDeathSound(enemy.type);
       state.gold += enemy.reward * goldYieldMult();
       if (sourceTower?.bonusGoldPerKill) state.gold += sourceTower.bonusGoldPerKill;
       state.kills += 1;
@@ -3638,6 +3639,65 @@ function updateExplosions(dt) {
     ex.age += dt;
     if (ex.age >= ex.duration) state.explosions.splice(i, 1);
   }
+}
+
+// ---------- Death sound effects ----------
+// Procedurally synthesized with the Web Audio API (no audio files to host
+// or license) - each enemy type gets its own short blip, roughly high/quick
+// for weak common enemies scaling down to long/deep booms for the biggest
+// bosses. Created lazily on the first real user interaction, since browsers
+// block audio playback until a genuine gesture happens.
+let audioCtx = null;
+function ensureAudioContext() {
+  if (audioCtx) return;
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if (Ctx) audioCtx = new Ctx();
+}
+document.addEventListener("pointerdown", ensureAudioContext, { once: true });
+document.addEventListener("keydown", ensureAudioContext, { once: true });
+
+function playBlip(freqStart, freqEnd, duration, waveType, volume) {
+  if (!audioCtx) return;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = waveType;
+  const now = audioCtx.currentTime;
+  osc.frequency.setValueAtTime(freqStart, now);
+  osc.frequency.exponentialRampToValueAtTime(Math.max(20, freqEnd), now + duration);
+  gain.gain.setValueAtTime(volume, now);
+  gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+  osc.connect(gain).connect(audioCtx.destination);
+  osc.start(now);
+  osc.stop(now + duration);
+}
+
+// One entry per ENEMY_TYPES key - freqStart/freqEnd/duration/waveType/volume
+// tuned per type so every death is audibly distinct, not just visually.
+const DEATH_SOUNDS = {
+  basic: { freqStart: 600, freqEnd: 300, duration: 0.12, waveType: "sine", volume: 0.12 },
+  fast: { freqStart: 900, freqEnd: 200, duration: 0.08, waveType: "square", volume: 0.08 },
+  tank: { freqStart: 150, freqEnd: 80, duration: 0.25, waveType: "triangle", volume: 0.16 },
+  legacy: { freqStart: 250, freqEnd: 150, duration: 0.18, waveType: "sine", volume: 0.13 },
+  firewalled: { freqStart: 300, freqEnd: 200, duration: 0.15, waveType: "square", volume: 0.12 },
+  encrypted: { freqStart: 700, freqEnd: 500, duration: 0.15, waveType: "triangle", volume: 0.12 },
+  obfuscated: { freqStart: 400, freqEnd: 250, duration: 0.2, waveType: "sine", volume: 0.08 },
+  splitter: { freqStart: 500, freqEnd: 350, duration: 0.15, waveType: "sawtooth", volume: 0.12 },
+  healer: { freqStart: 800, freqEnd: 600, duration: 0.2, waveType: "sine", volume: 0.12 },
+  shielded: { freqStart: 1000, freqEnd: 700, duration: 0.1, waveType: "square", volume: 0.1 },
+  boss: { freqStart: 200, freqEnd: 60, duration: 0.4, waveType: "sawtooth", volume: 0.2 },
+  bossCamo: { freqStart: 500, freqEnd: 150, duration: 0.35, waveType: "sine", volume: 0.16 },
+  bossTank: { freqStart: 120, freqEnd: 40, duration: 0.5, waveType: "sawtooth", volume: 0.22 },
+  megaboss: { freqStart: 150, freqEnd: 30, duration: 0.7, waveType: "sawtooth", volume: 0.28 },
+  splitBoss20: { freqStart: 250, freqEnd: 100, duration: 0.3, waveType: "square", volume: 0.16 },
+  splitBoss60: { freqStart: 180, freqEnd: 70, duration: 0.4, waveType: "sawtooth", volume: 0.2 },
+  splitBoss80: { freqStart: 150, freqEnd: 55, duration: 0.5, waveType: "sawtooth", volume: 0.22 },
+  splitBoss100: { freqStart: 100, freqEnd: 30, duration: 0.8, waveType: "sawtooth", volume: 0.28 },
+};
+
+function playDeathSound(type) {
+  const s = DEATH_SOUNDS[type];
+  if (!s) return;
+  playBlip(s.freqStart, s.freqEnd, s.duration, s.waveType, s.volume);
 }
 
 // ---------- Enemy death burst (visual only) ----------
