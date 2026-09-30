@@ -306,6 +306,10 @@ const TOWER_TYPES = {
 
 const TOWER100_UNLOCK_WAVE = 100;
 
+// Starting/max uptime - also the ceiling Consultant's T10 "covers 5 uptime a
+// sprint" perk heals back up to (see updateSpawning's end-of-sprint bonus).
+const STARTING_LIVES = 100;
+
 // Chosen per-map (state.difficulty, persisted in each map's save slot).
 // Multiplies onto the wave-scaling formula in spawnEnemy - hpMult/speedMult
 // make enemies tougher/faster, rewardMult compensates the economy so a
@@ -703,8 +707,8 @@ const TOWER_PATHS = {
           apply: (t) => { t.pathIncomeMult = 34; state.gold += 3800; },
         },
         {
-          desc: "post-scarcity - the credits never stop flowing", cost: 8000,
-          apply: (t) => { t.pathIncomeMult = 48; state.gold += 5500; },
+          desc: "post-scarcity - the credits never stop flowing, and the firm covers 5 uptime a sprint (T10 - a massive investment)", cost: 8000,
+          apply: (t) => { t.pathIncomeMult = 48; state.gold += 5500; t.pathLivesPerRound = 5; },
         },
       ],
     },
@@ -743,8 +747,8 @@ const TOWER_PATHS = {
           apply: (t) => { t.costDiscountPct = 0.46; state.gold += 3200; },
         },
         {
-          desc: "towers/upgrades cost 50% less - practically free", cost: 8000,
-          apply: (t) => { t.costDiscountPct = 0.50; state.gold += 4600; },
+          desc: "towers/upgrades cost 50% less - practically free, and the firm covers 5 uptime a sprint (T10 - a massive investment)", cost: 8000,
+          apply: (t) => { t.costDiscountPct = 0.50; state.gold += 4600; t.pathLivesPerRound = 5; },
         },
       ],
     },
@@ -783,8 +787,8 @@ const TOWER_PATHS = {
           apply: (t) => { t.pathIncomeMult = 12; t.costDiscountPct = 0.36; state.gold += 2800; },
         },
         {
-          desc: "a balanced portfolio that never stops paying", cost: 8000,
-          apply: (t) => { t.pathIncomeMult = 16; t.costDiscountPct = 0.4; state.gold += 4000; },
+          desc: "a balanced portfolio that never stops paying, and the firm covers 5 uptime a sprint (T10 - a massive investment)", cost: 8000,
+          apply: (t) => { t.pathIncomeMult = 16; t.costDiscountPct = 0.4; state.gold += 4000; t.pathLivesPerRound = 5; },
         },
       ],
     },
@@ -1355,9 +1359,10 @@ const TOWER_PATHS = {
   },
 };
 
-// Visual radii halved from their pre-zoom values to match the smaller grid -
-// purely cosmetic, no gameplay math reads these besides drawing (health
-// bars, emoji size).
+// Visual radii halved from their pre-zoom values to match the smaller grid.
+// lifeDamage (uptime lost if this enemy reaches the end) is derived from
+// that same radius - round(radius * 0.5) - so bigger enemies always cost
+// more uptime, on top of whatever their type-specific lifeDamage used to be.
 // splitsTo: on death, spawns `count` of a specific DIFFERENT, weaker enemy
 // type (not a weaker copy of itself) - e.g. a Glitch dying turns into 1
 // Bug. Each type points to exactly one rung down a fixed weakness chain
@@ -1369,21 +1374,21 @@ const TOWER_PATHS = {
 // the regular roster (healer/firewalled/shielded/encrypted) split into 3;
 // the weaker half (fast/tank/splitter/legacy/obfuscated) splits into just 1.
 const ENEMY_TYPES = {
-  basic: { label: "Bug", emoji: "🐛", hp: 50, speed: 60, reward: 5, lifeDamage: 1, color: "#e05353", radius: 7 },
-  fast: { label: "Glitch", emoji: "⚡", hp: 25, speed: 130, reward: 5, lifeDamage: 1, color: "#ffee58", radius: 6, splitsTo: { type: "basic", count: 1 } },
-  tank: { label: "Merge Conflict", emoji: "💀", hp: 160, speed: 35, reward: 12, lifeDamage: 2, color: "#8a4a2b", radius: 8.5, splitsTo: { type: "fast", count: 1 } },
-  boss: { label: "Production Outage", emoji: "🔥", hp: 400, speed: 30, reward: 60, lifeDamage: 5, color: "#ff3b3b", radius: 12, splitsTo: { type: "bossCamo", count: 3 } },
+  basic: { label: "Bug", emoji: "🐛", hp: 50, speed: 60, reward: 5, lifeDamage: 4, color: "#e05353", radius: 7 },
+  fast: { label: "Glitch", emoji: "⚡", hp: 25, speed: 130, reward: 5, lifeDamage: 3, color: "#ffee58", radius: 6, splitsTo: { type: "basic", count: 1 } },
+  tank: { label: "Merge Conflict", emoji: "💀", hp: 160, speed: 35, reward: 12, lifeDamage: 4, color: "#8a4a2b", radius: 8.5, splitsTo: { type: "fast", count: 1 } },
+  boss: { label: "Production Outage", emoji: "🔥", hp: 400, speed: 30, reward: 60, lifeDamage: 6, color: "#ff3b3b", radius: 12, splitsTo: { type: "bossCamo", count: 3 } },
   // The weakest of the 4 original bosses (lowest hp) - splits heterogeneous
   // into 3 of the strongest regular enemy (Merge Conflict/tank) rather than
   // continuing the boss chain further down. Uses the one-time splitInto
   // mechanism shared with the split-boss family (hasSplit gated) instead of
   // splitsTo, since it's 3-of-a-type rather than a single fixed rung.
   bossCamo: {
-    label: "Ghost Process", emoji: "👻", hp: 350, speed: 70, reward: 70, lifeDamage: 5, color: "#7c3aed", radius: 11.5, camo: true,
+    label: "Ghost Process", emoji: "👻", hp: 350, speed: 70, reward: 70, lifeDamage: 6, color: "#7c3aed", radius: 11.5, camo: true,
     splitInto: [{ type: "tank", count: 3 }],
   },
-  bossTank: { label: "Cascading Failure", emoji: "🌋", hp: 900, speed: 16, reward: 90, lifeDamage: 8, color: "#7f1d1d", radius: 13.5, splitsTo: { type: "boss", count: 3 } },
-  megaboss: { label: "Total System Failure", emoji: "☠️", hp: 3000, speed: 26, reward: 250, lifeDamage: 10, color: "#000000", radius: 16, splitsTo: { type: "bossTank", count: 3 } },
+  bossTank: { label: "Cascading Failure", emoji: "🌋", hp: 900, speed: 16, reward: 90, lifeDamage: 7, color: "#7f1d1d", radius: 13.5, splitsTo: { type: "boss", count: 3 } },
+  megaboss: { label: "Total System Failure", emoji: "☠️", hp: 3000, speed: 26, reward: 250, lifeDamage: 8, color: "#000000", radius: 16, splitsTo: { type: "bossTank", count: 3 } },
   // A 4-tier boss family, unlocked one tier at a time from wave 20/60/80/100
   // (see splitBossQueueFor). Each tier's death instantly spawns its ENTIRE
   // splitInto list at once (not a recursive chain reaction) - killing a
@@ -1391,34 +1396,34 @@ const ENEMY_TYPES = {
   // splitBoss20 in one go. splitBoss20 is the terminal tier (no further
   // split) and, once unlocked, also spawns on its own every wave from then
   // on (see splitBossQueueFor) rather than only appearing via a split.
-  splitBoss20: { label: "Build Failure", emoji: "🚧", hp: 450, speed: 30, reward: 55, lifeDamage: 5, color: "#ef4444", radius: 12 },
+  splitBoss20: { label: "Build Failure", emoji: "🚧", hp: 450, speed: 30, reward: 55, lifeDamage: 6, color: "#ef4444", radius: 12 },
   splitBoss60: {
     label: "Deployment Crisis", emoji: "🚨", hp: 1200, speed: 28, reward: 140, lifeDamage: 7, color: "#f59e0b", radius: 13,
     splitInto: [{ type: "splitBoss20", count: 2 }],
   },
   splitBoss80: {
-    label: "Service Outage", emoji: "💥", hp: 2200, speed: 26, reward: 260, lifeDamage: 9, color: "#dc2626", radius: 14,
+    label: "Service Outage", emoji: "💥", hp: 2200, speed: 26, reward: 260, lifeDamage: 7, color: "#dc2626", radius: 14,
     splitInto: [{ type: "splitBoss60", count: 2 }, { type: "splitBoss20", count: 4 }],
   },
   splitBoss100: {
-    label: "Catastrophic Failure", emoji: "☢️", hp: 4000, speed: 24, reward: 500, lifeDamage: 12, color: "#7f1d1d", radius: 16,
+    label: "Catastrophic Failure", emoji: "☢️", hp: 4000, speed: 24, reward: 500, lifeDamage: 8, color: "#7f1d1d", radius: 16,
     splitInto: [{ type: "splitBoss80", count: 2 }, { type: "splitBoss60", count: 4 }, { type: "splitBoss20", count: 8 }],
   },
   // Late-wave specialists, each resistant to one damage type (see
   // RESISTANCES) so no single tower archetype trivializes everything.
-  legacy: { label: "Legacy Code", emoji: "💾", hp: 90, speed: 45, reward: 10, lifeDamage: 2, color: "#a1887f", radius: 7.5, splitsTo: { type: "splitter", count: 1 } },
-  firewalled: { label: "Firewalled", emoji: "🧱", hp: 70, speed: 55, reward: 10, lifeDamage: 1, color: "#5b7fd6", radius: 7.5, splitsTo: { type: "healer", count: 3 } },
-  encrypted: { label: "Encrypted", emoji: "🔒", hp: 60, speed: 50, reward: 14, lifeDamage: 2, color: "#a855f7", radius: 7.5, splitsTo: { type: "shielded", count: 3 } },
+  legacy: { label: "Legacy Code", emoji: "💾", hp: 90, speed: 45, reward: 10, lifeDamage: 4, color: "#a1887f", radius: 7.5, splitsTo: { type: "splitter", count: 1 } },
+  firewalled: { label: "Firewalled", emoji: "🧱", hp: 70, speed: 55, reward: 10, lifeDamage: 4, color: "#5b7fd6", radius: 7.5, splitsTo: { type: "healer", count: 3 } },
+  encrypted: { label: "Encrypted", emoji: "🔒", hp: 60, speed: 50, reward: 14, lifeDamage: 4, color: "#a855f7", radius: 7.5, splitsTo: { type: "shielded", count: 3 } },
   // Untargetable by any tower unless that tower is currently in an active
   // Manager's buff range (see getTowerBuffs/findTargets) - still visible so
   // the player can see them coming, just can't be shot without support.
-  obfuscated: { label: "Obfuscated", emoji: "🌫️", hp: 55, speed: 65, reward: 12, lifeDamage: 1, color: "#94a3b8", radius: 7, camo: true, splitsTo: { type: "legacy", count: 1 } },
-  splitter: { label: "Forked Process", emoji: "🍴", hp: 70, speed: 55, reward: 8, lifeDamage: 1, color: "#fb7185", radius: 7.5, splitsTo: { type: "tank", count: 1 } },
+  obfuscated: { label: "Obfuscated", emoji: "🌫️", hp: 55, speed: 65, reward: 12, lifeDamage: 4, color: "#94a3b8", radius: 7, camo: true, splitsTo: { type: "legacy", count: 1 } },
+  splitter: { label: "Forked Process", emoji: "🍴", hp: 70, speed: 55, reward: 8, lifeDamage: 4, color: "#fb7185", radius: 7.5, splitsTo: { type: "tank", count: 1 } },
   // Passively heals nearby enemies each second - see updateHealers.
-  healer: { label: "QA Tester", emoji: "🩹", hp: 80, speed: 45, reward: 14, lifeDamage: 1, color: "#34d399", radius: 7.5, healRange: 90, healPerSecPct: 0.02, splitsTo: { type: "obfuscated", count: 3 } },
+  healer: { label: "QA Tester", emoji: "🩹", hp: 80, speed: 45, reward: 14, lifeDamage: 4, color: "#34d399", radius: 7.5, healRange: 90, healPerSecPct: 0.02, splitsTo: { type: "obfuscated", count: 3 } },
   // Has a separate regenerating shield on top of its hp - see the shield
   // handling in spawnEnemy/applyDamage/updateShields.
-  shielded: { label: "Hardened Build", emoji: "🛡️", hp: 60, speed: 50, reward: 14, lifeDamage: 1, color: "#60a5fa", radius: 7.5, shieldFrac: 1.0, shieldRegenDelay: 3, shieldRegenPerSec: 0.3, splitsTo: { type: "firewalled", count: 3 } },
+  shielded: { label: "Hardened Build", emoji: "🛡️", hp: 60, speed: 50, reward: 14, lifeDamage: 4, color: "#60a5fa", radius: 7.5, shieldFrac: 1.0, shieldRegenDelay: 3, shieldRegenPerSec: 0.3, splitsTo: { type: "firewalled", count: 3 } },
 };
 
 // Damage-type resistance: a multiplier applied when that enemy type takes
@@ -1438,7 +1443,7 @@ const state = {
   medals: { easy: false, normal: false, hard: false },
   gold: 200,
   bestGold: 200,
-  lives: 20,
+  lives: STARTING_LIVES,
   wave: 0,
   bestWave: 0,
   kills: 0,
@@ -1688,7 +1693,7 @@ function migrateMapLayout(stored) {
   const migratedMaps = {};
   Object.keys(MAP_DEFS).forEach((id) => {
     migratedMaps[id] = {
-      gold: 200, bestGold: 200, lives: 20, wave: 0, kills: 0, towers: [],
+      gold: 200, bestGold: 200, lives: STARTING_LIVES, wave: 0, kills: 0, towers: [],
       difficulty: "normal", medals: { easy: false, normal: false, hard: false },
       bestWave: stored.maps[id]?.bestWave || 0,
     };
@@ -1884,7 +1889,7 @@ function setMapDifficulty(mapId, diffId) {
   if (!DIFFICULTY_SETTINGS[diffId]) return;
   const stored = readStoredPayload();
   if (!stored.maps[mapId]) {
-    stored.maps[mapId] = { gold: 200, bestGold: 200, lives: 20, wave: 0, bestWave: 0, kills: 0, towers: [] };
+    stored.maps[mapId] = { gold: 200, bestGold: 200, lives: STARTING_LIVES, wave: 0, bestWave: 0, kills: 0, towers: [] };
   }
   stored.maps[mapId].difficulty = diffId;
   localStorage.setItem(TD_SAVE_KEY, JSON.stringify(stored));
@@ -3861,6 +3866,16 @@ function updateSpawning(dt) {
     const bonus = Math.round(WAVE_BONUS_BASE + state.wave * WAVE_BONUS_PER_WAVE);
     state.gold += bonus;
     spawnFloatingText(COLS * CELL / 2, 50, `sprint bonus +${bonus}c`, "#ffd166");
+
+    // Consultant's T10 (any of its 3 paths) covers some uptime back every
+    // sprint - stacks across multiple T10 Consultants, capped at the same
+    // max uptime you start a map with.
+    const livesBack = state.towers.reduce((sum, t) => sum + (t.pathLivesPerRound || 0), 0);
+    if (livesBack > 0 && state.lives < STARTING_LIVES) {
+      state.lives = Math.min(STARTING_LIVES, state.lives + livesBack);
+      spawnFloatingText(COLS * CELL / 2, 75, `+${livesBack} uptime`, "#39ff14");
+    }
+
     waveBtn.disabled = false;
     waveBtn.textContent = `deploy sprint ${state.wave + 1}`;
     if (state.autoRun) state.autoRunTimer = AUTO_RUN_DELAY;
@@ -4457,7 +4472,7 @@ function loop(now) {
 // differ only in whether bestWave/ownerId (tied to account identity) reset.
 function resetTransientState() {
   state.gold = 200;
-  state.lives = 20;
+  state.lives = STARTING_LIVES;
   state.wave = 0;
   state.kills = 0;
   state.medals = { easy: false, normal: false, hard: false };
