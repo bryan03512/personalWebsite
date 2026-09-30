@@ -29,7 +29,8 @@ const MAP_DEFS = {
       { x: 22 * 30, y: 10 * 30, w: 2 * 30, h: 4 * 30, kind: "wall" },
       { x: 250, y: 460, w: 90, h: 40, kind: "wall" },
     ],
-    bgColor: "#060a06", gridColor: "#132313", pathColor: "#12240f",
+    groundColor: "#5fae3d", groundAccent: "#6dc248", dirtColor: "#8a6d43",
+    stoneColors: ["#c9b28a", "#bfa47a", "#b3986c"],
   },
   map2: {
     name: "CI Pipeline",
@@ -46,7 +47,8 @@ const MAP_DEFS = {
       { x: 410, y: 255, w: 80, h: 28, kind: "obstacle" },
       { x: 120, y: 435, w: 80, h: 28, kind: "wall" },
     ],
-    bgColor: "#050a10", gridColor: "#13202f", pathColor: "#0f1e2c",
+    groundColor: "#4f9d78", groundAccent: "#5cb086", dirtColor: "#5c5f66",
+    stoneColors: ["#9aa0a6", "#8d9298", "#80858b"],
   },
   map3: {
     name: "The Monolith",
@@ -60,7 +62,8 @@ const MAP_DEFS = {
       { x: 8 * 30, y: 14 * 30, w: 4 * 30, h: 3 * 30, kind: "obstacle" },
       { x: 18 * 30, y: 10 * 30, w: 3 * 30, h: 4 * 30, kind: "wall" },
     ],
-    bgColor: "#0a0612", gridColor: "#231334", pathColor: "#1e1130",
+    groundColor: "#4a7a52", groundAccent: "#557f5c", dirtColor: "#463a52",
+    stoneColors: ["#7c6f8a", "#71647e", "#665973"],
   },
   // A stepped notch partway along (the col14-18/row3-8 detour) - a squared-
   // off bracket shape, echoing a patio walkway with a pool cut into one corner.
@@ -76,7 +79,8 @@ const MAP_DEFS = {
       { x: 300, y: 525, w: 120, h: 60, kind: "obstacle" },
       { x: 600, y: 525, w: 90, h: 50, kind: "wall" },
     ],
-    bgColor: "#0a0805", gridColor: "#2a1f12", pathColor: "#241a0e",
+    groundColor: "#dcc389", groundAccent: "#e6d09c", dirtColor: "#b08a54",
+    stoneColors: ["#e8d3a5", "#dcc494", "#cdb282"],
   },
   // A rectangular loop/spur near the start (the col5-9/row4-10 detour) before
   // a long zigzag swing - echoes a garden stepping-stone path with a bump.
@@ -92,7 +96,8 @@ const MAP_DEFS = {
       { x: 21 * 30, y: 9 * 30, w: 2 * 30, h: 3 * 30, kind: "obstacle" },
       { x: 21 * 30, y: 16 * 30, w: 3 * 30, h: 2 * 30, kind: "wall" },
     ],
-    bgColor: "#051010", gridColor: "#123030", pathColor: "#0e2626",
+    groundColor: "#5cb45c", groundAccent: "#6bc76b", dirtColor: "#6b6558",
+    stoneColors: ["#a8a49a", "#9c988e", "#8f8b81"],
   },
 };
 
@@ -103,27 +108,69 @@ const MAP_DEFS = {
 let GRID_WAYPOINTS = MAP_DEFS.map1.waypoints;
 let PATH_POINTS = GRID_WAYPOINTS.map(cellCenter);
 let mapObstacles = MAP_DEFS.map1.obstacles;
-// Ground speckle + obstacle blob shapes are randomized once per map load
-// (here) rather than every draw() call, so the texture stays put instead of
-// flickering every frame.
+// Ground decor, path stones, and obstacle blob shapes are all randomized
+// once per map load (here) rather than every draw() call, so the texture
+// stays put instead of flickering every frame.
 let grassDecor = [];
+let pathStones = [];
 
 function applyMapLayout(mapId) {
   GRID_WAYPOINTS = MAP_DEFS[mapId].waypoints;
   PATH_POINTS = GRID_WAYPOINTS.map(cellCenter);
   mapObstacles = MAP_DEFS[mapId].obstacles || [];
   generateGrassDecor();
+  generatePathStones();
   prepareObstacleVisuals(mapObstacles);
 }
 
+// A mix of small speckles, grass tufts, tiny flowers, and pebbles scattered
+// across the buildable ground - purely decorative (drawn under towers),
+// distinct from the obstacle blobs which actually block placement.
 function generateGrassDecor() {
   grassDecor = [];
-  const count = 260;
+  const count = 320;
   for (let i = 0; i < count; i++) {
     const x = Math.random() * COLS * CELL;
     const y = Math.random() * ROWS * CELL;
-    if (distanceToPath(x, y) < PATH_VISUAL_WIDTH * 0.75) continue;
-    grassDecor.push({ x, y, r: 1.3 + Math.random() * 2.2, light: Math.random() < 0.5 });
+    if (distanceToPath(x, y) < PATH_VISUAL_WIDTH * 0.7) continue;
+    const roll = Math.random();
+    if (roll < 0.4) {
+      grassDecor.push({ kind: "speckle", x, y, r: 1.3 + Math.random() * 2.2, light: Math.random() < 0.5 });
+    } else if (roll < 0.7) {
+      grassDecor.push({ kind: "tuft", x, y, angle: Math.random() * Math.PI * 2, size: 5 + Math.random() * 4 });
+    } else if (roll < 0.88) {
+      const palette = ["#ffffff", "#fde68a", "#f9a8d4"];
+      grassDecor.push({ kind: "flower", x, y, size: 2.2 + Math.random() * 1.3, color: palette[Math.floor(Math.random() * palette.length)] });
+    } else {
+      grassDecor.push({ kind: "pebble", x, y, r: 2 + Math.random() * 2.5, angle: Math.random() * Math.PI });
+    }
+  }
+}
+
+// Stone pavers laid along the path polyline, each perpendicular-ish to the
+// direction of travel and slightly randomized in size/angle/shade - the
+// dirt-colored stroke drawn under them (see draw()) fills the grout/gaps so
+// it reads as one continuous cobblestone trail instead of floating tiles.
+function generatePathStones() {
+  pathStones = [];
+  const step = 32;
+  for (let i = 0; i < PATH_POINTS.length - 1; i++) {
+    const a = PATH_POINTS[i], b = PATH_POINTS[i + 1];
+    const segLen = Math.hypot(b.x - a.x, b.y - a.y);
+    if (segLen < 1) continue;
+    const angle = Math.atan2(b.y - a.y, b.x - a.x);
+    const count = Math.max(1, Math.round(segLen / step));
+    for (let j = 0; j < count; j++) {
+      const t = (j + 0.5) / count;
+      pathStones.push({
+        x: a.x + (b.x - a.x) * t,
+        y: a.y + (b.y - a.y) * t,
+        angle: angle + (Math.random() - 0.5) * 0.25,
+        w: PATH_VISUAL_WIDTH * (0.62 + Math.random() * 0.2),
+        h: step * (0.72 + Math.random() * 0.24),
+        shadeIdx: Math.floor(Math.random() * 3),
+      });
+    }
   }
 }
 
@@ -4049,57 +4096,118 @@ function draw() {
     state.shakeMag = 0;
   }
 
-  // Each map has its own bg/grid/path colors for a distinct look - falls
-  // back to Main Branch's colors if the active map is somehow unknown.
+  // Each map has its own ground/dirt/stone palette for a distinct look -
+  // falls back to Main Branch's colors if the active map is somehow unknown.
   const mapTheme = MAP_DEFS[state.mapId] || MAP_DEFS.map1;
 
-  ctx.fillStyle = mapTheme.bgColor;
+  ctx.fillStyle = mapTheme.groundColor;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // grid
-  ctx.strokeStyle = mapTheme.gridColor;
-  ctx.lineWidth = 1;
-  for (let c = 0; c <= COLS; c++) {
+  // Soft irregular patches of the ground's accent shade, for a hand-painted
+  // "cartoony" look instead of one flat color.
+  for (let i = 0; i < 14; i++) {
+    const px = ((i * 137) % COLS) * CELL + CELL / 2;
+    const py = ((i * 71) % ROWS) * CELL + CELL / 2;
+    const r = 60 + (i % 3) * 25;
+    const grad = ctx.createRadialGradient(px, py, 0, px, py, r);
+    grad.addColorStop(0, mapTheme.groundAccent);
+    grad.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.globalAlpha = 0.35;
+    ctx.fillStyle = grad;
     ctx.beginPath();
-    ctx.moveTo(c * CELL, 0);
-    ctx.lineTo(c * CELL, ROWS * CELL);
-    ctx.stroke();
-  }
-  for (let r = 0; r <= ROWS; r++) {
-    ctx.beginPath();
-    ctx.moveTo(0, r * CELL);
-    ctx.lineTo(COLS * CELL, r * CELL);
-    ctx.stroke();
+    ctx.arc(px, py, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
   }
 
-  // ground speckle - a fixed (see generateGrassDecor) scatter of tiny light/
-  // dark flecks so the buildable ground reads as textured terrain instead of
-  // a flat fill.
+  // Ground decor (see generateGrassDecor): speckles, grass tufts, tiny
+  // flowers, and pebbles scattered over the buildable terrain.
   grassDecor.forEach((d) => {
-    ctx.fillStyle = d.light ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.14)";
-    ctx.beginPath();
-    ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
-    ctx.fill();
+    if (d.kind === "speckle") {
+      ctx.fillStyle = d.light ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.1)";
+      ctx.beginPath();
+      ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (d.kind === "tuft") {
+      ctx.strokeStyle = "rgba(20,60,20,0.4)";
+      ctx.lineWidth = 1.4;
+      for (let k = -1; k <= 1; k++) {
+        const a = d.angle + k * 0.4;
+        ctx.beginPath();
+        ctx.moveTo(d.x, d.y);
+        ctx.quadraticCurveTo(
+          d.x + Math.cos(a) * d.size * 0.6, d.y - d.size,
+          d.x + Math.cos(a) * d.size, d.y - d.size * 1.6,
+        );
+        ctx.stroke();
+      }
+    } else if (d.kind === "flower") {
+      ctx.fillStyle = d.color;
+      for (let k = 0; k < 4; k++) {
+        const a = (Math.PI / 2) * k;
+        ctx.beginPath();
+        ctx.arc(d.x + Math.cos(a) * d.size, d.y + Math.sin(a) * d.size, d.size * 0.7, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.fillStyle = "#fbbf24";
+      ctx.beginPath();
+      ctx.arc(d.x, d.y, d.size * 0.6, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (d.kind === "pebble") {
+      ctx.save();
+      ctx.translate(d.x, d.y);
+      ctx.rotate(d.angle);
+      ctx.fillStyle = "rgba(120,110,95,0.55)";
+      ctx.beginPath();
+      ctx.ellipse(0, 0, d.r, d.r * 0.7, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "rgba(255,255,255,0.2)";
+      ctx.beginPath();
+      ctx.ellipse(-d.r * 0.25, -d.r * 0.2, d.r * 0.35, d.r * 0.22, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
   });
 
-  // path - a bordered, layered corridor along the waypoint polyline (worn
-  // dark edge, mid fill, faint lighter center trail) instead of one flat
-  // stroke, so it reads as a real path rather than a colored lane.
-  const drawPathStroke = (width, style) => {
-    ctx.strokeStyle = style;
-    ctx.lineWidth = width;
-    ctx.lineJoin = "round";
-    ctx.lineCap = "round";
+  // path - a dirt base (fills the grout between stones) topped with
+  // individually-shaded stone pavers, instead of a flat colored lane.
+  ctx.strokeStyle = "rgba(0,0,0,0.25)";
+  ctx.lineWidth = PATH_VISUAL_WIDTH + 8;
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  PATH_POINTS.forEach((p, i) => {
+    if (i === 0) ctx.moveTo(p.x, p.y);
+    else ctx.lineTo(p.x, p.y);
+  });
+  ctx.stroke();
+
+  ctx.strokeStyle = mapTheme.dirtColor;
+  ctx.lineWidth = PATH_VISUAL_WIDTH;
+  ctx.beginPath();
+  PATH_POINTS.forEach((p, i) => {
+    if (i === 0) ctx.moveTo(p.x, p.y);
+    else ctx.lineTo(p.x, p.y);
+  });
+  ctx.stroke();
+
+  pathStones.forEach((s) => {
+    ctx.save();
+    ctx.translate(s.x, s.y);
+    ctx.rotate(s.angle);
+    ctx.fillStyle = mapTheme.stoneColors[s.shadeIdx];
     ctx.beginPath();
-    PATH_POINTS.forEach((p, i) => {
-      if (i === 0) ctx.moveTo(p.x, p.y);
-      else ctx.lineTo(p.x, p.y);
-    });
+    ctx.roundRect(-s.w / 2, -s.h / 2, s.w, s.h, 4);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(0,0,0,0.22)";
+    ctx.lineWidth = 1.5;
     ctx.stroke();
-  };
-  drawPathStroke(PATH_VISUAL_WIDTH + 8, "rgba(0,0,0,0.28)");
-  drawPathStroke(PATH_VISUAL_WIDTH, mapTheme.pathColor);
-  drawPathStroke(PATH_VISUAL_WIDTH * 0.35, "rgba(255,255,255,0.07)");
+    ctx.fillStyle = "rgba(255,255,255,0.18)";
+    ctx.beginPath();
+    ctx.roundRect(-s.w / 2 + 2, -s.h / 2 + 2, Math.max(0, s.w - 4), Math.max(0, s.h * 0.3), 3);
+    ctx.fill();
+    ctx.restore();
+  });
 
   // obstacles/walls - rendered as clustered blobs (rocks for "wall", bushes
   // for "obstacle") instead of flat rectangles, using the shapes cached by
