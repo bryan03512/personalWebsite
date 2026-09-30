@@ -3322,18 +3322,28 @@ function updateEnemies(dt) {
   separateEnemies();
 }
 
-// Pushes any two overlapping enemy circles apart along the line between
-// their centers, split evenly - run every frame after movement so a faster
-// enemy catching up to a slower one queues up behind/beside it instead of
-// drawing on top of it. Self-corrects back toward the path on its own next
-// frame (movement above always re-aims at the current waypoint), so a shove
-// off-line is never permanent.
+// Allows enemies to overlap up to 70% of their combined radii (packed
+// crowds still read as a crowd) but no more - only pushes apart once they'd
+// overlap beyond that. A full-separation version of this (0% overlap
+// allowed) turned out to fight the path-following movement hard enough to
+// gridlock dense clusters entirely (they'd get pushed backward exactly as
+// fast as they walked forward). ENEMY_MAX_OVERLAP_PCT is that tolerance.
+const ENEMY_MAX_OVERLAP_PCT = 0.7;
+// How far off the path centerline the push above is allowed to drift an
+// enemy before getting pulled back - keeps a crowded cluster visually on
+// the road instead of spilling out into the surrounding terrain.
+const ENEMY_MAX_PATH_OFFSET = PATH_VISUAL_WIDTH / 2;
+
+// Pushes any two enemy circles overlapping more than ENEMY_MAX_OVERLAP_PCT
+// apart along the line between their centers, split evenly, then clamps
+// every enemy back onto the path corridor if that push (or a crowd of
+// neighbors) shoved it too far off-line. Run every frame after movement.
 function separateEnemies() {
   const list = state.enemies;
   for (let i = 0; i < list.length; i++) {
     for (let j = i + 1; j < list.length; j++) {
       const a = list[i], b = list[j];
-      const minDist = a.radius + b.radius;
+      const minDist = (a.radius + b.radius) * (1 - ENEMY_MAX_OVERLAP_PCT);
       const dx = b.x - a.x, dy = b.y - a.y;
       const dist = Math.hypot(dx, dy);
       if (dist === 0) {
@@ -3344,6 +3354,15 @@ function separateEnemies() {
         a.x -= ux * push; a.y -= uy * push;
         b.x += ux * push; b.y += uy * push;
       }
+    }
+  }
+
+  for (const e of list) {
+    const onPath = closestPointOnPath(e.x, e.y);
+    if (onPath.dist > ENEMY_MAX_PATH_OFFSET) {
+      const t = ENEMY_MAX_PATH_OFFSET / onPath.dist;
+      e.x = onPath.x + (e.x - onPath.x) * t;
+      e.y = onPath.y + (e.y - onPath.y) * t;
     }
   }
 }
