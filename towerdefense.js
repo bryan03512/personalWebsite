@@ -1395,8 +1395,8 @@ const state = {
   mapId: "map1",
   difficulty: "normal",
   medals: { easy: false, normal: false, hard: false },
-  gold: 150,
-  bestGold: 150,
+  gold: 200,
+  bestGold: 200,
   lives: 20,
   wave: 0,
   bestWave: 0,
@@ -1645,7 +1645,7 @@ function migrateMapLayout(stored) {
   const migratedMaps = {};
   Object.keys(MAP_DEFS).forEach((id) => {
     migratedMaps[id] = {
-      gold: 150, bestGold: 150, lives: 20, wave: 0, kills: 0, towers: [],
+      gold: 200, bestGold: 200, lives: 20, wave: 0, kills: 0, towers: [],
       difficulty: "normal", medals: { easy: false, normal: false, hard: false },
       bestWave: stored.maps[id]?.bestWave || 0,
     };
@@ -1822,7 +1822,7 @@ function switchMap(newMapId) {
   state.gameSpeed = preservedGameSpeed;
   syncSpeedButton();
   state.bestWave = 0;
-  state.bestGold = 150;
+  state.bestGold = 200;
   state.difficulty = "normal";
   applyMapDataToState(stored.maps[newMapId]);
   updateStats();
@@ -1836,7 +1836,7 @@ function setMapDifficulty(mapId, diffId) {
   if (!DIFFICULTY_SETTINGS[diffId]) return;
   const stored = readStoredPayload();
   if (!stored.maps[mapId]) {
-    stored.maps[mapId] = { gold: 150, bestGold: 150, lives: 20, wave: 0, bestWave: 0, kills: 0, towers: [] };
+    stored.maps[mapId] = { gold: 200, bestGold: 200, lives: 20, wave: 0, bestWave: 0, kills: 0, towers: [] };
   }
   stored.maps[mapId].difficulty = diffId;
   localStorage.setItem(TD_SAVE_KEY, JSON.stringify(stored));
@@ -2160,7 +2160,7 @@ window.addEventListener("account:logout", () => {
   applyMapLayout("map1");
   resetTransientState();
   state.bestWave = 0;
-  state.bestGold = 150;
+  state.bestGold = 200;
   state.ownerId = null;
   state.achievements = {};
   state.totalBossKills = 0;
@@ -4342,7 +4342,7 @@ function loop(now) {
 // Shared by "restart after a loss" (resetGame) and "logged out" - the two
 // differ only in whether bestWave/ownerId (tied to account identity) reset.
 function resetTransientState() {
-  state.gold = 150;
+  state.gold = 200;
   state.lives = 20;
   state.wave = 0;
   state.kills = 0;
