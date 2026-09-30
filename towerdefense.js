@@ -226,7 +226,7 @@ const TOWER_TYPES = {
   // board from a single placement.
   gamer: {
     name: "Gamer", desc: "fast reflexes, rapid fire", emoji: "🎮",
-    cost: 50, damage: 10, range: 90, fireRate: 0.6, color: "#39ff14", projectileSpeed: 500,
+    cost: 50, damage: 10, range: 105, fireRate: 0.6, color: "#39ff14", projectileSpeed: 500,
   },
   coder: {
     name: "Sniper", desc: "one precise shot, anywhere on the board - slow, but never needs repositioning", emoji: "🎯",
@@ -235,12 +235,12 @@ const TOWER_TYPES = {
   },
   hacker: {
     name: "Hacker", desc: "slow, heavy AoE exploit", emoji: "👾",
-    cost: 170, damage: 55, range: 113, fireRate: 2.2, color: "#ff4fd8", projectileSpeed: 400, splashRadius: 65,
+    cost: 170, damage: 55, range: 130, fireRate: 2.2, color: "#ff4fd8", projectileSpeed: 400, splashRadius: 65,
     damageType: "explosive",
   },
   manager: {
     name: "Manager", desc: "no damage - boosts nearby devs", emoji: "👔",
-    cost: 120, damage: 0, range: 98, fireRate: Infinity, color: "#ffd166", projectileSpeed: 0,
+    cost: 120, damage: 0, range: 112, fireRate: Infinity, color: "#ffd166", projectileSpeed: 0,
     isSupport: true, buffDamagePct: 0.2, buffRatePct: 0.2,
   },
   farmer: {
@@ -255,22 +255,22 @@ const TOWER_TYPES = {
   },
   quant: {
     name: "Quant", desc: "arcane exploits - true damage, ignores all resistances", emoji: "🔮",
-    cost: 220, damage: 0.018, range: 105, fireRate: 1.8, color: "#a78bfa", projectileSpeed: 550,
+    cost: 220, damage: 0.018, range: 120, fireRate: 1.8, color: "#a78bfa", projectileSpeed: 550,
     damageType: "magic", percentDamage: true,
   },
   freeze: {
     name: "Freeze", desc: "chills on every hit - a full stop instead of a slow", emoji: "🧊",
-    cost: 140, damage: 8, range: 98, fireRate: 1.0, color: "#7dd3fc", projectileSpeed: 550,
+    cost: 140, damage: 8, range: 112, fireRate: 1.0, color: "#7dd3fc", projectileSpeed: 550,
     slowOnHit: { pct: 1.0, duration: 1.2 },
   },
   tesla: {
     name: "Tesla", desc: "chains a shock through nearby enemies, weaker each bounce", emoji: "⚡",
-    cost: 180, damage: 20, range: 98, fireRate: 1.2, color: "#fde047", projectileSpeed: 700,
+    cost: 180, damage: 20, range: 112, fireRate: 1.2, color: "#fde047", projectileSpeed: 700,
     chainCount: 3, chainFalloff: 0.6, chainRange: 90,
   },
   turret: {
     name: "Sentry", desc: "no path - auto-levels for free over time, targets the strongest enemy in range, damage scales exponentially", emoji: "🗼",
-    cost: 90, damage: 12, range: 105, fireRate: 1.3, color: "#94a3b8", projectileSpeed: 480,
+    cost: 90, damage: 12, range: 120, fireRate: 1.3, color: "#94a3b8", projectileSpeed: 480,
     isSentry: true, autoLevels: true, autoLevelInterval: 20, targetPriority: "strongest",
   },
   shotgun: {
@@ -309,6 +309,9 @@ const TOWER100_UNLOCK_WAVE = 100;
 // Starting/max uptime - also the ceiling Consultant's T10 "covers 5 uptime a
 // sprint" perk heals back up to (see updateSpawning's end-of-sprint bonus).
 const STARTING_LIVES = 100;
+// Bumped from 200 - early sprints were leaving players too gold-starved to
+// field enough coverage before enemies started leaking through.
+const STARTING_GOLD = 300;
 
 // Chosen per-map (state.difficulty, persisted in each map's save slot).
 // Multiplies onto the wave-scaling formula in spawnEnemy - hpMult/speedMult
@@ -327,8 +330,10 @@ const DIFFICULTY_SETTINGS = {
 const MEDAL_THRESHOLDS = { easy: 50, normal: 80, hard: 100 };
 
 // Awarded once a sprint's whole spawn queue is cleared (see updateSpawning),
-// on top of normal per-kill gold - grows by a flat amount every wave.
-const WAVE_BONUS_BASE = 15;
+// on top of normal per-kill gold - grows by a flat amount every wave. Base
+// bumped from 15 - early sprints needed a bigger cushion to afford enough
+// coverage before enemies started leaking through.
+const WAVE_BONUS_BASE = 30;
 const WAVE_BONUS_PER_WAVE = 5;
 
 const OVERCLOCK_DURATION = 8;
@@ -1374,9 +1379,9 @@ const TOWER_PATHS = {
 // the regular roster (healer/firewalled/shielded/encrypted) split into 3;
 // the weaker half (fast/tank/splitter/legacy/obfuscated) splits into just 1.
 const ENEMY_TYPES = {
-  basic: { label: "Bug", emoji: "🐛", hp: 50, speed: 60, reward: 5, lifeDamage: 4, color: "#e05353", radius: 7 },
-  fast: { label: "Glitch", emoji: "⚡", hp: 25, speed: 130, reward: 5, lifeDamage: 3, color: "#ffee58", radius: 6, splitsTo: { type: "basic", count: 1 } },
-  tank: { label: "Merge Conflict", emoji: "💀", hp: 160, speed: 35, reward: 12, lifeDamage: 4, color: "#8a4a2b", radius: 8.5, splitsTo: { type: "fast", count: 1 } },
+  basic: { label: "Bug", emoji: "🐛", hp: 50, speed: 60, reward: 8, lifeDamage: 4, color: "#e05353", radius: 7 },
+  fast: { label: "Glitch", emoji: "⚡", hp: 25, speed: 130, reward: 8, lifeDamage: 3, color: "#ffee58", radius: 6, splitsTo: { type: "basic", count: 1 } },
+  tank: { label: "Merge Conflict", emoji: "💀", hp: 160, speed: 35, reward: 18, lifeDamage: 4, color: "#8a4a2b", radius: 8.5, splitsTo: { type: "fast", count: 1 } },
   boss: { label: "Production Outage", emoji: "🔥", hp: 400, speed: 30, reward: 60, lifeDamage: 6, color: "#ff3b3b", radius: 12, splitsTo: { type: "bossCamo", count: 3 } },
   // The weakest of the 4 original bosses (lowest hp) - splits heterogeneous
   // into 3 of the strongest regular enemy (Merge Conflict/tank) rather than
@@ -1441,8 +1446,8 @@ const state = {
   mapId: "map1",
   difficulty: "normal",
   medals: { easy: false, normal: false, hard: false },
-  gold: 200,
-  bestGold: 200,
+  gold: STARTING_GOLD,
+  bestGold: STARTING_GOLD,
   lives: STARTING_LIVES,
   wave: 0,
   bestWave: 0,
@@ -1693,7 +1698,7 @@ function migrateMapLayout(stored) {
   const migratedMaps = {};
   Object.keys(MAP_DEFS).forEach((id) => {
     migratedMaps[id] = {
-      gold: 200, bestGold: 200, lives: STARTING_LIVES, wave: 0, kills: 0, towers: [],
+      gold: STARTING_GOLD, bestGold: STARTING_GOLD, lives: STARTING_LIVES, wave: 0, kills: 0, towers: [],
       difficulty: "normal", medals: { easy: false, normal: false, hard: false },
       bestWave: stored.maps[id]?.bestWave || 0,
     };
@@ -1889,7 +1894,7 @@ function setMapDifficulty(mapId, diffId) {
   if (!DIFFICULTY_SETTINGS[diffId]) return;
   const stored = readStoredPayload();
   if (!stored.maps[mapId]) {
-    stored.maps[mapId] = { gold: 200, bestGold: 200, lives: STARTING_LIVES, wave: 0, bestWave: 0, kills: 0, towers: [] };
+    stored.maps[mapId] = { gold: STARTING_GOLD, bestGold: STARTING_GOLD, lives: STARTING_LIVES, wave: 0, bestWave: 0, kills: 0, towers: [] };
   }
   stored.maps[mapId].difficulty = diffId;
   localStorage.setItem(TD_SAVE_KEY, JSON.stringify(stored));
@@ -4471,7 +4476,7 @@ function loop(now) {
 // Shared by "restart after a loss" (resetGame) and "logged out" - the two
 // differ only in whether bestWave/ownerId (tied to account identity) reset.
 function resetTransientState() {
-  state.gold = 200;
+  state.gold = STARTING_GOLD;
   state.lives = STARTING_LIVES;
   state.wave = 0;
   state.kills = 0;
