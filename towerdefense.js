@@ -241,6 +241,11 @@ const TOWER_TYPES = {
     cost: 90, damage: 12, range: 105, fireRate: 1.3, color: "#94a3b8", projectileSpeed: 480,
     isSentry: true, autoLevels: true, autoLevelInterval: 20, targetPriority: "strongest",
   },
+  shotgun: {
+    name: "Shotgun", desc: "point-blank spread - hits several enemies at once, brutal up close but very short range", emoji: "🔫",
+    cost: 130, damage: 16, range: 70, fireRate: 1.1, color: "#f43f5e", projectileSpeed: 600,
+    multiShot: 3,
+  },
   // Secret capstone towers - excluded from buildTowerButtons (and therefore
   // invisible/unknown) until each one's unlockCheck() passes. How many may
   // be placed at once is capped and grows with further milestones - see
@@ -984,6 +989,51 @@ const TOWER_PATHS = {
       ],
     },
   },
+  shotgun: {
+    spray: {
+      name: "Spray and Pray",
+      accentColor: "#fca5a5",
+      tiers: [
+        { desc: "one more pellet, faster reload", cost: 150, apply: (t) => { t.multiShot = 4; t.pathRateMult = 1.2; } },
+        { desc: "even more spread, bigger hits", cost: 270, apply: (t) => { t.multiShot = 5; t.pathDamageMult = 1.3; } },
+        {
+          desc: "hits nearly everything nearby, chance to crit", cost: 460,
+          apply: (t) => { t.multiShot = 7; t.pathDamageMult = 1.5; t.critChance = 0.2; t.critMult = 1.8; },
+        },
+        { desc: "a wall of pellets, faster still", cost: 780, apply: (t) => { t.multiShot = 9; t.pathDamageMult = 1.8; t.pathRateMult = 1.4; } },
+        {
+          desc: "every pellet finds a target (T5 - a major investment)", cost: 1300,
+          apply: (t) => { t.multiShot = 13; t.pathDamageMult = 2.4; t.pathRateMult = 1.6; t.critChance = 0.35; t.critMult = 2.4; },
+        },
+      ],
+    },
+    slug: {
+      name: "Slug Round",
+      accentColor: "#fbbf24",
+      tiers: [
+        {
+          desc: "one heavy slug instead of a spread, longer reach", cost: 150,
+          apply: (t) => { t.multiShot = 1; t.pathDamageMult = 2.2; t.pathRangeMult = 1.8; },
+        },
+        {
+          desc: "armor-piercing, bonus dmg vs merge conflicts", cost: 270,
+          apply: (t) => { t.pathDamageMult = 3.0; t.pathRangeMult = 2.0; t.tankDamageMult = 1.5; },
+        },
+        {
+          desc: "devastating point hits, chance to crit", cost: 460,
+          apply: (t) => { t.pathDamageMult = 4.0; t.pathRangeMult = 2.2; t.critChance = 0.25; t.critMult = 2.2; },
+        },
+        {
+          desc: "even bigger slugs, bonus dmg vs bosses", cost: 780,
+          apply: (t) => { t.pathDamageMult = 5.4; t.pathRangeMult = 2.4; t.bossDamageMult = 1.6; },
+        },
+        {
+          desc: "one shot, one kill (T5 - a major investment)", cost: 1300,
+          apply: (t) => { t.pathDamageMult = 9.0; t.pathRangeMult = 2.6; t.critChance = 0.4; t.critMult = 3.2; t.bossDamageMult = 2.2; t.tankDamageMult = 2.4; },
+        },
+      ],
+    },
+  },
   tenx: {
     fullstack: {
       name: "Full Stack",
@@ -1279,6 +1329,26 @@ const ENEMY_TYPES = {
   bossCamo: { label: "Ghost Process", emoji: "👻", hp: 350, speed: 70, reward: 70, lifeDamage: 5, color: "#7c3aed", radius: 11.5, camo: true },
   bossTank: { label: "Cascading Failure", emoji: "🌋", hp: 900, speed: 16, reward: 90, lifeDamage: 8, color: "#7f1d1d", radius: 13.5 },
   megaboss: { label: "Total System Failure", emoji: "☠️", hp: 3000, speed: 26, reward: 250, lifeDamage: 10, color: "#000000", radius: 16 },
+  // A 4-tier boss family, unlocked one tier at a time from wave 20/60/80/100
+  // (see splitBossQueueFor). Each tier's death instantly spawns its ENTIRE
+  // splitInto list at once (not a recursive chain reaction) - killing a
+  // splitBoss100 floods the board with 2 splitBoss80 + 4 splitBoss60 + 8
+  // splitBoss20 in one go. splitBoss20 is the terminal tier (no further
+  // split) and, once unlocked, also spawns on its own every wave from then
+  // on (see splitBossQueueFor) rather than only appearing via a split.
+  splitBoss20: { label: "Build Failure", emoji: "🚧", hp: 450, speed: 30, reward: 55, lifeDamage: 5, color: "#ef4444", radius: 12 },
+  splitBoss60: {
+    label: "Deployment Crisis", emoji: "🚨", hp: 1200, speed: 28, reward: 140, lifeDamage: 7, color: "#f59e0b", radius: 13,
+    splitInto: [{ type: "splitBoss20", count: 2 }],
+  },
+  splitBoss80: {
+    label: "Service Outage", emoji: "💥", hp: 2200, speed: 26, reward: 260, lifeDamage: 9, color: "#dc2626", radius: 14,
+    splitInto: [{ type: "splitBoss60", count: 2 }, { type: "splitBoss20", count: 4 }],
+  },
+  splitBoss100: {
+    label: "Catastrophic Failure", emoji: "☢️", hp: 4000, speed: 24, reward: 500, lifeDamage: 12, color: "#7f1d1d", radius: 16,
+    splitInto: [{ type: "splitBoss80", count: 2 }, { type: "splitBoss60", count: 4 }, { type: "splitBoss20", count: 8 }],
+  },
   // Late-wave specialists, each resistant to one damage type (see
   // RESISTANCES) so no single tower archetype trivializes everything.
   legacy: { label: "Legacy Code", emoji: "💾", hp: 90, speed: 45, reward: 10, lifeDamage: 2, color: "#a1887f", radius: 7.5 },
@@ -1879,6 +1949,10 @@ function renderCodex() {
       if (resText) parts.push(resText);
       if (def.camo) parts.push("camo - untargetable unless the shooting tower is currently inside an active Manager's buff range");
       if (def.splitCount) parts.push(`splits into ${def.splitCount} weaker copies on death`);
+      if (def.splitInto) {
+        const combo = def.splitInto.map((s) => `${s.count}x ${ENEMY_TYPES[s.type].label}`).join(" + ");
+        parts.push(`splits into ${combo} on death`);
+      }
       if (def.healPerSecPct) parts.push(`heals nearby enemies ${Math.round(def.healPerSecPct * 100)}%/sec of their own max hp`);
       if (def.shieldFrac) parts.push("has a separate regenerating shield on top of its hp");
       const desc = parts.length ? parts.join(" | ") : "no resistances";
@@ -2576,6 +2650,7 @@ towerSellBtn.addEventListener("click", () => state.selectedTower && sellTower(st
 const TOWER_HOTKEYS = {
   q: "gamer", w: "coder", e: "hacker", r: "manager", t: "farmer",
   y: "recruiter", u: "quant", i: "freeze", o: "turret", p: "tenx", a: "singularity", s: "tesla",
+  d: "shotgun",
 };
 
 // = deploys the next sprint, - toggles auto-run (neither needs a tower
@@ -2923,6 +2998,25 @@ function buildWave(waveNum) {
   if (waveNum === 100 || waveNum === 140 || waveNum === 200) {
     queue.push("megaboss");
   }
+  queue.push(...splitBossQueueFor(waveNum));
+  return queue;
+}
+
+// The split-boss family (see ENEMY_TYPES.splitBoss20/60/80/100) is separate
+// from the regular boss pool/cadence above - splitBoss20 is the common one,
+// unlocked at wave 20 and appearing every wave after that (twice from wave
+// 60 on, so it keeps scaling the difficulty rather than staying flat
+// forever). The heavier tiers show up periodically once their own wave
+// threshold is reached, each dumping its whole splitInto cascade when killed.
+function splitBossQueueFor(waveNum) {
+  const queue = [];
+  if (waveNum >= 20) {
+    const count = waveNum >= 60 ? 2 : 1;
+    for (let i = 0; i < count; i++) queue.push("splitBoss20");
+  }
+  if (waveNum >= 60 && waveNum % 10 === 0) queue.push("splitBoss60");
+  if (waveNum >= 80 && waveNum % 20 === 0) queue.push("splitBoss80");
+  if (waveNum >= 100 && (waveNum - 100) % 40 === 0) queue.push("splitBoss100");
   return queue;
 }
 
@@ -2959,7 +3053,10 @@ autoRunBtn.addEventListener("click", () => {
   if (state.autoRun) startNextWave();
 });
 
-const BOSS_TYPES = new Set(["boss", "bossCamo", "bossTank", "megaboss"]);
+const BOSS_TYPES = new Set([
+  "boss", "bossCamo", "bossTank", "megaboss",
+  "splitBoss20", "splitBoss60", "splitBoss80", "splitBoss100",
+]);
 
 // Bosses get an extra hp multiplier on top of the shared formula below -
 // a much bigger jump starting wave 90, and megaboss (the wave 100/140/200
@@ -2971,16 +3068,16 @@ function bossHpMultiplier(type, waveNum) {
   return mult;
 }
 
-function spawnEnemy(type) {
+// Previously only bosses scaled with wave - every other enemy stayed at its
+// wave-1 hp forever, so a snowballing tower build made mid-to-late waves
+// trivial once it outgrew that fixed baseline. Scale everyone now. A flat
+// linear rate still can't keep up with a compounding tower economy forever,
+// so waves past 50 get extra compounding growth on top - tuned so builds
+// strong enough to reach wave 90+ still meet real resistance instead of
+// one-shotting everything before it's visible on screen.
+function computeEnemyStats(type) {
   const def = ENEMY_TYPES[type];
   const isBossType = BOSS_TYPES.has(type);
-  // Previously only bosses scaled with wave - every other enemy stayed at
-  // its wave-1 hp forever, so a snowballing tower build made mid-to-late
-  // waves trivial once it outgrew that fixed baseline. Scale everyone now.
-  // A flat linear rate still can't keep up with a compounding tower economy
-  // forever, so waves past 50 get extra compounding growth on top - tuned
-  // so builds strong enough to reach wave 90+ still meet real resistance
-  // instead of one-shotting everything before it's visible on screen.
   const diff = DIFFICULTY_SETTINGS[state.difficulty] || DIFFICULTY_SETTINGS.normal;
   const lateWaves = Math.max(0, state.wave - 50);
   let hp = Math.round(def.hp * (1 + state.wave * 0.18) * Math.pow(1.11, lateWaves) * diff.hpMult);
@@ -2990,6 +3087,11 @@ function spawnEnemy(type) {
   // base speed (bossTank stays slow, bossCamo stays fast, relative to each other).
   const speed = def.speed * (1 + state.wave * 0.004) * diff.speedMult;
   const maxShield = def.shieldFrac ? Math.round(hp * def.shieldFrac) : 0;
+  return { def, isBossType, hp, reward, speed, maxShield };
+}
+
+function spawnEnemy(type) {
+  const { def, isBossType, hp, reward, speed, maxShield } = computeEnemyStats(type);
   state.enemies.push({
     type,
     x: PATH_POINTS[0].x,
@@ -3008,6 +3110,28 @@ function spawnEnemy(type) {
     maxShield,
     shield: maxShield,
     shieldRegenTimer: 0,
+  });
+}
+
+// A split-boss child (see ENEMY_TYPES.splitBoss60/80/100's splitInto) -
+// spawned at the parent's death position/path segment instead of the path
+// entrance, with hasSplit set so it can't chain into its own split again
+// (this tier's split cascade is a one-time lump sum, not recursive).
+function spawnSplitBoss(type, x, y, segment) {
+  const { def, isBossType, hp, reward, speed, maxShield } = computeEnemyStats(type);
+  state.enemies.push({
+    type, x, y, hp, maxHp: hp, speed, reward,
+    lifeDamage: def.lifeDamage,
+    color: def.color,
+    radius: def.radius,
+    emoji: def.emoji,
+    isBoss: isBossType,
+    camo: !!def.camo,
+    segment,
+    maxShield,
+    shield: maxShield,
+    shieldRegenTimer: 0,
+    hasSplit: true,
   });
 }
 
@@ -3218,6 +3342,22 @@ function applyDamage(enemy, amount, sourceTower) {
             y: enemy.y + (Math.random() - 0.5) * 12,
           });
         }
+      }
+
+      // Split-boss family: on death, dump the ENTIRE splitInto list at once
+      // (see ENEMY_TYPES.splitBoss60/80/100) - hasSplit stops a split child
+      // from chaining into its own split again.
+      if (dyingDef?.splitInto && !enemy.hasSplit) {
+        dyingDef.splitInto.forEach(({ type, count }) => {
+          for (let i = 0; i < count; i++) {
+            spawnSplitBoss(
+              type,
+              enemy.x + (Math.random() - 0.5) * 40,
+              enemy.y + (Math.random() - 0.5) * 40,
+              enemy.segment,
+            );
+          }
+        });
       }
     }
   }
