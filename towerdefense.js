@@ -62,6 +62,38 @@ const MAP_DEFS = {
     ],
     bgColor: "#0a0612", gridColor: "#231334", pathColor: "#1e1130",
   },
+  // A stepped notch partway along (the col14-18/row3-8 detour) - a squared-
+  // off bracket shape, echoing a patio walkway with a pool cut into one corner.
+  map4: {
+    name: "Staging Loop",
+    waypoints: [
+      [-1, 10], [4, 10], [4, 3], [14, 3], [14, 8], [18, 8], [18, 3], [24, 3],
+      [24, 16], [8, 16], [8, 12], [26, 12],
+    ],
+    obstacles: [
+      { x: 6 * 30, y: 5 * 30, w: 3 * 30, h: 2 * 30, kind: "obstacle" },
+      { x: 20 * 30, y: 5 * 30, w: 3 * 30, h: 2 * 30, kind: "wall" },
+      { x: 300, y: 525, w: 120, h: 60, kind: "obstacle" },
+      { x: 600, y: 525, w: 90, h: 50, kind: "wall" },
+    ],
+    bgColor: "#0a0805", gridColor: "#2a1f12", pathColor: "#241a0e",
+  },
+  // A rectangular loop/spur near the start (the col5-9/row4-10 detour) before
+  // a long zigzag swing - echoes a garden stepping-stone path with a bump.
+  map5: {
+    name: "Feedback Loop",
+    waypoints: [
+      [-1, 10], [5, 10], [5, 4], [9, 4], [9, 10], [13, 10], [13, 16], [19, 16],
+      [19, 6], [24, 6], [24, 13], [26, 13],
+    ],
+    obstacles: [
+      { x: 1 * 30, y: 2 * 30, w: 3 * 30, h: 2 * 30, kind: "obstacle" },
+      { x: 15 * 30, y: 12 * 30, w: 3 * 30, h: 3 * 30, kind: "wall" },
+      { x: 21 * 30, y: 9 * 30, w: 2 * 30, h: 3 * 30, kind: "obstacle" },
+      { x: 21 * 30, y: 16 * 30, w: 3 * 30, h: 2 * 30, kind: "wall" },
+    ],
+    bgColor: "#051010", gridColor: "#123030", pathColor: "#0e2626",
+  },
 };
 
 // Waypoints in grid coordinates (col, row). First/last are off-canvas so
@@ -289,6 +321,11 @@ const DIFFICULTY_SETTINGS = {
 // settings since the enemies scale up less there. Stored in each map's save
 // slot (state.medals), never un-earned once true.
 const MEDAL_THRESHOLDS = { easy: 50, normal: 80, hard: 100 };
+
+// Awarded once a sprint's whole spawn queue is cleared (see updateSpawning),
+// on top of normal per-kill gold - grows by a flat amount every wave.
+const WAVE_BONUS_BASE = 15;
+const WAVE_BONUS_PER_WAVE = 5;
 
 const OVERCLOCK_DURATION = 8;
 const OVERCLOCK_COOLDOWN = 30;
@@ -1673,9 +1710,14 @@ function readStoredPayload() {
 
 // Singularity's unlock condition - every map's own bestWave (not just the
 // currently active one) has to clear sprint 100.
+// Deliberately the original 3 maps only, not Object.keys(MAP_DEFS) - so
+// adding more maps later never raises this bar and re-locks Singularity for
+// someone who already permanently earned it (see [[project_singularity_unlock]]).
+const CORE_MAP_IDS = ["map1", "map2", "map3"];
+
 function hasBeatenAllMaps() {
   const stored = readStoredPayload();
-  return Object.keys(MAP_DEFS).every((id) => (stored.maps[id]?.bestWave || 0) > TOWER100_UNLOCK_WAVE);
+  return CORE_MAP_IDS.every((id) => (stored.maps[id]?.bestWave || 0) > TOWER100_UNLOCK_WAVE);
 }
 
 // ---------- Achievements ----------
@@ -3813,6 +3855,12 @@ function updateSpawning(dt) {
   }
   if (state.spawnQueue.length === 0 && state.enemies.length === 0) {
     state.waveInProgress = false;
+    // End-of-sprint bonus, on top of normal kill gold - grows linearly with
+    // wave number so clearing a sprint stays worth doing at any point in a
+    // run, not just early on.
+    const bonus = Math.round(WAVE_BONUS_BASE + state.wave * WAVE_BONUS_PER_WAVE);
+    state.gold += bonus;
+    spawnFloatingText(COLS * CELL / 2, 50, `sprint bonus +${bonus}c`, "#ffd166");
     waveBtn.disabled = false;
     waveBtn.textContent = `deploy sprint ${state.wave + 1}`;
     if (state.autoRun) state.autoRunTimer = AUTO_RUN_DELAY;
