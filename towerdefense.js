@@ -1412,6 +1412,8 @@ const state = {
   floatingTexts: [],
   chainBolts: [],
   deathParticles: [],
+  shakeUntil: 0,
+  shakeMag: 0,
   allies: [],
   waveInProgress: false,
   spawnQueue: [],
@@ -2201,7 +2203,7 @@ let pasteArmed = false;
 function copySelectedTower() {
   const t = state.selectedTower;
   if (!t) return;
-  const { x, y, cooldown, flashUntil, visualStage, totalDamageDealt, totalInvested, ...blueprint } = t;
+  const { x, y, cooldown, flashUntil, placedAt, visualStage, totalDamageDealt, totalInvested, ...blueprint } = t;
   towerClipboard = { blueprint, cost: totalInvested };
   const def = TOWER_TYPES[t.type];
   medalToast.textContent = `copied ${def.emoji} ${def.name} (Lv.${t.level}) - paste costs ${Math.round(totalInvested)}c`;
@@ -2252,6 +2254,7 @@ function commitPaste(x, y) {
     totalDamageDealt: 0,
     totalInvested: cost,
     flashUntil: performance.now() + 400,
+    placedAt: performance.now(),
     visualStage: visualStageForBlueprint(bp),
   };
   recomputeTowerStats(tower);
@@ -2295,6 +2298,7 @@ function handlePlacementOrSelection(pos) {
     totalInvested: cost,
     totalDamageDealt: 0,
     flashUntil: performance.now() + 400,
+    placedAt: performance.now(),
     visualStage: 0,
     ...def,
   };
@@ -3493,6 +3497,10 @@ function applyDamage(enemy, amount, sourceTower) {
     }
   }
 
+  // Brief white flash on any hit that doesn't kill - draw() reads this to
+  // make shots feel like they're actually landing, not just numbers ticking.
+  if (amount > 0) enemy.hitFlashUntil = performance.now() + 90;
+
   enemy.hp -= amount;
   if (sourceTower) sourceTower.totalDamageDealt = (sourceTower.totalDamageDealt || 0) + amount;
   if (enemy.hp <= 0) {
@@ -3501,10 +3509,16 @@ function applyDamage(enemy, amount, sourceTower) {
       state.enemies.splice(idx, 1);
       spawnDeathBurst(enemy.x, enemy.y, enemy.color);
       playDeathSound(enemy.type);
-      state.gold += enemy.reward * goldYieldMult();
+      const goldEarned = enemy.reward * goldYieldMult();
+      state.gold += goldEarned;
+      spawnFloatingText(enemy.x, enemy.y - 16, `+${Math.round(goldEarned)}c`, "#ffd166");
       if (sourceTower?.bonusGoldPerKill) state.gold += sourceTower.bonusGoldPerKill;
       state.kills += 1;
-      if (enemy.isBoss) state.totalBossKills = (state.totalBossKills || 0) + 1;
+      if (enemy.isBoss) {
+        state.totalBossKills = (state.totalBossKills || 0) + 1;
+        // Bigger enemies get a bigger, longer shake - see draw()/loop().
+        triggerShake(Math.min(14, 4 + enemy.radius * 0.5), 220);
+      }
 
       // splitsTo: turns into `count` of one specific weaker TYPE (e.g. a
       // Glitch dying becomes 2 Bugs) - see the chain documented above
@@ -3709,6 +3723,16 @@ function playDeathSound(type) {
   const s = DEATH_SOUNDS[type];
   if (!s) return;
   playBlip(s.freqStart, s.freqEnd, s.duration, s.waveType, s.volume);
+}
+
+// ---------- Screen shake ----------
+// A brief camera shake on satisfying big moments (boss kills) - draw()
+// applies a small random translate while state.shakeUntil is in the future,
+// decaying linearly to nothing. Uses Math.max so overlapping triggers
+// (several bosses dying in the same frame) don't cut a bigger shake short.
+function triggerShake(mag, durationMs) {
+  state.shakeMag = Math.max(state.shakeMag, mag);
+  state.shakeUntil = Math.max(state.shakeUntil, performance.now() + durationMs);
 }
 
 // ---------- Enemy death burst (visual only) ----------
@@ -3916,6 +3940,17 @@ function drawPlacementGhost(px, py, { color, emoji, range, isGlobalRange, valid 
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+  // Screen shake: while active, everything below is drawn slightly offset,
+  // decaying linearly back to zero - see triggerShake().
+  const shakeRemaining = state.shakeUntil - performance.now();
+  ctx.save();
+  if (shakeRemaining > 0) {
+    const power = state.shakeMag * (shakeRemaining / 220);
+    ctx.translate((Math.random() - 0.5) * power, (Math.random() - 0.5) * power);
+  } else {
+    state.shakeMag = 0;
+  }
+
   // Each map has its own bg/grid/path colors for a distinct look - falls
   // back to Main Branch's colors if the active map is somehow unknown.
   const mapTheme = MAP_DEFS[state.mapId] || MAP_DEFS.map1;
@@ -4060,18 +4095,23 @@ function draw() {
     const pathColor = t.path ? TOWER_PATHS[t.type]?.[t.path]?.accentColor : null;
     const bodyColor = pathColor || t.color;
 
+    // Pop-in: freshly placed towers scale up from small over ~200ms instead
+    // of just appearing, for a bit more satisfying "placement" feel.
+    const spawnP = t.placedAt ? Math.min(1, (performance.now() - t.placedAt) / 200) : 1;
+    const bodyRadius = TOWER_BODY_RADIUS * (0.35 + 0.65 * spawnP);
+
     ctx.fillStyle = bodyColor;
     ctx.globalAlpha = pathColor ? 0.4 : 0.25;
     ctx.beginPath();
-    ctx.arc(t.x, t.y, TOWER_BODY_RADIUS, 0, Math.PI * 2);
+    ctx.arc(t.x, t.y, bodyRadius, 0, Math.PI * 2);
     ctx.fill();
     ctx.globalAlpha = 1;
     ctx.strokeStyle = bodyColor;
     ctx.lineWidth = pathColor ? 3 : 2;
     ctx.beginPath();
-    ctx.arc(t.x, t.y, TOWER_BODY_RADIUS, 0, Math.PI * 2);
+    ctx.arc(t.x, t.y, bodyRadius, 0, Math.PI * 2);
     ctx.stroke();
-    ctx.font = `${CELL * 0.48}px sans-serif`;
+    ctx.font = `${CELL * 0.48 * (0.35 + 0.65 * spawnP)}px sans-serif`;
     ctx.fillText(t.emoji, t.x, t.y + 1);
 
     // visual evolution: a growing, more elaborate ring per upgrade milestone
@@ -4224,6 +4264,17 @@ function draw() {
     ctx.fillText(e.emoji, e.x, e.y + 1);
     ctx.globalAlpha = 1;
 
+    // Brief white flash on a hit that didn't kill - see applyDamage.
+    if (e.hitFlashUntil && e.hitFlashUntil > performance.now()) {
+      const flashT = (e.hitFlashUntil - performance.now()) / 90;
+      ctx.fillStyle = "#ffffff";
+      ctx.globalAlpha = 0.55 * flashT;
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
     const barW = e.radius * 2;
     const pct = Math.max(0, e.hp / e.maxHp);
     ctx.fillStyle = "#000";
@@ -4316,6 +4367,8 @@ function draw() {
     drawLightning(b.x1, b.y1, b.x2, b.y2, b.color, 4);
     ctx.globalAlpha = 1;
   }
+
+  ctx.restore(); // matches the shake-offset ctx.save() at the top
 }
 
 // ---------- Main loop ----------
@@ -4367,6 +4420,8 @@ function resetTransientState() {
   state.floatingTexts = [];
   state.chainBolts = [];
   state.deathParticles = [];
+  state.shakeUntil = 0;
+  state.shakeMag = 0;
   state.allies = [];
   state.waveInProgress = false;
   state.spawnQueue = [];

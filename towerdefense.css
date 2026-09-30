@@ -3,6 +3,27 @@
   margin: 0 auto;
 }
 
+/* Extra lift/glow on top of the shared .btn styling, scoped to this page
+   only so it doesn't affect other pages sharing theme.css. */
+.td-wrap .btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 10px rgba(57, 255, 20, 0.25);
+}
+
+.td-wrap .btn:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+.td-wrap .btn {
+  transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
+}
+
+@keyframes popIn {
+  0% { opacity: 0; transform: scale(0.92) translateY(4px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
 .td-window {
   overflow: visible;
 }
@@ -28,6 +49,7 @@ canvas {
   background: #060a06;
   border-radius: 4px;
   border: 1px solid var(--border);
+  box-shadow: 0 0 24px rgba(57, 255, 20, 0.08), inset 0 0 40px rgba(0, 0, 0, 0.4);
   cursor: pointer;
   touch-action: none;
 }
@@ -62,23 +84,45 @@ canvas {
 }
 
 .stat {
+  position: relative;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 4px;
-  padding: 8px 10px;
+  padding: 9px 10px 8px;
   display: flex;
   flex-direction: column;
   gap: 2px;
+  overflow: hidden;
+  transition: border-color 0.2s ease, transform 0.15s ease;
+}
+
+.stat::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--green-dim), transparent 70%);
+  opacity: 0.7;
+}
+
+.stat:hover {
+  border-color: var(--green-dim);
+  transform: translateY(-1px);
 }
 
 .stat span {
   font-size: 0.72rem;
   color: var(--green-faint);
+  letter-spacing: 0.02em;
 }
 
 .stat strong {
-  font-size: 1.1rem;
+  font-size: 1.15rem;
   color: var(--green);
+  text-shadow: 0 0 8px rgba(57, 255, 20, 0.35);
+  transition: text-shadow 0.2s ease;
 }
 
 .panel h3 {
@@ -110,6 +154,12 @@ canvas {
   text-align: left;
   font-family: var(--font);
   font-size: 0.82rem;
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.tower-btn:hover:not(:disabled):not(.selected) {
+  border-color: var(--green-faint);
+  transform: translateX(2px);
 }
 
 .tower-btn .emoji {
@@ -142,6 +192,12 @@ canvas {
 .tower-btn.selected {
   border-color: var(--green);
   box-shadow: 0 0 10px rgba(57, 255, 20, 0.25);
+  animation: selectedPulse 1.6s ease-in-out infinite;
+}
+
+@keyframes selectedPulse {
+  0%, 100% { box-shadow: 0 0 10px rgba(57, 255, 20, 0.25); }
+  50% { box-shadow: 0 0 16px rgba(57, 255, 20, 0.45); }
 }
 
 .tower-btn:disabled {
@@ -158,6 +214,18 @@ canvas {
   flex: 1;
   padding: 12px;
   font-size: 0.95rem;
+  font-weight: bold;
+  background: linear-gradient(180deg, rgba(57, 255, 20, 0.12), transparent);
+  box-shadow: 0 0 0 rgba(57, 255, 20, 0);
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.2s ease, transform 0.1s ease;
+}
+
+.wave-btn:hover:not(:disabled) {
+  box-shadow: 0 0 18px rgba(57, 255, 20, 0.4);
+}
+
+.wave-btn:active:not(:disabled) {
+  transform: scale(0.98);
 }
 
 .auto-btn {
@@ -226,6 +294,8 @@ canvas {
   flex-shrink: 0;
   max-height: 260px;
   overflow-y: auto;
+  box-shadow: 0 0 16px rgba(0, 229, 255, 0.15);
+  animation: popIn 0.15s ease;
 }
 
 .tower-info-panel:not([hidden]) {
@@ -364,6 +434,8 @@ canvas {
   border: 1px solid var(--red);
   border-radius: 6px;
   padding: 24px 32px;
+  box-shadow: 0 0 30px rgba(255, 68, 68, 0.2);
+  animation: popIn 0.2s ease;
 }
 
 .game-over-box h2 {
@@ -406,6 +478,8 @@ canvas {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  box-shadow: 0 0 30px rgba(57, 255, 20, 0.12);
+  animation: popIn 0.18s ease;
 }
 
 .pause-box h2 {
@@ -440,6 +514,8 @@ canvas {
   border-radius: 6px;
   padding: 20px;
   text-align: center;
+  box-shadow: 0 0 30px rgba(57, 255, 20, 0.12);
+  animation: popIn 0.18s ease;
 }
 
 .map-picker-box h2 {
@@ -552,6 +628,8 @@ canvas {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  box-shadow: 0 0 30px rgba(57, 255, 20, 0.12);
+  animation: popIn 0.18s ease;
 }
 
 .codex-header {
