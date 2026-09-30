@@ -1321,14 +1321,28 @@ const TOWER_PATHS = {
 // Visual radii halved from their pre-zoom values to match the smaller grid -
 // purely cosmetic, no gameplay math reads these besides drawing (health
 // bars, emoji size).
+// splitCount/splitHpFrac: on death, spawns splitCount copies of the SAME
+// type at splitHpFrac of its own maxHp - and those copies can chain-split
+// again themselves when THEY die, each generation weaker than the last,
+// capped at MAX_SPLIT_GEN generations deep (see applyDamage) so it can't
+// run away into an unbounded enemy count. Applies to every regular enemy
+// and to 3 of the 4 original bosses.
 const ENEMY_TYPES = {
-  basic: { label: "Bug", emoji: "🐛", hp: 50, speed: 60, reward: 5, lifeDamage: 1, color: "#e05353", radius: 7 },
-  fast: { label: "Glitch", emoji: "⚡", hp: 25, speed: 130, reward: 5, lifeDamage: 1, color: "#ffee58", radius: 6 },
-  tank: { label: "Merge Conflict", emoji: "💀", hp: 160, speed: 35, reward: 12, lifeDamage: 2, color: "#8a4a2b", radius: 8.5 },
-  boss: { label: "Production Outage", emoji: "🔥", hp: 400, speed: 30, reward: 60, lifeDamage: 5, color: "#ff3b3b", radius: 12 },
-  bossCamo: { label: "Ghost Process", emoji: "👻", hp: 350, speed: 70, reward: 70, lifeDamage: 5, color: "#7c3aed", radius: 11.5, camo: true },
-  bossTank: { label: "Cascading Failure", emoji: "🌋", hp: 900, speed: 16, reward: 90, lifeDamage: 8, color: "#7f1d1d", radius: 13.5 },
-  megaboss: { label: "Total System Failure", emoji: "☠️", hp: 3000, speed: 26, reward: 250, lifeDamage: 10, color: "#000000", radius: 16 },
+  basic: { label: "Bug", emoji: "🐛", hp: 50, speed: 60, reward: 5, lifeDamage: 1, color: "#e05353", radius: 7, splitCount: 3, splitHpFrac: 0.4 },
+  fast: { label: "Glitch", emoji: "⚡", hp: 25, speed: 130, reward: 5, lifeDamage: 1, color: "#ffee58", radius: 6, splitCount: 3, splitHpFrac: 0.4 },
+  tank: { label: "Merge Conflict", emoji: "💀", hp: 160, speed: 35, reward: 12, lifeDamage: 2, color: "#8a4a2b", radius: 8.5, splitCount: 3, splitHpFrac: 0.4 },
+  boss: { label: "Production Outage", emoji: "🔥", hp: 400, speed: 30, reward: 60, lifeDamage: 5, color: "#ff3b3b", radius: 12, splitCount: 3, splitHpFrac: 0.4 },
+  // The weakest of the 4 original bosses (lowest hp) - splits heterogeneous
+  // instead of the generic self-split: 3 of the strongest regular enemy
+  // (Merge Conflict/tank, 160 base hp) rather than 3 weaker Ghost Processes.
+  // Uses the same one-time splitInto mechanism as the split-boss family
+  // (hasSplit gated), not the chained splitCount system.
+  bossCamo: {
+    label: "Ghost Process", emoji: "👻", hp: 350, speed: 70, reward: 70, lifeDamage: 5, color: "#7c3aed", radius: 11.5, camo: true,
+    splitInto: [{ type: "tank", count: 3 }],
+  },
+  bossTank: { label: "Cascading Failure", emoji: "🌋", hp: 900, speed: 16, reward: 90, lifeDamage: 8, color: "#7f1d1d", radius: 13.5, splitCount: 3, splitHpFrac: 0.4 },
+  megaboss: { label: "Total System Failure", emoji: "☠️", hp: 3000, speed: 26, reward: 250, lifeDamage: 10, color: "#000000", radius: 16, splitCount: 3, splitHpFrac: 0.4 },
   // A 4-tier boss family, unlocked one tier at a time from wave 20/60/80/100
   // (see splitBossQueueFor). Each tier's death instantly spawns its ENTIRE
   // splitInto list at once (not a recursive chain reaction) - killing a
@@ -1351,21 +1365,19 @@ const ENEMY_TYPES = {
   },
   // Late-wave specialists, each resistant to one damage type (see
   // RESISTANCES) so no single tower archetype trivializes everything.
-  legacy: { label: "Legacy Code", emoji: "💾", hp: 90, speed: 45, reward: 10, lifeDamage: 2, color: "#a1887f", radius: 7.5 },
-  firewalled: { label: "Firewalled", emoji: "🧱", hp: 70, speed: 55, reward: 10, lifeDamage: 1, color: "#5b7fd6", radius: 7.5 },
-  encrypted: { label: "Encrypted", emoji: "🔒", hp: 60, speed: 50, reward: 14, lifeDamage: 2, color: "#a855f7", radius: 7.5 },
+  legacy: { label: "Legacy Code", emoji: "💾", hp: 90, speed: 45, reward: 10, lifeDamage: 2, color: "#a1887f", radius: 7.5, splitCount: 3, splitHpFrac: 0.4 },
+  firewalled: { label: "Firewalled", emoji: "🧱", hp: 70, speed: 55, reward: 10, lifeDamage: 1, color: "#5b7fd6", radius: 7.5, splitCount: 3, splitHpFrac: 0.4 },
+  encrypted: { label: "Encrypted", emoji: "🔒", hp: 60, speed: 50, reward: 14, lifeDamage: 2, color: "#a855f7", radius: 7.5, splitCount: 3, splitHpFrac: 0.4 },
   // Untargetable by any tower unless that tower is currently in an active
   // Manager's buff range (see getTowerBuffs/findTargets) - still visible so
   // the player can see them coming, just can't be shot without support.
-  obfuscated: { label: "Obfuscated", emoji: "🌫️", hp: 55, speed: 65, reward: 12, lifeDamage: 1, color: "#94a3b8", radius: 7, camo: true },
-  // On death, splits into splitCount weaker copies (splitHpFrac of its own
-  // max hp) unless it's already a split itself - see applyDamage.
-  splitter: { label: "Forked Process", emoji: "🍴", hp: 70, speed: 55, reward: 8, lifeDamage: 1, color: "#fb7185", radius: 7.5, splitCount: 2, splitHpFrac: 0.4 },
+  obfuscated: { label: "Obfuscated", emoji: "🌫️", hp: 55, speed: 65, reward: 12, lifeDamage: 1, color: "#94a3b8", radius: 7, camo: true, splitCount: 3, splitHpFrac: 0.4 },
+  splitter: { label: "Forked Process", emoji: "🍴", hp: 70, speed: 55, reward: 8, lifeDamage: 1, color: "#fb7185", radius: 7.5, splitCount: 3, splitHpFrac: 0.4 },
   // Passively heals nearby enemies each second - see updateHealers.
-  healer: { label: "QA Tester", emoji: "🩹", hp: 80, speed: 45, reward: 14, lifeDamage: 1, color: "#34d399", radius: 7.5, healRange: 90, healPerSecPct: 0.02 },
+  healer: { label: "QA Tester", emoji: "🩹", hp: 80, speed: 45, reward: 14, lifeDamage: 1, color: "#34d399", radius: 7.5, healRange: 90, healPerSecPct: 0.02, splitCount: 3, splitHpFrac: 0.4 },
   // Has a separate regenerating shield on top of its hp - see the shield
   // handling in spawnEnemy/applyDamage/updateShields.
-  shielded: { label: "Hardened Build", emoji: "🛡️", hp: 60, speed: 50, reward: 14, lifeDamage: 1, color: "#60a5fa", radius: 7.5, shieldFrac: 1.0, shieldRegenDelay: 3, shieldRegenPerSec: 0.3 },
+  shielded: { label: "Hardened Build", emoji: "🛡️", hp: 60, speed: 50, reward: 14, lifeDamage: 1, color: "#60a5fa", radius: 7.5, shieldFrac: 1.0, shieldRegenDelay: 3, shieldRegenPerSec: 0.3, splitCount: 3, splitHpFrac: 0.4 },
 };
 
 // Damage-type resistance: a multiplier applied when that enemy type takes
@@ -3154,6 +3166,13 @@ const BOSS_TYPES = new Set([
   "splitBoss20", "splitBoss60", "splitBoss80", "splitBoss100",
 ]);
 
+// How many generations a splitCount chain can go before it stops splitting
+// even if killed again - a hard cap independent of hp, since wave-scaled hp
+// gets into the millions late-game and a fraction-based hp floor alone would
+// take far too many generations to ever bite (see applyDamage). 3 deep
+// means one original kill can cascade into at most 3+9+27=39 extra enemies.
+const MAX_SPLIT_GEN = 3;
+
 // Bosses get an extra hp multiplier on top of the shared formula below -
 // a much bigger jump starting wave 90, and megaboss (the wave 100/140/200
 // milestone spawn) is bigger again on top of that.
@@ -3300,6 +3319,33 @@ function updateEnemies(dt) {
       e.y += ((target.y - e.y) / d) * step;
     }
   }
+  separateEnemies();
+}
+
+// Pushes any two overlapping enemy circles apart along the line between
+// their centers, split evenly - run every frame after movement so a faster
+// enemy catching up to a slower one queues up behind/beside it instead of
+// drawing on top of it. Self-corrects back toward the path on its own next
+// frame (movement above always re-aims at the current waypoint), so a shove
+// off-line is never permanent.
+function separateEnemies() {
+  const list = state.enemies;
+  for (let i = 0; i < list.length; i++) {
+    for (let j = i + 1; j < list.length; j++) {
+      const a = list[i], b = list[j];
+      const minDist = a.radius + b.radius;
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist === 0) {
+        a.x -= 0.5; b.x += 0.5;
+      } else if (dist < minDist) {
+        const push = (minDist - dist) / 2;
+        const ux = dx / dist, uy = dy / dist;
+        a.x -= ux * push; a.y -= uy * push;
+        b.x += ux * push; b.y += uy * push;
+      }
+    }
+  }
 }
 
 // Returns up to `count` enemies within range, nearest first. Camo enemies
@@ -3422,27 +3468,36 @@ function applyDamage(enemy, amount, sourceTower) {
       state.kills += 1;
       if (enemy.isBoss) state.totalBossKills = (state.totalBossKills || 0) + 1;
 
-      // Splitter enemies leave weaker copies behind on death - hasSplit
-      // stops the copies from splitting again themselves.
+      // Splits into splitCount weaker copies of itself, which can chain into
+      // their own split again when THEY die (each generation weaker, via
+      // splitHpFrac) - capped at MAX_SPLIT_GEN generations deep so a chain
+      // can't run away into an unbounded enemy count regardless of how
+      // enormous the wave-scaled hp gets. Separate from (and independent of)
+      // the one-time splitInto mechanism below - hasSplit only gates that one.
       const dyingDef = ENEMY_TYPES[enemy.type];
-      if (dyingDef?.splitCount && !enemy.hasSplit) {
+      if (dyingDef?.splitCount && (enemy.splitGen || 0) < MAX_SPLIT_GEN) {
         const childHp = Math.max(1, Math.round(enemy.maxHp * dyingDef.splitHpFrac));
+        const childMaxShield = enemy.maxShield ? Math.max(0, Math.round(enemy.maxShield * dyingDef.splitHpFrac)) : 0;
         for (let i = 0; i < dyingDef.splitCount; i++) {
           state.enemies.push({
             ...enemy,
             hp: childHp,
             maxHp: childHp,
-            hasSplit: true,
+            maxShield: childMaxShield,
+            shield: childMaxShield,
             reward: Math.round(enemy.reward * 0.4),
+            splitGen: (enemy.splitGen || 0) + 1,
             x: enemy.x + (Math.random() - 0.5) * 12,
             y: enemy.y + (Math.random() - 0.5) * 12,
           });
         }
       }
 
-      // Split-boss family: on death, dump the ENTIRE splitInto list at once
-      // (see ENEMY_TYPES.splitBoss60/80/100) - hasSplit stops a split child
-      // from chaining into its own split again.
+      // Split-boss family (and Ghost Process's own splitInto - see
+      // ENEMY_TYPES.bossCamo): on death, dump the ENTIRE splitInto list at
+      // once. hasSplit stops a split child from chaining into its own split
+      // again - unlike splitCount above, this one is a single lump sum, not
+      // a multi-generation chain.
       if (dyingDef?.splitInto && !enemy.hasSplit) {
         dyingDef.splitInto.forEach(({ type, count }) => {
           for (let i = 0; i < count; i++) {
@@ -3489,6 +3544,33 @@ function updateProjectiles(dt) {
     } else {
       p.x += ((p.target.x - p.x) / d) * step;
       p.y += ((p.target.y - p.y) / d) * step;
+    }
+  }
+  separateProjectiles();
+}
+
+// Keeps every in-flight projectile visible - pushes any two drawn closer
+// than PROJECTILE_MIN_SEPARATION apart along the line between them, same
+// approach as separateEnemies. Matters most for high-multiShot towers
+// (Shotgun, 10x Engineer's Full Stack) firing a dozen-plus pellets from the
+// same point in the same frame, which would otherwise stack exactly on top
+// of each other.
+const PROJECTILE_MIN_SEPARATION = 6;
+function separateProjectiles() {
+  const list = state.projectiles;
+  for (let i = 0; i < list.length; i++) {
+    for (let j = i + 1; j < list.length; j++) {
+      const a = list[i], b = list[j];
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist === 0) {
+        a.x -= 0.5; b.x += 0.5;
+      } else if (dist < PROJECTILE_MIN_SEPARATION) {
+        const push = (PROJECTILE_MIN_SEPARATION - dist) / 2;
+        const ux = dx / dist, uy = dy / dist;
+        a.x -= ux * push; a.y -= uy * push;
+        b.x += ux * push; b.y += uy * push;
+      }
     }
   }
 }
