@@ -1961,30 +1961,38 @@ function loadGame() {
 // responsible for having confirmed that with the player first.
 function enterMap(mapId, diffId, wipe) {
   if (!MAP_DEFS[mapId] || !DIFFICULTY_SETTINGS[diffId]) return;
-  saveGame();
-  const stored = readStoredPayload();
-  let mapSlot = stored.maps[mapId];
-  if (!mapSlot) {
-    mapSlot = { bestWave: 0, bestGold: STARTING_GOLD, medals: { easy: false, normal: false, hard: false }, activeDifficulty: null, saves: {} };
-    stored.maps[mapId] = mapSlot;
-  }
-  mapSlot.saves = mapSlot.saves || {};
-  if (wipe) delete mapSlot.saves[diffId];
-  localStorage.setItem(TD_SAVE_KEY, JSON.stringify(stored));
-  scheduleCloudSync();
+  // The whole body is wrapped so a thrown error partway through can never
+  // leave the picker/confirm dialogs stuck open over a half-switched game -
+  // the overlays always get hidden in the finally block regardless.
+  try {
+    saveGame();
+    const stored = readStoredPayload();
+    let mapSlot = stored.maps[mapId];
+    if (!mapSlot) {
+      mapSlot = { bestWave: 0, bestGold: STARTING_GOLD, medals: { easy: false, normal: false, hard: false }, activeDifficulty: null, saves: {} };
+      stored.maps[mapId] = mapSlot;
+    }
+    mapSlot.saves = mapSlot.saves || {};
+    if (wipe) delete mapSlot.saves[diffId];
+    localStorage.setItem(TD_SAVE_KEY, JSON.stringify(stored));
+    scheduleCloudSync();
 
-  const preservedGameSpeed = state.gameSpeed; // gameSpeed is a global preference, not per-map
-  state.mapId = mapId;
-  applyMapLayout(mapId);
-  resetTransientState();
-  state.gameSpeed = preservedGameSpeed;
-  syncSpeedButton();
-  state.bestWave = 0;
-  state.bestGold = STARTING_GOLD;
-  applyMapDataToState(mapSlot, diffId);
-  updateStats();
-  saveGame();
-  mapPickerOverlay.hidden = true;
+    const preservedGameSpeed = state.gameSpeed; // gameSpeed is a global preference, not per-map
+    state.mapId = mapId;
+    applyMapLayout(mapId);
+    resetTransientState();
+    state.gameSpeed = preservedGameSpeed;
+    syncSpeedButton();
+    state.bestWave = 0;
+    state.bestGold = STARTING_GOLD;
+    applyMapDataToState(mapSlot, diffId);
+    updateStats();
+    saveGame();
+  } catch (err) {
+    console.error("enterMap failed:", err);
+  } finally {
+    mapPickerOverlay.hidden = true;
+  }
 }
 
 // ---------- Map picker: entry confirmation ----------
@@ -4716,31 +4724,40 @@ function draw() {
 // ---------- Main loop ----------
 let lastTime = performance.now();
 function loop(now) {
-  const rawDt = Math.min((now - lastTime) / 1000, 0.05);
-  lastTime = now;
-  const dt = rawDt * state.gameSpeed;
+  // Wrapped in try/catch so one bad frame (e.g. a transient bug right at the
+  // moment of switching maps) can never permanently freeze the game - an
+  // uncaught throw here would stop requestAnimationFrame from ever
+  // rescheduling itself, leaving the canvas stuck on its last good frame
+  // until the page is reloaded. Logged so it's still visible in devtools.
+  try {
+    const rawDt = Math.min((now - lastTime) / 1000, 0.05);
+    lastTime = now;
+    const dt = rawDt * state.gameSpeed;
 
-  if (!state.gameOver && !state.paused) {
-    updateSpawning(dt);
-    updateEnemies(dt);
-    updateHealers(dt);
-    updateShields(dt);
-    updateTowers(dt);
-    updateSentries(dt);
-    updateRecruiters(dt);
-    updateAllies(dt);
-    updateEconomy(dt);
-    updateAuras(dt);
-    updateProjectiles(dt);
-    updateExplosions(dt);
-    updateDeathParticles(dt);
-    updateFloatingTexts(dt);
-    updateChainBolts(dt);
-    updateOverclock(dt);
-    updateFundraiser(dt);
-    updateStats();
+    if (!state.gameOver && !state.paused) {
+      updateSpawning(dt);
+      updateEnemies(dt);
+      updateHealers(dt);
+      updateShields(dt);
+      updateTowers(dt);
+      updateSentries(dt);
+      updateRecruiters(dt);
+      updateAllies(dt);
+      updateEconomy(dt);
+      updateAuras(dt);
+      updateProjectiles(dt);
+      updateExplosions(dt);
+      updateDeathParticles(dt);
+      updateFloatingTexts(dt);
+      updateChainBolts(dt);
+      updateOverclock(dt);
+      updateFundraiser(dt);
+      updateStats();
+    }
+    draw();
+  } catch (err) {
+    console.error("Frame error (recovered):", err);
   }
-  draw();
   requestAnimationFrame(loop);
 }
 
