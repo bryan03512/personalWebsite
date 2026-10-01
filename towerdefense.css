@@ -325,6 +325,26 @@ canvas {
   color: var(--green-faint);
 }
 
+.tower-target-section {
+  display: flex;
+  gap: 6px;
+}
+
+.tower-target-section:empty {
+  display: none;
+}
+
+.target-btn {
+  flex: 1;
+  padding: 6px 4px;
+  font-size: 0.7rem;
+}
+
+.target-btn.active {
+  background: var(--green);
+  color: #04150a;
+}
+
 .tower-path-section {
   display: flex;
   flex-direction: column;

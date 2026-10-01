@@ -1694,6 +1694,7 @@ const towerInfoPanel = document.getElementById("towerInfoPanel");
 const towerInfoName = document.getElementById("towerInfoName");
 const towerInfoLevel = document.getElementById("towerInfoLevel");
 const towerPathSection = document.getElementById("towerPathSection");
+const towerTargetSection = document.getElementById("towerTargetSection");
 const towerInfoClose = document.getElementById("towerInfoClose");
 const towerUpgradeBtn = document.getElementById("towerUpgradeBtn");
 const towerSellBtn = document.getElementById("towerSellBtn");
@@ -2767,8 +2768,21 @@ function recomputeSingularityMultiPath(t) {
   else if (t.hasExplosionPath) t.damageType = "explosive";
 }
 
+// "nearest" (closest to the tower), "strongest" (highest current hp),
+// "first" (farthest along the path). Defaults per-type (Sentry is born
+// "strongest") but always overridable per-instance via the tower info panel
+// - set here rather than at each placement/paste/load call site so every
+// tower (old saves included, which predate this field entirely) ends up
+// with a concrete value instead of leaving it undefined forever.
+const TARGET_PRIORITIES = [
+  { id: "nearest", label: "Close" },
+  { id: "strongest", label: "Strong" },
+  { id: "first", label: "First" },
+];
+
 function recomputeTowerStats(t) {
   const def = TOWER_TYPES[t.type];
+  if (!t.targetPriority) t.targetPriority = def.targetPriority || "nearest";
   const levelFactor = 1 + 0.25 * (t.level - 1);
   const rangeLevelFactor = 1 + 0.06 * (t.level - 1);
   t.range = def.range * rangeLevelFactor * (t.pathRangeMult || 1);
@@ -2950,7 +2964,45 @@ function refreshTowerInfoPanel() {
   towerUpgradeBtn.disabled = state.gold < cost;
   towerSellBtn.textContent = `sell (+${Math.round(t.totalInvested * 0.6)}c)`;
 
+  refreshTowerTargetSection(t);
   refreshTowerPathSection(t);
+}
+
+// Same "don't rebuild mid-click" constraint as the path section above - only
+// rebuilt when the selected tower itself changes, not on every one of
+// refreshTowerInfoPanel's 60x/sec calls. Towers that don't attack
+// (isSupport/isEconomy/isRecruiter - see updateTowers' own skip check) never
+// pick a target at all, so the section is just left empty for those.
+let lastTargetSectionTower = null;
+
+function refreshTowerTargetSection(t) {
+  if (t.isSupport || t.isEconomy || t.isRecruiter) {
+    towerTargetSection.innerHTML = "";
+    lastTargetSectionTower = null;
+    return;
+  }
+  if (t === lastTargetSectionTower) {
+    towerTargetSection.querySelectorAll(".target-btn").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.priority === t.targetPriority);
+    });
+    return;
+  }
+  lastTargetSectionTower = t;
+  towerTargetSection.innerHTML = "";
+  TARGET_PRIORITIES.forEach(({ id, label }) => {
+    const btn = document.createElement("button");
+    btn.className = "btn target-btn" + (t.targetPriority === id ? " active" : "");
+    btn.dataset.priority = id;
+    btn.textContent = label;
+    btn.addEventListener("click", () => {
+      t.targetPriority = id;
+      towerTargetSection.querySelectorAll(".target-btn").forEach((b) => {
+        b.classList.toggle("active", b.dataset.priority === id);
+      });
+      saveGame();
+    });
+    towerTargetSection.appendChild(btn);
+  });
 }
 
 // refreshTowerInfoPanel runs every frame (60x/sec), so this must NOT tear
@@ -3814,6 +3866,19 @@ function isEnemyHalfOnScreen(e) {
   return e.x >= 0 && e.x <= COLS * CELL && e.y >= 0 && e.y <= ROWS * CELL;
 }
 
+// Single sortable progress number for "farthest along the path" targeting -
+// segment dominates (an enemy on a later segment is always further along
+// than one on an earlier segment, regardless of pixel position), and the
+// distance remaining to its next waypoint breaks ties within the same
+// segment (closer to the next point = further along). Every enemy still in
+// state.enemies has a valid PATH_POINTS[e.segment] (see updateEnemies, which
+// removes an enemy the instant its segment runs out), so no bounds guard needed.
+function enemyPathProgress(e) {
+  const target = PATH_POINTS[e.segment];
+  const distToNext = distance(e.x, e.y, target.x, target.y);
+  return e.segment * 100000 - distToNext;
+}
+
 function findTargets(t, count, canSeeCamo, targetPriority) {
   const inRange = [];
   for (const e of state.enemies) {
@@ -3824,6 +3889,8 @@ function findTargets(t, count, canSeeCamo, targetPriority) {
   }
   if (targetPriority === "strongest") {
     inRange.sort((a, b) => b.e.hp - a.e.hp);
+  } else if (targetPriority === "first") {
+    inRange.sort((a, b) => enemyPathProgress(b.e) - enemyPathProgress(a.e));
   } else {
     inRange.sort((a, b) => a.d - b.d);
   }
