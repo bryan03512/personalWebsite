@@ -275,10 +275,11 @@ function canPlaceTowerAt(x, y) {
 // wherever a range circle gets drawn. Far past the map's ~984px diagonal, so
 // it's functionally always-in-range without being non-finite.
 const GLOBAL_RANGE = 9999;
-// 1/3 of the map's shorter dimension - the ceiling every tower's fully
-// computed range (base * level * path * buffs) gets clamped to, unless the
-// tower is explicitly flagged isGlobalRange (the Sniper's whole gimmick).
-const MAP_RANGE_CAP = Math.min(COLS * CELL, ROWS * CELL) / 3;
+// A flat ceiling every tower's fully computed range (base * level * path *
+// buffs) gets clamped to, unless the tower is explicitly flagged
+// isGlobalRange (the Sniper's whole gimmick) - no amount of leveling or
+// path investment can push a normal tower's range past this.
+const MAP_RANGE_CAP = 175;
 
 // ---------- Tower & enemy definitions ----------
 const TOWER_TYPES = {
