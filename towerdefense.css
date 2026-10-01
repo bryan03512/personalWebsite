@@ -568,6 +568,32 @@ canvas {
   font-weight: bold;
 }
 
+.map-picker-tier {
+  display: inline-block;
+  font-size: 0.62rem;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 6px;
+  border-radius: 3px;
+  margin: 2px 0;
+}
+
+.map-picker-tier-easy {
+  color: var(--green);
+  border: 1px solid var(--green-dim);
+}
+
+.map-picker-tier-medium {
+  color: var(--yellow);
+  border: 1px solid #7a6a1a;
+}
+
+.map-picker-tier-hard {
+  color: var(--red);
+  border: 1px solid #5a2323;
+}
+
 .map-picker-meta {
   font-size: 0.72rem;
   color: var(--green-faint);

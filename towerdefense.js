@@ -16,9 +16,33 @@ function cellCenter([col, row]) {
 // static obstacles/walls: rects towers can't be placed on or overlapping
 // (see canPlaceTowerAt) - purely footprint blockers, they don't affect
 // enemy movement or tower targeting (towers "see over" them).
+// Listed (and shown in the picker) in order from easiest to hardest map
+// LAYOUT - tier is about the path shape itself (length, how many times it
+// loops back near its own earlier stretch giving towers a second crack at
+// the same enemies, overall enemy travel time) and is entirely separate
+// from the Easy/Normal/Hard per-save difficulty picked alongside it.
 const MAP_DEFS = {
+  // Long path that loops back near itself twice, so well-placed towers get
+  // two separate exposure windows on the same enemies - the easiest layout.
+  map3: {
+    name: "The Monolith",
+    tier: "easy",
+    waypoints: [
+      [-1, 8], [8, 8], [8, 1], [16, 1], [16, 12], [5, 12], [5, 18], [22, 18],
+      [22, 4], [13, 4], [13, 15], [24, 15], [24, 9], [26, 9],
+    ],
+    obstacles: [
+      { x: 285, y: 90, w: 90, h: 80, kind: "obstacle" },
+      { x: 18 * 30, y: 3 * 30, w: 3 * 30, h: 6 * 30, kind: "wall" },
+      { x: 8 * 30, y: 14 * 30, w: 4 * 30, h: 3 * 30, kind: "obstacle" },
+      { x: 18 * 30, y: 10 * 30, w: 3 * 30, h: 4 * 30, kind: "wall" },
+    ],
+    groundColor: "#4a7a52", groundAccent: "#557f5c", dirtColor: "#463a52",
+    stoneColors: ["#7c6f8a", "#71647e", "#665973"],
+  },
   map1: {
     name: "Main Branch",
+    tier: "medium",
     waypoints: [
       [-1, 2], [6, 2], [6, 6], [2, 6], [2, 10], [10, 10], [10, 4], [14, 4],
       [14, 14], [4, 14], [4, 17], [20, 17], [20, 8], [24, 8], [24, 2], [26, 2],
@@ -34,6 +58,7 @@ const MAP_DEFS = {
   },
   map2: {
     name: "CI Pipeline",
+    tier: "medium",
     // Rows 3 apart (was 2) so free placement actually has a legal gap
     // between adjacent zigzag lanes - a tighter pitch left zero buildable
     // space anywhere once path clearance is a continuous distance instead
@@ -50,25 +75,11 @@ const MAP_DEFS = {
     groundColor: "#4f9d78", groundAccent: "#5cb086", dirtColor: "#5c5f66",
     stoneColors: ["#9aa0a6", "#8d9298", "#80858b"],
   },
-  map3: {
-    name: "The Monolith",
-    waypoints: [
-      [-1, 8], [8, 8], [8, 1], [16, 1], [16, 12], [5, 12], [5, 18], [22, 18],
-      [22, 4], [13, 4], [13, 15], [24, 15], [24, 9], [26, 9],
-    ],
-    obstacles: [
-      { x: 285, y: 90, w: 90, h: 80, kind: "obstacle" },
-      { x: 18 * 30, y: 3 * 30, w: 3 * 30, h: 6 * 30, kind: "wall" },
-      { x: 8 * 30, y: 14 * 30, w: 4 * 30, h: 3 * 30, kind: "obstacle" },
-      { x: 18 * 30, y: 10 * 30, w: 3 * 30, h: 4 * 30, kind: "wall" },
-    ],
-    groundColor: "#4a7a52", groundAccent: "#557f5c", dirtColor: "#463a52",
-    stoneColors: ["#7c6f8a", "#71647e", "#665973"],
-  },
   // A stepped notch partway along (the col14-18/row3-8 detour) - a squared-
   // off bracket shape, echoing a patio walkway with a pool cut into one corner.
   map4: {
     name: "Staging Loop",
+    tier: "medium",
     waypoints: [
       [-1, 10], [4, 10], [4, 3], [14, 3], [14, 8], [18, 8], [18, 3], [24, 3],
       [24, 16], [8, 16], [8, 12], [26, 12],
@@ -82,10 +93,12 @@ const MAP_DEFS = {
     groundColor: "#dcc389", groundAccent: "#e6d09c", dirtColor: "#b08a54",
     stoneColors: ["#e8d3a5", "#dcc494", "#cdb282"],
   },
-  // A rectangular loop/spur near the start (the col5-9/row4-10 detour) before
-  // a long zigzag swing - echoes a garden stepping-stone path with a bump.
+  // The shortest path of the 5 (one rectangular spur near the start, then a
+  // single zigzag swing to the exit) - least room and least enemy exposure
+  // time, the hardest layout.
   map5: {
     name: "Feedback Loop",
+    tier: "hard",
     waypoints: [
       [-1, 10], [5, 10], [5, 4], [9, 4], [9, 10], [13, 10], [13, 16], [19, 16],
       [19, 6], [24, 6], [24, 13], [26, 13],
@@ -100,6 +113,8 @@ const MAP_DEFS = {
     stoneColors: ["#a8a49a", "#9c988e", "#8f8b81"],
   },
 };
+
+const MAP_TIER_LABELS = { easy: "Easy map", medium: "Medium map", hard: "Hard map" };
 
 // Waypoints in grid coordinates (col, row). First/last are off-canvas so
 // enemies spawn/exit smoothly at the edges. Reassigned by applyMapLayout()
@@ -2099,9 +2114,10 @@ function renderMapPicker() {
     const headerRow = document.createElement("div");
     headerRow.className = "map-picker-header-row";
 
+    const tierLabel = MAP_TIER_LABELS[def.tier] || "";
     const btn = document.createElement("button");
     btn.className = "btn map-picker-btn";
-    btn.innerHTML = `<span class="map-picker-name">${def.name}</span><span class="map-picker-meta">${current}</span>`;
+    btn.innerHTML = `<span class="map-picker-name">${def.name}</span><span class="map-picker-tier map-picker-tier-${def.tier}">${tierLabel}</span><span class="map-picker-meta">${current}</span>`;
     btn.addEventListener("click", () => onMapNameClick(id));
     headerRow.appendChild(btn);
 
