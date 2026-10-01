@@ -341,6 +341,21 @@ const TOWER_TYPES = {
     cost: 130, damage: 16, range: 70, fireRate: 1.1, color: "#f43f5e", projectileSpeed: 600,
     multiShot: 3,
   },
+  grep: {
+    name: "Grep", desc: "a piercing beam that scans clean through everything in a line, hitting every enemy it passes", emoji: "🔍",
+    cost: 160, damage: 24, range: 130, fireRate: 1.3, color: "#4ade80", projectileSpeed: 700,
+    piercing: true,
+  },
+  // Chains through a sequence of enemies like Tesla, but as an actual
+  // thrown projectile with travel time between jumps instead of an instant
+  // zap - and once it runs out of chain or targets, it flies back to the
+  // tower and disappears (see resolveBoomerangStep) rather than just
+  // vanishing on the last hit.
+  callback: {
+    name: "Callback", desc: "a boomerang that chains through nearby enemies before flying back home", emoji: "🪃",
+    cost: 190, damage: 18, range: 120, fireRate: 1.4, color: "#2dd4bf", projectileSpeed: 550,
+    boomerang: true, chainCount: 3, chainFalloff: 0.7, chainRange: 100,
+  },
   // Secret capstone towers - excluded from buildTowerButtons (and therefore
   // invisible/unknown) until each one's unlockCheck() passes. How many may
   // be placed at once is capped and grows with further milestones - see
@@ -1139,6 +1154,87 @@ const TOWER_PATHS = {
         {
           desc: "one shot, one kill (T5 - a major investment)", cost: 1300,
           apply: (t) => { t.pathDamageMult = 9.0; t.pathRangeMult = 2.6; t.critChance = 0.4; t.critMult = 3.2; t.bossDamageMult = 2.2; t.tankDamageMult = 2.4; },
+        },
+      ],
+    },
+  },
+  grep: {
+    global: {
+      name: "Global Match",
+      accentColor: "#4ade80",
+      tiers: [
+        { desc: "pierces with more force, bigger hits", cost: 80, apply: (t) => { t.pathDamageMult = 1.3; } },
+        { desc: "even bigger hits, faster fire rate", cost: 150, apply: (t) => { t.pathDamageMult = 1.6; t.pathRateMult = 1.2; } },
+        {
+          desc: "massive hits, chance to crit", cost: 260,
+          apply: (t) => { t.pathDamageMult = 2.0; t.critChance = 0.2; t.critMult = 2.0; },
+        },
+        {
+          desc: "huge hits, bigger crits", cost: 440,
+          apply: (t) => { t.pathDamageMult = 2.6; t.critChance = 0.28; t.critMult = 2.4; },
+        },
+        {
+          desc: "every match counts (T5 - a major investment)", cost: 750,
+          apply: (t) => { t.pathDamageMult = 4.0; t.pathRateMult = 1.4; t.critChance = 0.4; t.critMult = 3.0; },
+        },
+      ],
+    },
+    regex: {
+      name: "Regex Precision",
+      accentColor: "#38bdf8",
+      tiers: [
+        { desc: "longer reach, bonus dmg vs merge conflicts", cost: 80, apply: (t) => { t.pathRangeMult = 1.3; t.tankDamageMult = 1.4; } },
+        {
+          desc: "even longer reach, bigger tank bonus", cost: 150,
+          apply: (t) => { t.pathRangeMult = 1.5; t.tankDamageMult = 1.8; },
+        },
+        {
+          desc: "extreme reach, bonus dmg vs bosses too", cost: 260,
+          apply: (t) => { t.pathRangeMult = 1.7; t.bossDamageMult = 1.5; },
+        },
+        { desc: "board-spanning reach", cost: 440, apply: (t) => { t.pathRangeMult = 2.0; t.bossDamageMult = 2.0; } },
+        {
+          desc: "matches everything, everywhere (T5 - a major investment)", cost: 750,
+          apply: (t) => { t.pathRangeMult = 2.4; t.bossDamageMult = 3.0; t.tankDamageMult = 3.0; },
+        },
+      ],
+    },
+  },
+  callback: {
+    chain: {
+      name: "Deep Chain",
+      accentColor: "#2dd4bf",
+      tiers: [
+        { desc: "chains to 1 more target", cost: 90, apply: (t) => { t.chainCount = 4; } },
+        { desc: "chains to 2 more, bigger hits", cost: 170, apply: (t) => { t.chainCount = 5; t.pathDamageMult = 1.3; } },
+        {
+          desc: "chains to 4 more, better falloff", cost: 300,
+          apply: (t) => { t.chainCount = 7; t.chainFalloff = 0.8; },
+        },
+        { desc: "chains to 7 more", cost: 600, apply: (t) => { t.chainCount = 10; t.pathDamageMult = 1.6; } },
+        {
+          desc: "infinite recursion - keeps calling back until nothing answers (T5 - a major investment)", cost: 1000,
+          apply: (t) => { t.chainCount = Infinity; t.pathDamageMult = 2.2; },
+        },
+      ],
+    },
+    fastReturn: {
+      name: "Fast Return",
+      accentColor: "#fb923c",
+      tiers: [
+        { desc: "faster throws, bigger hits", cost: 90, apply: (t) => { t.pathRateMult = 1.3; t.pathDamageMult = 1.3; } },
+        {
+          desc: "even faster, chance to crit", cost: 170,
+          apply: (t) => { t.pathRateMult = 1.6; t.critChance = 0.2; t.critMult = 1.8; },
+        },
+        {
+          desc: "rapid throws, bigger crits", cost: 300,
+          apply: (t) => { t.pathRateMult = 2.0; t.critChance = 0.3; t.critMult = 2.2; },
+        },
+        { desc: "blistering speed", cost: 600, apply: (t) => { t.pathRateMult = 2.5; t.critChance = 0.38; t.critMult = 2.6; } },
+        {
+          desc: "never stops calling back (T5 - a major investment)", cost: 1000,
+          apply: (t) => { t.pathRateMult = 3.2; t.critChance = 0.5; t.critMult = 3.2; t.pathDamageMult = 1.8; },
         },
       ],
     },
@@ -3012,7 +3108,7 @@ towerSellBtn.addEventListener("click", () => state.selectedTower && sellTower(st
 const TOWER_HOTKEYS = {
   q: "gamer", w: "coder", e: "hacker", r: "manager", t: "farmer",
   y: "recruiter", u: "quant", i: "freeze", o: "turret", p: "tenx", a: "singularity", s: "tesla",
-  d: "shotgun",
+  d: "shotgun", f: "grep", g: "callback",
 };
 
 // = deploys the next sprint, - toggles auto-run (neither needs a tower
@@ -3726,7 +3822,8 @@ function updateTowers(dt) {
         let dmg = baseDmg * buffs.damageMult;
         const isCrit = t.critChance && Math.random() < t.critChance;
         if (isCrit) dmg *= t.critMult || 2;
-        state.projectiles.push({
+
+        const proj = {
           x: t.x,
           y: t.y,
           target,
@@ -3734,12 +3831,37 @@ function updateTowers(dt) {
           damage: dmg,
           isCrit,
           splashRadius: t.splashRadius || 0,
-          chainCount: t.chainCount || 0,
+          // Callback's chain is a traveling boomerang (see resolveBoomerangStep
+          // in updateProjectiles), not Tesla's instant zap - keep chainCount
+          // zeroed here so it can never fall into that older, unrelated path.
+          chainCount: t.boomerang ? 0 : (t.chainCount || 0),
           chainFalloff: t.chainFalloff || 0.6,
           chainRange: t.chainRange || 90,
           color: t.color,
           sourceTower: t,
-        });
+        };
+
+        if (t.piercing) {
+          const dx = target.x - t.x, dy = target.y - t.y;
+          const dist = Math.hypot(dx, dy) || 1;
+          proj.piercing = true;
+          proj.dirX = dx / dist;
+          proj.dirY = dy / dist;
+          proj.traveled = 0;
+          proj.maxDist = t.range;
+          proj.hitEnemies = new Set();
+        }
+
+        if (t.boomerang) {
+          proj.boomerang = true;
+          proj.homeX = t.x;
+          proj.homeY = t.y;
+          proj.chainsLeft = t.chainCount || 1;
+          proj.hitEnemies = new Set();
+          proj.phase = "outbound";
+        }
+
+        state.projectiles.push(proj);
       }
       t.cooldown = t.fireRate / buffs.rateMult;
     }
@@ -3853,6 +3975,35 @@ function applyDamage(enemy, amount, sourceTower) {
 function updateProjectiles(dt) {
   for (let i = state.projectiles.length - 1; i >= 0; i--) {
     const p = state.projectiles[i];
+
+    // Grep's piercing beam: travels in a fixed straight line from launch
+    // (not re-aimed at a moving target) and damages every enemy it passes
+    // within maxDist, instead of stopping at the first thing it touches.
+    if (p.piercing) {
+      p.x += p.dirX * p.speed * dt;
+      p.y += p.dirY * p.speed * dt;
+      p.traveled += p.speed * dt;
+      for (const e of state.enemies) {
+        if (p.hitEnemies.has(e)) continue;
+        if (distance(p.x, p.y, e.x, e.y) <= e.radius + 5) {
+          p.hitEnemies.add(e);
+          applyDamage(e, p.damage, p.sourceTower);
+          if (p.isCrit) spawnFloatingText(e.x, e.y - 20, "CRIT!", "#ffee58");
+        }
+      }
+      const outOfBounds = p.x < -20 || p.x > COLS * CELL + 20 || p.y < -20 || p.y > ROWS * CELL + 20;
+      if (p.traveled >= p.maxDist || outOfBounds) state.projectiles.splice(i, 1);
+      continue;
+    }
+
+    // Callback's boomerang: a traveling chain (unlike Tesla's instant zap) -
+    // see resolveBoomerangStep.
+    if (p.boomerang) {
+      resolveBoomerangStep(p, dt);
+      if (p.phase === "done") state.projectiles.splice(i, 1);
+      continue;
+    }
+
     if (!state.enemies.includes(p.target)) {
       state.projectiles.splice(i, 1);
       continue;
@@ -3883,6 +4034,72 @@ function updateProjectiles(dt) {
     }
   }
   separateProjectiles();
+}
+
+// Callback's boomerang chain, one frame at a time. Outbound: flies to its
+// current target (or, if that target died en route, skips straight to
+// seeking the next one from its current position), deals damage+falloff,
+// then either retargets to the nearest not-yet-hit enemy within chainRange
+// or - once chainsLeft runs out (possibly never, at T5) or no enemy is left
+// anywhere on the map to chain to - switches to flying back home. Returning:
+// flies to where its tower stood at launch (towers don't move, so a fixed
+// point is fine) and disappears on arrival, a bit faster than it went out.
+function resolveBoomerangStep(p, dt) {
+  if (p.phase === "outbound") {
+    if (state.enemies.length === 0) {
+      // Nothing left on the map at all - no point hanging around even
+      // mid-chain (this is what makes T5's infinite chain actually end).
+      p.phase = "returning";
+    } else if (!state.enemies.includes(p.target)) {
+      // Something else killed our current target before we got there -
+      // don't waste the trip, just seek the next one from here.
+      seekNextChainTarget(p, p.x, p.y);
+    } else {
+      const d = distance(p.x, p.y, p.target.x, p.target.y);
+      const step = p.speed * dt;
+      if (step >= d) {
+        p.hitEnemies.add(p.target);
+        applyDamage(p.target, p.damage, p.sourceTower);
+        if (p.isCrit) spawnFloatingText(p.target.x, p.target.y - 20, "CRIT!", "#ffee58");
+        p.chainsLeft -= 1;
+        p.damage *= p.chainFalloff;
+        seekNextChainTarget(p, p.target.x, p.target.y);
+      } else {
+        p.x += ((p.target.x - p.x) / d) * step;
+        p.y += ((p.target.y - p.y) / d) * step;
+      }
+    }
+  }
+  if (p.phase === "returning") {
+    const d = distance(p.x, p.y, p.homeX, p.homeY);
+    const step = p.speed * dt * 1.6;
+    if (step >= d) {
+      p.phase = "done";
+    } else {
+      p.x += ((p.homeX - p.x) / d) * step;
+      p.y += ((p.homeY - p.y) / d) * step;
+    }
+  }
+}
+
+// Shared by resolveBoomerangStep: finds the nearest not-yet-hit enemy within
+// chainRange of (fromX, fromY) and retargets p at it, or switches p to the
+// returning phase if chainsLeft is exhausted or nothing qualifies.
+function seekNextChainTarget(p, fromX, fromY) {
+  let next = null;
+  if (p.chainsLeft > 0) {
+    let bestDist = Infinity;
+    for (const e of state.enemies) {
+      if (p.hitEnemies.has(e) || !isEnemyHalfOnScreen(e)) continue;
+      const dd = distance(fromX, fromY, e.x, e.y);
+      if (dd <= p.chainRange && dd < bestDist) {
+        bestDist = dd;
+        next = e;
+      }
+    }
+  }
+  if (next) p.target = next;
+  else p.phase = "returning";
 }
 
 // Keeps every in-flight projectile visible - pushes any two drawn closer
@@ -3973,40 +4190,62 @@ document.addEventListener("keydown", ensureAudioContext, { once: true });
 
 function playBlip(freqStart, freqEnd, duration, waveType, volume) {
   if (!audioCtx) return;
+  // Small per-call jitter so several simultaneous deaths (e.g. a splitsTo
+  // cascade, or an AoE hit that kills a cluster at once) read as a bunch of
+  // distinct pops instead of one reinforced tone - identical oscillators
+  // all starting at the exact same instant otherwise just sound like one.
+  const jitter = 0.92 + Math.random() * 0.16;
+  const now = audioCtx.currentTime + Math.random() * 0.012;
+
   const osc = audioCtx.createOscillator();
   const gain = audioCtx.createGain();
   osc.type = waveType;
-  const now = audioCtx.currentTime;
-  osc.frequency.setValueAtTime(freqStart, now);
-  osc.frequency.exponentialRampToValueAtTime(Math.max(20, freqEnd), now + duration);
+  osc.frequency.setValueAtTime(freqStart * jitter, now);
+  osc.frequency.exponentialRampToValueAtTime(Math.max(20, freqEnd * jitter), now + duration);
   gain.gain.setValueAtTime(volume, now);
   gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
   osc.connect(gain).connect(audioCtx.destination);
   osc.start(now);
   osc.stop(now + duration);
+
+  // A quieter octave-up triangle layered on top for a rounder, more
+  // "satisfying" pop instead of one thin single-oscillator tone.
+  const osc2 = audioCtx.createOscillator();
+  const gain2 = audioCtx.createGain();
+  const shortDuration = duration * 0.6;
+  osc2.type = "triangle";
+  osc2.frequency.setValueAtTime(freqStart * 2 * jitter, now);
+  osc2.frequency.exponentialRampToValueAtTime(Math.max(40, freqEnd * 2 * jitter), now + shortDuration);
+  gain2.gain.setValueAtTime(volume * 0.35, now);
+  gain2.gain.exponentialRampToValueAtTime(0.001, now + shortDuration);
+  osc2.connect(gain2).connect(audioCtx.destination);
+  osc2.start(now);
+  osc2.stop(now + shortDuration);
 }
 
 // One entry per ENEMY_TYPES key - freqStart/freqEnd/duration/waveType/volume
 // tuned per type so every death is audibly distinct, not just visually.
+// Volumes cut to ~60% of their original levels - a lot of simultaneous
+// deaths (a boss-split cascade, an AoE wipe) was getting loud fast.
 const DEATH_SOUNDS = {
-  basic: { freqStart: 600, freqEnd: 300, duration: 0.12, waveType: "sine", volume: 0.12 },
-  fast: { freqStart: 900, freqEnd: 200, duration: 0.08, waveType: "square", volume: 0.08 },
-  tank: { freqStart: 150, freqEnd: 80, duration: 0.25, waveType: "triangle", volume: 0.16 },
-  legacy: { freqStart: 250, freqEnd: 150, duration: 0.18, waveType: "sine", volume: 0.13 },
-  firewalled: { freqStart: 300, freqEnd: 200, duration: 0.15, waveType: "square", volume: 0.12 },
-  encrypted: { freqStart: 700, freqEnd: 500, duration: 0.15, waveType: "triangle", volume: 0.12 },
-  obfuscated: { freqStart: 400, freqEnd: 250, duration: 0.2, waveType: "sine", volume: 0.08 },
-  splitter: { freqStart: 500, freqEnd: 350, duration: 0.15, waveType: "sawtooth", volume: 0.12 },
-  healer: { freqStart: 800, freqEnd: 600, duration: 0.2, waveType: "sine", volume: 0.12 },
-  shielded: { freqStart: 1000, freqEnd: 700, duration: 0.1, waveType: "square", volume: 0.1 },
-  boss: { freqStart: 200, freqEnd: 60, duration: 0.4, waveType: "sawtooth", volume: 0.2 },
-  bossCamo: { freqStart: 500, freqEnd: 150, duration: 0.35, waveType: "sine", volume: 0.16 },
-  bossTank: { freqStart: 120, freqEnd: 40, duration: 0.5, waveType: "sawtooth", volume: 0.22 },
-  megaboss: { freqStart: 150, freqEnd: 30, duration: 0.7, waveType: "sawtooth", volume: 0.28 },
-  splitBoss20: { freqStart: 250, freqEnd: 100, duration: 0.3, waveType: "square", volume: 0.16 },
-  splitBoss60: { freqStart: 180, freqEnd: 70, duration: 0.4, waveType: "sawtooth", volume: 0.2 },
-  splitBoss80: { freqStart: 150, freqEnd: 55, duration: 0.5, waveType: "sawtooth", volume: 0.22 },
-  splitBoss100: { freqStart: 100, freqEnd: 30, duration: 0.8, waveType: "sawtooth", volume: 0.28 },
+  basic: { freqStart: 600, freqEnd: 300, duration: 0.12, waveType: "sine", volume: 0.07 },
+  fast: { freqStart: 900, freqEnd: 200, duration: 0.08, waveType: "square", volume: 0.05 },
+  tank: { freqStart: 150, freqEnd: 80, duration: 0.25, waveType: "triangle", volume: 0.1 },
+  legacy: { freqStart: 250, freqEnd: 150, duration: 0.18, waveType: "sine", volume: 0.08 },
+  firewalled: { freqStart: 300, freqEnd: 200, duration: 0.15, waveType: "square", volume: 0.07 },
+  encrypted: { freqStart: 700, freqEnd: 500, duration: 0.15, waveType: "triangle", volume: 0.07 },
+  obfuscated: { freqStart: 400, freqEnd: 250, duration: 0.2, waveType: "sine", volume: 0.05 },
+  splitter: { freqStart: 500, freqEnd: 350, duration: 0.15, waveType: "sawtooth", volume: 0.07 },
+  healer: { freqStart: 800, freqEnd: 600, duration: 0.2, waveType: "sine", volume: 0.07 },
+  shielded: { freqStart: 1000, freqEnd: 700, duration: 0.1, waveType: "square", volume: 0.06 },
+  boss: { freqStart: 200, freqEnd: 60, duration: 0.4, waveType: "sawtooth", volume: 0.13 },
+  bossCamo: { freqStart: 500, freqEnd: 150, duration: 0.35, waveType: "sine", volume: 0.1 },
+  bossTank: { freqStart: 120, freqEnd: 40, duration: 0.5, waveType: "sawtooth", volume: 0.14 },
+  megaboss: { freqStart: 150, freqEnd: 30, duration: 0.7, waveType: "sawtooth", volume: 0.18 },
+  splitBoss20: { freqStart: 250, freqEnd: 100, duration: 0.3, waveType: "square", volume: 0.1 },
+  splitBoss60: { freqStart: 180, freqEnd: 70, duration: 0.4, waveType: "sawtooth", volume: 0.13 },
+  splitBoss80: { freqStart: 150, freqEnd: 55, duration: 0.5, waveType: "sawtooth", volume: 0.14 },
+  splitBoss100: { freqStart: 100, freqEnd: 30, duration: 0.8, waveType: "sawtooth", volume: 0.18 },
 };
 
 function playDeathSound(type) {
@@ -4198,6 +4437,196 @@ function drawBolt(x, y, dx, dy, len, color) {
   const norm = Math.hypot(dx, dy) || 1;
   const ux = dx / norm, uy = dy / norm;
   drawLightning(x - ux * len * 0.5, y - uy * len * 0.5, x + ux * len * 0.5, y + uy * len * 0.5, color, 3);
+}
+
+// ---------- Per-tower projectile shapes ----------
+// Each tower's shot reads as its own small icon instead of every tower
+// firing the same colored dot - dispatched by drawProjectileShape below.
+function drawSparkProjectile(x, y, color, scale) {
+  const s = 5 * (scale || 1);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.6 * (scale || 1);
+  ctx.beginPath();
+  ctx.moveTo(x - s, y); ctx.lineTo(x + s, y);
+  ctx.moveTo(x, y - s); ctx.lineTo(x, y + s);
+  ctx.moveTo(x - s * 0.7, y - s * 0.7); ctx.lineTo(x + s * 0.7, y + s * 0.7);
+  ctx.moveTo(x - s * 0.7, y + s * 0.7); ctx.lineTo(x + s * 0.7, y - s * 0.7);
+  ctx.stroke();
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(x, y, 1.6 * (scale || 1), 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawOrbProjectile(x, y, color) {
+  ctx.fillStyle = color;
+  ctx.globalAlpha = 0.9;
+  ctx.beginPath();
+  ctx.arc(x, y, 3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = 0.35;
+  ctx.beginPath();
+  ctx.arc(x, y, 5.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+}
+
+function drawDiamondProjectile(x, y, color) {
+  const s = 4;
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(x, y - s); ctx.lineTo(x + s, y); ctx.lineTo(x, y + s); ctx.lineTo(x - s, y);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = "rgba(255,255,255,0.6)";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+}
+
+function drawShardProjectile(x, y, color) {
+  const s = 4.5;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.8;
+  for (let i = 0; i < 3; i++) {
+    const a = (Math.PI / 3) * i;
+    ctx.beginPath();
+    ctx.moveTo(x - Math.cos(a) * s, y - Math.sin(a) * s);
+    ctx.lineTo(x + Math.cos(a) * s, y + Math.sin(a) * s);
+    ctx.stroke();
+  }
+  ctx.fillStyle = "#ffffff";
+  ctx.beginPath();
+  ctx.arc(x, y, 1.3, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawPelletProjectile(x, y, dx, dy, color) {
+  const norm = Math.hypot(dx, dy) || 1;
+  const angle = Math.atan2(dy / norm, dx / norm);
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 4, 1.8, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawVoidProjectile(x, y, color) {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(x, y, 4, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.fillStyle = "#1a0b24";
+  ctx.beginPath();
+  ctx.arc(x, y, 2, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+// Grep's piercing beam - a short bright streak oriented along its fixed
+// travel direction, instead of a jagged lightning bolt (it's a clean scan,
+// not a shock).
+function drawBeamProjectile(x, y, dirX, dirY, color) {
+  const len = 16;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2.4;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(x - dirX * len * 0.5, y - dirY * len * 0.5);
+  ctx.lineTo(x + dirX * len * 0.5, y + dirY * len * 0.5);
+  ctx.stroke();
+  ctx.fillStyle = "#ffffff";
+  ctx.globalAlpha = 0.8;
+  ctx.beginPath();
+  ctx.arc(x + dirX * len * 0.5, y + dirY * len * 0.5, 1.6, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+}
+
+// Callback's boomerang - a small spinning crescent so it visually reads as
+// a thrown boomerang rather than a plain dot, during both its outbound and
+// return legs.
+function drawBoomerangProjectile(x, y, color) {
+  const spin = (performance.now() / 120) % (Math.PI * 2);
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(spin);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2.4;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.arc(0, 0, 4.5, Math.PI * 0.15, Math.PI * 1.1);
+  ctx.stroke();
+  ctx.restore();
+}
+
+// Sniper's shot - a long, bright, thin streak toward its target (it's a
+// precision long-range rifle, not a thrown object).
+function drawSniperBeam(x, y, dx, dy, color) {
+  const norm = Math.hypot(dx, dy) || 1;
+  const ux = dx / norm, uy = dy / norm;
+  const len = 20;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.4;
+  ctx.globalAlpha = 0.85;
+  ctx.beginPath();
+  ctx.moveTo(x - ux * len, y - uy * len);
+  ctx.lineTo(x, y);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = "#ffffff";
+  ctx.beginPath();
+  ctx.arc(x, y, 1.6, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+// Sentry's shot - a small steady square instead of a round pellet.
+function drawSquareProjectile(x, y, color) {
+  ctx.fillStyle = color;
+  ctx.fillRect(x - 3, y - 3, 6, 6);
+  ctx.strokeStyle = "rgba(0,0,0,0.3)";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x - 3, y - 3, 6, 6);
+}
+
+function drawDotProjectile(x, y, color) {
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(x, y, 2.2, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawProjectileShape(p) {
+  const type = p.sourceTower?.type;
+  if (type === "tesla") {
+    drawBolt(p.x, p.y, p.target.x - p.x, p.target.y - p.y, 24, p.color);
+  } else if (type === "grep") {
+    drawBeamProjectile(p.x, p.y, p.dirX, p.dirY, p.color);
+  } else if (type === "callback") {
+    drawBoomerangProjectile(p.x, p.y, p.color);
+  } else if (type === "gamer") {
+    drawSparkProjectile(p.x, p.y, p.color);
+  } else if (type === "tenx") {
+    drawSparkProjectile(p.x, p.y, p.color, 1.6);
+  } else if (type === "hacker") {
+    drawOrbProjectile(p.x, p.y, p.color);
+  } else if (type === "quant") {
+    drawDiamondProjectile(p.x, p.y, p.color);
+  } else if (type === "freeze") {
+    drawShardProjectile(p.x, p.y, p.color);
+  } else if (type === "singularity") {
+    drawVoidProjectile(p.x, p.y, p.color);
+  } else if (type === "shotgun") {
+    drawPelletProjectile(p.x, p.y, p.target.x - p.x, p.target.y - p.y, p.color);
+  } else if (type === "coder") {
+    drawSniperBeam(p.x, p.y, p.target.x - p.x, p.target.y - p.y, p.color);
+  } else if (type === "turret") {
+    drawSquareProjectile(p.x, p.y, p.color);
+  } else {
+    drawDotProjectile(p.x, p.y, p.color);
+  }
 }
 
 // Ghost preview shared by both normal shop placement and pasted-tower
@@ -4676,17 +5105,10 @@ function draw() {
     ctx.globalAlpha = 1;
   }
 
-  // projectiles - Tesla fires a small jagged bolt instead of a round dot,
-  // oriented toward whatever it's currently flying at.
+  // projectiles - each tower's shot has its own distinct shape (see
+  // drawProjectileShape) instead of every tower firing the same dot.
   for (const p of state.projectiles) {
-    if (p.sourceTower?.type === "tesla") {
-      drawBolt(p.x, p.y, p.target.x - p.x, p.target.y - p.y, 24, p.color);
-    } else {
-      ctx.fillStyle = p.color;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, 2, 0, Math.PI * 2);
-      ctx.fill();
-    }
+    drawProjectileShape(p);
   }
 
   // explosions: expanding, fading ring where an AoE hit landed
