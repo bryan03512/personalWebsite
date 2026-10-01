@@ -770,24 +770,24 @@ const TOWER_PATHS = {
           apply: (t) => { t.pathIncomeMult = 5.5; state.gold += 400; },
         },
         {
-          desc: "acquired - staggering credits/sec, the team retires early (T5 - a major investment)", cost: 1000,
-          apply: (t) => { t.pathIncomeMult = 14; state.gold += 2000; },
+          desc: "acquired - staggering credits/sec, the team retires early, and the firm starts covering 2 uptime a sprint (T5 - a major investment)", cost: 1000,
+          apply: (t) => { t.pathIncomeMult = 14; state.gold += 2000; t.pathLivesPerRound = 2; },
         },
         {
-          desc: "strategic partnership - massive credits/sec, another payout", cost: 1600,
-          apply: (t) => { t.pathIncomeMult = 12; state.gold += 1200; },
+          desc: "strategic partnership - massive credits/sec, another payout, firm covers 2 uptime a sprint", cost: 1600,
+          apply: (t) => { t.pathIncomeMult = 12; state.gold += 1200; t.pathLivesPerRound = 2; },
         },
         {
-          desc: "unicorn status - huge credits/sec, huge payout", cost: 2500,
-          apply: (t) => { t.pathIncomeMult = 17; state.gold += 1800; },
+          desc: "unicorn status - huge credits/sec, huge payout, firm covers 3 uptime a sprint", cost: 2500,
+          apply: (t) => { t.pathIncomeMult = 17; state.gold += 1800; t.pathLivesPerRound = 3; },
         },
         {
-          desc: "market leader - enormous credits/sec, big payout", cost: 3800,
-          apply: (t) => { t.pathIncomeMult = 24; state.gold += 2600; },
+          desc: "market leader - enormous credits/sec, big payout, firm covers 3 uptime a sprint", cost: 3800,
+          apply: (t) => { t.pathIncomeMult = 24; state.gold += 2600; t.pathLivesPerRound = 3; },
         },
         {
-          desc: "monopoly - staggering credits/sec, giant payout", cost: 5600,
-          apply: (t) => { t.pathIncomeMult = 34; state.gold += 3800; },
+          desc: "monopoly - staggering credits/sec, giant payout, firm covers 4 uptime a sprint", cost: 5600,
+          apply: (t) => { t.pathIncomeMult = 34; state.gold += 3800; t.pathLivesPerRound = 4; },
         },
         {
           desc: "post-scarcity - the credits never stop flowing, and the firm covers 5 uptime a sprint (T10 - a massive investment)", cost: 8000,
@@ -810,24 +810,24 @@ const TOWER_PATHS = {
           apply: (t) => { t.costDiscountPct = 0.24; state.gold += 300; },
         },
         {
-          desc: "towers/upgrades cost 42% less, IPO windfall (T5 - a major investment)", cost: 1000,
-          apply: (t) => { t.costDiscountPct = 0.42; state.gold += 1500; },
+          desc: "towers/upgrades cost 42% less, IPO windfall, and the firm starts covering 2 uptime a sprint (T5 - a major investment)", cost: 1000,
+          apply: (t) => { t.costDiscountPct = 0.42; state.gold += 1500; t.pathLivesPerRound = 2; },
         },
         {
-          desc: "towers/upgrades cost 34% less, strategic funding round", cost: 1600,
-          apply: (t) => { t.costDiscountPct = 0.34; state.gold += 1000; },
+          desc: "towers/upgrades cost 34% less, strategic funding round, firm covers 2 uptime a sprint", cost: 1600,
+          apply: (t) => { t.costDiscountPct = 0.34; state.gold += 1000; t.pathLivesPerRound = 2; },
         },
         {
-          desc: "towers/upgrades cost 38% less, unicorn valuation", cost: 2500,
-          apply: (t) => { t.costDiscountPct = 0.38; state.gold += 1500; },
+          desc: "towers/upgrades cost 38% less, unicorn valuation, firm covers 3 uptime a sprint", cost: 2500,
+          apply: (t) => { t.costDiscountPct = 0.38; state.gold += 1500; t.pathLivesPerRound = 3; },
         },
         {
-          desc: "towers/upgrades cost 42% less, market-leading capital", cost: 3800,
-          apply: (t) => { t.costDiscountPct = 0.42; state.gold += 2200; },
+          desc: "towers/upgrades cost 42% less, market-leading capital, firm covers 3 uptime a sprint", cost: 3800,
+          apply: (t) => { t.costDiscountPct = 0.42; state.gold += 2200; t.pathLivesPerRound = 3; },
         },
         {
-          desc: "towers/upgrades cost 46% less, monopoly capital", cost: 5600,
-          apply: (t) => { t.costDiscountPct = 0.46; state.gold += 3200; },
+          desc: "towers/upgrades cost 46% less, monopoly capital, firm covers 4 uptime a sprint", cost: 5600,
+          apply: (t) => { t.costDiscountPct = 0.46; state.gold += 3200; t.pathLivesPerRound = 4; },
         },
         {
           desc: "towers/upgrades cost 50% less - practically free, and the firm covers 5 uptime a sprint (T10 - a massive investment)", cost: 8000,
@@ -850,24 +850,24 @@ const TOWER_PATHS = {
           apply: (t) => { t.pathIncomeMult = 3.4; t.costDiscountPct = 0.16; state.gold += 300; },
         },
         {
-          desc: "big income and discount, big payout (T5 - a major investment)", cost: 1000,
-          apply: (t) => { t.pathIncomeMult = 7.0; t.costDiscountPct = 0.30; state.gold += 1500; },
+          desc: "big income and discount, big payout, and the firm starts covering 2 uptime a sprint (T5 - a major investment)", cost: 1000,
+          apply: (t) => { t.pathIncomeMult = 7.0; t.costDiscountPct = 0.30; state.gold += 1500; t.pathLivesPerRound = 2; },
         },
         {
-          desc: "huge income and discount, huge payout", cost: 1600,
-          apply: (t) => { t.pathIncomeMult = 5.8; t.costDiscountPct = 0.24; state.gold += 900; },
+          desc: "huge income and discount, huge payout, firm covers 2 uptime a sprint", cost: 1600,
+          apply: (t) => { t.pathIncomeMult = 5.8; t.costDiscountPct = 0.24; state.gold += 900; t.pathLivesPerRound = 2; },
         },
         {
-          desc: "even huger income and discount", cost: 2500,
-          apply: (t) => { t.pathIncomeMult = 7.5; t.costDiscountPct = 0.28; state.gold += 1400; },
+          desc: "even huger income and discount, firm covers 3 uptime a sprint", cost: 2500,
+          apply: (t) => { t.pathIncomeMult = 7.5; t.costDiscountPct = 0.28; state.gold += 1400; t.pathLivesPerRound = 3; },
         },
         {
-          desc: "massive income and discount, massive payout", cost: 3800,
-          apply: (t) => { t.pathIncomeMult = 9.5; t.costDiscountPct = 0.32; state.gold += 2000; },
+          desc: "massive income and discount, massive payout, firm covers 3 uptime a sprint", cost: 3800,
+          apply: (t) => { t.pathIncomeMult = 9.5; t.costDiscountPct = 0.32; state.gold += 2000; t.pathLivesPerRound = 3; },
         },
         {
-          desc: "staggering income and discount", cost: 5600,
-          apply: (t) => { t.pathIncomeMult = 12; t.costDiscountPct = 0.36; state.gold += 2800; },
+          desc: "staggering income and discount, firm covers 4 uptime a sprint", cost: 5600,
+          apply: (t) => { t.pathIncomeMult = 12; t.costDiscountPct = 0.36; state.gold += 2800; t.pathLivesPerRound = 4; },
         },
         {
           desc: "a balanced portfolio that never stops paying, and the firm covers 5 uptime a sprint (T10 - a massive investment)", cost: 8000,
