@@ -2013,14 +2013,17 @@ function applyMapDataToState(mapSlot, difficulty) {
   // race with navigating away mid-round) silently deleting placed towers -
   // never adopt an incoming towers list that's smaller than what's already here.
   if (Array.isArray(save.towers) && save.towers.length >= state.towers.length) {
-    // flashUntil is a performance.now() timestamp from whatever session saved
-    // this - meaningless (and potentially crash-inducing, see draw()) now.
+    // flashUntil/placedAt are performance.now() timestamps from whatever
+    // session saved this - meaningless (and potentially crash-inducing, see
+    // draw()'s spawn pop-in math) now. Clearing placedAt here makes a loaded
+    // tower just appear at full size instead of replaying its pop-in, same
+    // as a reloaded tower not replaying its flash pulse.
     // recomputeTowerStats refreshes any derived field the game code has
     // added since this was last saved (e.g. allySpeed didn't exist before
     // the Recruiter rework) - without this, a tower saved under older code
     // keeps missing fields forever, which silently breaks as NaN math
     // rather than an obvious error.
-    state.towers = save.towers.map((t) => ({ ...t, flashUntil: 0 }));
+    state.towers = save.towers.map((t) => ({ ...t, flashUntil: 0, placedAt: 0 }));
     state.towers.forEach(recomputeTowerStats);
   }
 }
@@ -4916,7 +4919,11 @@ function draw() {
 
     // Pop-in: freshly placed towers scale up from small over ~200ms instead
     // of just appearing, for a bit more satisfying "placement" feel.
-    const spawnP = t.placedAt ? Math.min(1, (performance.now() - t.placedAt) / 200) : 1;
+    // Clamped on both ends as a guardrail (not just the intended 0-1 progress
+    // range) - a stale placedAt from an older session could otherwise go
+    // deeply negative here and send ctx.arc() below a negative bodyRadius,
+    // which throws and silently freezes the render loop (see flashUntil below).
+    const spawnP = t.placedAt ? Math.max(0, Math.min(1, (performance.now() - t.placedAt) / 200)) : 1;
     const bodyRadius = TOWER_BODY_RADIUS * (0.35 + 0.65 * spawnP);
 
     ctx.fillStyle = bodyColor;
