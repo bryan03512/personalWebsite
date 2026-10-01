@@ -1998,6 +1998,13 @@ function applyMapDataToState(mapSlot, difficulty) {
 
   const save = mapSlot.saves?.[difficulty];
   if (!save) return;
+  // Wave only ever climbs during a live run, so an incoming save reporting a
+  // LOWER wave than what's already live here means it's a stale snapshot
+  // (e.g. a cloud push that lost a race with navigating away mid-round) -
+  // don't let it roll an already-further-along run backward. Callers that
+  // intend a genuine fresh start (enterMap, loadGame) always reset wave to 0
+  // first, so this only ever blocks a true regression, never a real load.
+  if (typeof save.wave === "number" && save.wave < state.wave) return;
   if (typeof save.gold === "number") state.gold = save.gold;
   if (typeof save.lives === "number") state.lives = save.lives;
   if (typeof save.wave === "number") state.wave = save.wave;
@@ -2495,15 +2502,31 @@ async function pullCloudSave() {
   winner.ownerId = user.id;
   localStorage.setItem(TD_SAVE_KEY, JSON.stringify(winner));
 
+  const previousMapId = state.mapId;
+  const previousDifficulty = state.difficulty;
+
   state.mapId = MAP_DEFS[winner.activeMap] ? winner.activeMap : "map1";
   applyMapLayout(state.mapId);
   state.gameSpeed = SPEED_STEPS.includes(winner.gameSpeed) ? winner.gameSpeed : 1;
   state.lastSaveTime = winner.lastSaveTime || Date.now();
   state.achievements = { ...winner.achievements };
   state.totalBossKills = winner.totalBossKills || 0;
-  state.towers = [];
   const winnerMapSlot = winner.maps[state.mapId];
   const winnerDiff = winnerMapSlot?.activeDifficulty && DIFFICULTY_SETTINGS[winnerMapSlot.activeDifficulty] ? winnerMapSlot.activeDifficulty : "normal";
+  // Only clear the live towers/wave when actually switching to a different
+  // map/difficulty than what's already loaded (e.g. cloud progress from
+  // another device) - otherwise applyMapDataToState's own guards (never
+  // adopt a towers list smaller than what's already here, never adopt a
+  // lower wave than what's already here) would be comparing against values
+  // we just reset ourselves, defeating the guards and letting a stale/
+  // incomplete cloud snapshot (e.g. one whose upload got cut off by
+  // navigating away) silently wipe progress that's still live locally. A
+  // real map/difficulty switch has to reset both first, though, since a
+  // different map's wave count isn't comparable to this one's at all.
+  if (state.mapId !== previousMapId || winnerDiff !== previousDifficulty) {
+    state.towers = [];
+    state.wave = 0;
+  }
   applyMapDataToState(winnerMapSlot, winnerDiff);
 
   saveGame();
