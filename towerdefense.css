@@ -803,12 +803,15 @@ canvas {
   border: 1px solid var(--cyan);
   border-radius: 4px;
   padding: 8px;
-  display: flex;
   flex-direction: column;
   gap: 6px;
   font-family: var(--font);
   font-size: 0.72rem;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
+}
+
+.cheat-panel:not([hidden]) {
+  display: flex;
 }
 
 .cheat-panel-header {
