@@ -3920,6 +3920,11 @@ function enemyPathProgress(e) {
 // and lets a projectile legitimately loop back to one it already hit once
 // enough time has passed instead of being blocked by it forever.
 const CALLBACK_HIT_COOLDOWN_MS = 1500;
+// A boomerang's damage never falls below this fraction of its original hit
+// (see the floor applied in resolveBoomerangStep) - without it, chainFalloff
+// compounding every single bounce of a now-indefinite chain decays toward
+// zero within a dozen or so hits.
+const CALLBACK_MIN_DAMAGE_FRACTION = 0.25;
 
 function findTargets(t, count, canSeeCamo, targetPriority, excludeRecentMs) {
   const now = excludeRecentMs ? performance.now() : 0;
@@ -3993,6 +3998,7 @@ function updateTowers(dt) {
           proj.boomerang = true;
           proj.chainsLeft = t.chainCount || 1;
           proj.phase = "outbound";
+          proj.baseDamage = dmg;
         }
 
         state.projectiles.push(proj);
@@ -4206,7 +4212,15 @@ function resolveBoomerangStep(p, dt) {
     applyDamage(p.target, p.damage, p.sourceTower);
     if (p.isCrit) spawnFloatingText(p.target.x, p.target.y - 20, "CRIT!", "#ffee58");
     p.chainsLeft -= 1;
-    p.damage *= p.chainFalloff;
+    // Floored rather than left to compound freely - now that a boomerang can
+    // bounce indefinitely (not just through a handful of chainCount hits),
+    // repeatedly multiplying by chainFalloff every single hit would decay
+    // damage exponentially toward zero within a dozen or so bounces (e.g.
+    // 0.7^10 is under 3% of the original hit), making most of a long chain's
+    // hits deal no meaningful damage at all. The floor keeps the "each
+    // ricochet hits a bit softer" feel for the first several hits without
+    // ever letting it actually bottom out at nothing.
+    p.damage = Math.max(p.damage * p.chainFalloff, p.baseDamage * CALLBACK_MIN_DAMAGE_FRACTION);
     seekNextChainTarget(p, p.target.x, p.target.y);
   } else {
     p.x += ((p.target.x - p.x) / d) * step;
