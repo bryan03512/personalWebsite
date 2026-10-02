@@ -206,11 +206,30 @@ const treeLines = document.getElementById("treeLines");
 
 let audioCtx = null;
 
-function playClickSound() {
+// iOS Safari/iPadOS ties "this gesture is allowed to unlock audio" to a
+// specific set of trusted event types that's narrower than desktop browsers
+// - the click button's own pointerdown handler already creates the context
+// and calls resume() every time, but on the very first tap that resume() is
+// still an unsettled promise by the time the oscillator below gets scheduled
+// in the same synchronous handler, which can leave it silent on iOS. Also
+// listening at the document level, in the capture phase (so it runs before
+// the button's own handler for the same event), across several redundant
+// gesture types gets the context created and resuming as early as possible -
+// by the second/third tap (well before the player notices) it's reliably
+// already running instead of racing resume() on every single click.
+function ensureAudioContext() {
   const AudioCtx = window.AudioContext || window.webkitAudioContext;
   if (!AudioCtx) return;
   if (!audioCtx) audioCtx = new AudioCtx();
-  if (audioCtx.state === "suspended") audioCtx.resume();
+  if (audioCtx.state === "suspended") audioCtx.resume().catch(() => {});
+}
+["pointerdown", "touchstart", "touchend", "mousedown", "keydown"].forEach((evt) => {
+  document.addEventListener(evt, ensureAudioContext, { capture: true });
+});
+
+function playClickSound() {
+  ensureAudioContext();
+  if (!audioCtx) return;
 
   const osc = audioCtx.createOscillator();
   const gain = audioCtx.createGain();

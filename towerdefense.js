@@ -891,12 +891,12 @@ const TOWER_PATHS = {
           apply: (t) => { t.pathAllyCountBonus = 3; t.pathAllyDurationMult = 2.0; t.pathAllyDamageMult = 1.8; },
         },
         {
-          desc: "deploys 5 allies, even stronger & longer-lived", cost: 660,
-          apply: (t) => { t.pathAllyCountBonus = 4; t.pathAllyDurationMult = 2.4; t.pathAllyDamageMult = 2.3; },
+          desc: "deploys 5 allies, even stronger & longer-lived, chance to call in a boss-tier ally", cost: 660,
+          apply: (t) => { t.pathAllyCountBonus = 4; t.pathAllyDurationMult = 2.4; t.pathAllyDamageMult = 2.3; t.pathBossAllyChance = 0.35; },
         },
         {
-          desc: "deploys a full squad of 8 elite warriors (T5 - a major investment)", cost: 1090,
-          apply: (t) => { t.pathAllyCountBonus = 7; t.pathAllyDurationMult = 4.5; t.pathAllyDamageMult = 4.5; },
+          desc: "deploys a full squad of 8 elite warriors, usually with a boss-tier ally too (T5 - a major investment)", cost: 1090,
+          apply: (t) => { t.pathAllyCountBonus = 7; t.pathAllyDurationMult = 4.5; t.pathAllyDamageMult = 4.5; t.pathBossAllyChance = 0.75; },
         },
       ],
     },
@@ -2782,7 +2782,7 @@ const TARGET_PRIORITIES = [
 
 function recomputeTowerStats(t) {
   const def = TOWER_TYPES[t.type];
-  if (!t.targetPriority) t.targetPriority = def.targetPriority || "nearest";
+  if (!t.targetPriority) t.targetPriority = def.targetPriority || "first";
   const levelFactor = 1 + 0.25 * (t.level - 1);
   const rangeLevelFactor = 1 + 0.06 * (t.level - 1);
   t.range = def.range * rangeLevelFactor * (t.pathRangeMult || 1);
@@ -3342,12 +3342,17 @@ function updateRecruiters(dt) {
     // Warriors emerge from the stretch of track nearest this Recruiter and
     // walk backwards toward the entrance from there (segment counts DOWN,
     // the reverse of how enemies move), fighting anything they meet along
-    // the way instead of sitting still.
+    // the way instead of sitting still. Arranged in a small ring around the
+    // spawn point (instead of all landing within the same tiny +-12px jitter
+    // box) so a squad of several allies reads as a spread-out group instead
+    // of a stack of identical sprites on top of each other.
     const spawnPoint = closestPointOnPath(t.x, t.y);
+    const ringRadius = CELL * 0.35 + t.allyCount * 2;
     for (let i = 0; i < t.allyCount; i++) {
+      const angle = (i / t.allyCount) * Math.PI * 2 + Math.random() * 0.4;
       state.allies.push({
-        x: spawnPoint.x + (Math.random() - 0.5) * 24,
-        y: spawnPoint.y + (Math.random() - 0.5) * 24,
+        x: spawnPoint.x + Math.cos(angle) * ringRadius,
+        y: spawnPoint.y + Math.sin(angle) * ringRadius,
         segment: spawnPoint.segment,
         speed: t.allySpeed,
         damage: t.allyDamage,
@@ -3362,6 +3367,32 @@ function updateRecruiters(dt) {
         bossDamageMult: t.pathAllyBossMult || 0,
         tankDamageMult: t.pathAllyTankMult || 0,
         expiresAt: performance.now() + t.allyDuration * 1000,
+      });
+    }
+
+    // Scrum Sprint's T4/T5 bonus: a chance each deploy to also call in one
+    // boss-tier ally - a single much stronger, bigger, longer-lived unit
+    // alongside the regular squad, mirroring a boss enemy but fighting for us.
+    if (t.pathBossAllyChance && Math.random() < t.pathBossAllyChance) {
+      state.allies.push({
+        x: spawnPoint.x,
+        y: spawnPoint.y,
+        segment: spawnPoint.segment,
+        speed: t.allySpeed,
+        damage: t.allyDamage * 6,
+        range: t.allyRange * 1.8,
+        fireRate: t.allyFireRate,
+        cooldown: 0,
+        color: "#fbbf24",
+        emoji: "🦸",
+        radius: CELL * 0.4,
+        damageType: t.pathAllyExplosive ? "explosive" : "normal",
+        splashRadius: t.pathAllyExplosive ? 70 : 0,
+        bonusGoldPerKill: (t.pathAllyBonusGold || 0) * 3,
+        bossDamageMult: t.pathAllyBossMult || 0,
+        tankDamageMult: t.pathAllyTankMult || 0,
+        isBossAlly: true,
+        expiresAt: performance.now() + t.allyDuration * 1.3 * 1000,
       });
     }
   }
@@ -3879,11 +3910,25 @@ function enemyPathProgress(e) {
   return e.segment * 100000 - distToNext;
 }
 
-function findTargets(t, count, canSeeCamo, targetPriority) {
+// How long an enemy is untouchable by any Callback boomerang after being hit
+// by one - shared across every Callback (not just the one that hit it), and
+// checked both when a tower first picks a projectile's initial target
+// (excludeRecentMs below) and mid-flight while chaining (seekNextChainTarget).
+// Without this, a short-cooldown Callback kept re-targeting whichever enemy
+// was already nearest/first every time it fired, and several boomerangs independently
+// chaining around the same tiny cluster read as a chaotic "cloud" instead of
+// one clean bouncing chain - this forces each hit to spread to a fresh enemy,
+// and lets a projectile legitimately loop back to one it already hit once
+// enough time has passed instead of being blocked by it forever.
+const CALLBACK_HIT_COOLDOWN_MS = 1500;
+
+function findTargets(t, count, canSeeCamo, targetPriority, excludeRecentMs) {
+  const now = excludeRecentMs ? performance.now() : 0;
   const inRange = [];
   for (const e of state.enemies) {
     if (e.camo && !canSeeCamo) continue;
     if (!isEnemyHalfOnScreen(e)) continue;
+    if (excludeRecentMs && now - (e.lastCallbackHitAt || -Infinity) < excludeRecentMs) continue;
     const d = distance(t.x, t.y, e.x, e.y);
     if (d <= t.range) inRange.push({ e, d });
   }
@@ -3904,7 +3949,7 @@ function updateTowers(dt) {
     if (t.cooldown > 0) continue;
 
     const buffs = getTowerBuffs(t);
-    const targets = findTargets(t, t.multiShot || 1, buffs.supported || t.alwaysSeeCamo, t.targetPriority);
+    const targets = findTargets(t, t.multiShot || 1, buffs.supported || t.alwaysSeeCamo, t.targetPriority, t.boomerang ? CALLBACK_HIT_COOLDOWN_MS : 0);
     if (targets.length > 0) {
       for (const target of targets) {
         // Quant's damage is a fraction of the target's own max hp (true
@@ -3950,7 +3995,6 @@ function updateTowers(dt) {
           proj.homeX = t.x;
           proj.homeY = t.y;
           proj.chainsLeft = t.chainCount || 1;
-          proj.hitEnemies = new Set();
           proj.phase = "outbound";
         }
 
@@ -4131,12 +4175,17 @@ function updateProjectiles(dt) {
 
 // Callback's boomerang chain, one frame at a time. Outbound: flies to its
 // current target (or, if that target died en route, skips straight to
-// seeking the next one from its current position), deals damage+falloff,
-// then either retargets to the nearest not-yet-hit enemy within chainRange
-// or - once chainsLeft runs out (possibly never, at T5) or no enemy is left
-// anywhere on the map to chain to - switches to flying back home. Returning:
-// flies to where its tower stood at launch (towers don't move, so a fixed
-// point is fine) and disappears on arrival, a bit faster than it went out.
+// seeking the next one from its current position), deals damage+falloff and
+// marks the enemy as recently hit (see CALLBACK_HIT_COOLDOWN_MS), then either
+// retargets to the nearest eligible enemy anywhere on the map or - once
+// chainsLeft runs out (possibly never, at T5) or literally no enemy remains
+// anywhere on the map - switches to flying back home. There's no chainRange
+// cap on retargeting (unlike Tesla's instant chain) - a boomerang keeps
+// seeking across the whole map rather than stopping just because nothing is
+// near its last hit, so it only ever comes home early for running out of
+// chains, not for the map thinning out near it. Returning: flies to where
+// its tower stood at launch (towers don't move, so a fixed point is fine)
+// and disappears on arrival, a bit faster than it went out.
 function resolveBoomerangStep(p, dt) {
   if (p.phase === "outbound") {
     if (state.enemies.length === 0) {
@@ -4151,7 +4200,7 @@ function resolveBoomerangStep(p, dt) {
       const d = distance(p.x, p.y, p.target.x, p.target.y);
       const step = p.speed * dt;
       if (step >= d) {
-        p.hitEnemies.add(p.target);
+        p.target.lastCallbackHitAt = performance.now();
         applyDamage(p.target, p.damage, p.sourceTower);
         if (p.isCrit) spawnFloatingText(p.target.x, p.target.y - 20, "CRIT!", "#ffee58");
         p.chainsLeft -= 1;
@@ -4175,17 +4224,21 @@ function resolveBoomerangStep(p, dt) {
   }
 }
 
-// Shared by resolveBoomerangStep: finds the nearest not-yet-hit enemy within
-// chainRange of (fromX, fromY) and retargets p at it, or switches p to the
-// returning phase if chainsLeft is exhausted or nothing qualifies.
+// Shared by resolveBoomerangStep: finds the nearest enemy anywhere on the
+// map that hasn't been hit by any Callback boomerang in the last
+// CALLBACK_HIT_COOLDOWN_MS and retargets p at it, or switches p to the
+// returning phase if chainsLeft is exhausted or nothing qualifies (either
+// every remaining enemy is on cooldown, or there's truly nothing left).
 function seekNextChainTarget(p, fromX, fromY) {
   let next = null;
   if (p.chainsLeft > 0) {
+    const now = performance.now();
     let bestDist = Infinity;
     for (const e of state.enemies) {
-      if (p.hitEnemies.has(e) || !isEnemyHalfOnScreen(e)) continue;
+      if (!isEnemyHalfOnScreen(e)) continue;
+      if (now - (e.lastCallbackHitAt || -Infinity) < CALLBACK_HIT_COOLDOWN_MS) continue;
       const dd = distance(fromX, fromY, e.x, e.y);
-      if (dd <= p.chainRange && dd < bestDist) {
+      if (dd < bestDist) {
         bestDist = dd;
         next = e;
       }
@@ -4201,7 +4254,7 @@ function seekNextChainTarget(p, fromX, fromY) {
 // (Shotgun, 10x Engineer's Full Stack) firing a dozen-plus pellets from the
 // same point in the same frame, which would otherwise stack exactly on top
 // of each other.
-const PROJECTILE_MIN_SEPARATION = 6;
+const PROJECTILE_MIN_SEPARATION = 9;
 function separateProjectiles() {
   const list = state.projectiles;
   for (let i = 0; i < list.length; i++) {
@@ -4273,13 +4326,25 @@ function updateExplosions(dt) {
 // bosses. Created lazily on the first real user interaction, since browsers
 // block audio playback until a genuine gesture happens.
 let audioCtx = null;
+// iOS Safari/iPadOS ties "this gesture is allowed to unlock audio" to a
+// specific set of trusted event types that's narrower than desktop browsers
+// - pointerdown alone isn't reliably on that list on every WebKit version,
+// which is why sound could work on desktop (any gesture unlocks there) but
+// stay silent on mobile/iPad. Listening for several redundant gesture types
+// covers it regardless of which one that WebKit build actually honors; once
+// the context is running the rest become harmless no-ops. Also explicitly
+// resume() every time (not just on the first gesture) since iOS re-suspends
+// the context after the tab is backgrounded, and resume() must itself run
+// from inside a real gesture handler to take effect.
 function ensureAudioContext() {
-  if (audioCtx) return;
   const Ctx = window.AudioContext || window.webkitAudioContext;
-  if (Ctx) audioCtx = new Ctx();
+  if (!Ctx) return;
+  if (!audioCtx) audioCtx = new Ctx();
+  if (audioCtx.state === "suspended") audioCtx.resume().catch(() => {});
 }
-document.addEventListener("pointerdown", ensureAudioContext, { once: true });
-document.addEventListener("keydown", ensureAudioContext, { once: true });
+["pointerdown", "touchstart", "touchend", "mousedown", "keydown"].forEach((evt) => {
+  document.addEventListener(evt, ensureAudioContext, { capture: true });
+});
 
 function playBlip(freqStart, freqEnd, duration, waveType, volume) {
   if (!audioCtx) return;
@@ -4529,16 +4594,22 @@ function drawLightning(x1, y1, x2, y2, color, width) {
 function drawBolt(x, y, dx, dy, len, color) {
   const norm = Math.hypot(dx, dy) || 1;
   const ux = dx / norm, uy = dy / norm;
-  drawLightning(x - ux * len * 0.5, y - uy * len * 0.5, x + ux * len * 0.5, y + uy * len * 0.5, color, 3);
+  drawLightning(x - ux * len * 0.5, y - uy * len * 0.5, x + ux * len * 0.5, y + uy * len * 0.5, color, 4);
 }
 
 // ---------- Per-tower projectile shapes ----------
 // Each tower's shot reads as its own small icon instead of every tower
 // firing the same colored dot - dispatched by drawProjectileShape below.
+// Every shape's base size is scaled up by PROJECTILE_SIZE_MULT (applied
+// inline below rather than via a canvas-wide ctx.scale, since several of
+// these shapes are oriented/translated per-projectile and a shared scale
+// transform would have to re-derive that same per-shape origin anyway).
+const PROJECTILE_SIZE_MULT = 1.4;
+
 function drawSparkProjectile(x, y, color, scale) {
-  const s = 5 * (scale || 1);
+  const s = 5 * PROJECTILE_SIZE_MULT * (scale || 1);
   ctx.strokeStyle = color;
-  ctx.lineWidth = 1.6 * (scale || 1);
+  ctx.lineWidth = 1.6 * PROJECTILE_SIZE_MULT * (scale || 1);
   ctx.beginPath();
   ctx.moveTo(x - s, y); ctx.lineTo(x + s, y);
   ctx.moveTo(x, y - s); ctx.lineTo(x, y + s);
@@ -4547,7 +4618,7 @@ function drawSparkProjectile(x, y, color, scale) {
   ctx.stroke();
   ctx.fillStyle = color;
   ctx.beginPath();
-  ctx.arc(x, y, 1.6 * (scale || 1), 0, Math.PI * 2);
+  ctx.arc(x, y, 1.6 * PROJECTILE_SIZE_MULT * (scale || 1), 0, Math.PI * 2);
   ctx.fill();
 }
 
@@ -4555,17 +4626,17 @@ function drawOrbProjectile(x, y, color) {
   ctx.fillStyle = color;
   ctx.globalAlpha = 0.9;
   ctx.beginPath();
-  ctx.arc(x, y, 3, 0, Math.PI * 2);
+  ctx.arc(x, y, 3 * PROJECTILE_SIZE_MULT, 0, Math.PI * 2);
   ctx.fill();
   ctx.globalAlpha = 0.35;
   ctx.beginPath();
-  ctx.arc(x, y, 5.5, 0, Math.PI * 2);
+  ctx.arc(x, y, 5.5 * PROJECTILE_SIZE_MULT, 0, Math.PI * 2);
   ctx.fill();
   ctx.globalAlpha = 1;
 }
 
 function drawDiamondProjectile(x, y, color) {
-  const s = 4;
+  const s = 4 * PROJECTILE_SIZE_MULT;
   ctx.fillStyle = color;
   ctx.beginPath();
   ctx.moveTo(x, y - s); ctx.lineTo(x + s, y); ctx.lineTo(x, y + s); ctx.lineTo(x - s, y);
@@ -4577,7 +4648,7 @@ function drawDiamondProjectile(x, y, color) {
 }
 
 function drawShardProjectile(x, y, color) {
-  const s = 4.5;
+  const s = 4.5 * PROJECTILE_SIZE_MULT;
   ctx.strokeStyle = color;
   ctx.lineWidth = 1.8;
   for (let i = 0; i < 3; i++) {
@@ -4589,7 +4660,7 @@ function drawShardProjectile(x, y, color) {
   }
   ctx.fillStyle = "#ffffff";
   ctx.beginPath();
-  ctx.arc(x, y, 1.3, 0, Math.PI * 2);
+  ctx.arc(x, y, 1.3 * PROJECTILE_SIZE_MULT, 0, Math.PI * 2);
   ctx.fill();
 }
 
@@ -4601,7 +4672,7 @@ function drawPelletProjectile(x, y, dx, dy, color) {
   ctx.rotate(angle);
   ctx.fillStyle = color;
   ctx.beginPath();
-  ctx.ellipse(0, 0, 4, 1.8, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, 0, 4 * PROJECTILE_SIZE_MULT, 1.8 * PROJECTILE_SIZE_MULT, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 }
@@ -4610,11 +4681,11 @@ function drawVoidProjectile(x, y, color) {
   ctx.strokeStyle = color;
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.arc(x, y, 4, 0, Math.PI * 2);
+  ctx.arc(x, y, 4 * PROJECTILE_SIZE_MULT, 0, Math.PI * 2);
   ctx.stroke();
   ctx.fillStyle = "#1a0b24";
   ctx.beginPath();
-  ctx.arc(x, y, 2, 0, Math.PI * 2);
+  ctx.arc(x, y, 2 * PROJECTILE_SIZE_MULT, 0, Math.PI * 2);
   ctx.fill();
 }
 
@@ -4622,7 +4693,7 @@ function drawVoidProjectile(x, y, color) {
 // travel direction, instead of a jagged lightning bolt (it's a clean scan,
 // not a shock).
 function drawBeamProjectile(x, y, dirX, dirY, color) {
-  const len = 16;
+  const len = 16 * PROJECTILE_SIZE_MULT;
   ctx.strokeStyle = color;
   ctx.lineWidth = 2.4;
   ctx.lineCap = "round";
@@ -4647,10 +4718,10 @@ function drawBoomerangProjectile(x, y, color) {
   ctx.translate(x, y);
   ctx.rotate(spin);
   ctx.strokeStyle = color;
-  ctx.lineWidth = 2.4;
+  ctx.lineWidth = 2.6;
   ctx.lineCap = "round";
   ctx.beginPath();
-  ctx.arc(0, 0, 4.5, Math.PI * 0.15, Math.PI * 1.1);
+  ctx.arc(0, 0, 4.5 * PROJECTILE_SIZE_MULT, Math.PI * 0.15, Math.PI * 1.1);
   ctx.stroke();
   ctx.restore();
 }
@@ -4660,7 +4731,7 @@ function drawBoomerangProjectile(x, y, color) {
 function drawSniperBeam(x, y, dx, dy, color) {
   const norm = Math.hypot(dx, dy) || 1;
   const ux = dx / norm, uy = dy / norm;
-  const len = 20;
+  const len = 20 * PROJECTILE_SIZE_MULT;
   ctx.strokeStyle = color;
   ctx.lineWidth = 1.4;
   ctx.globalAlpha = 0.85;
@@ -4671,30 +4742,31 @@ function drawSniperBeam(x, y, dx, dy, color) {
   ctx.globalAlpha = 1;
   ctx.fillStyle = "#ffffff";
   ctx.beginPath();
-  ctx.arc(x, y, 1.6, 0, Math.PI * 2);
+  ctx.arc(x, y, 1.6 * PROJECTILE_SIZE_MULT, 0, Math.PI * 2);
   ctx.fill();
 }
 
 // Sentry's shot - a small steady square instead of a round pellet.
 function drawSquareProjectile(x, y, color) {
+  const h = 3 * PROJECTILE_SIZE_MULT;
   ctx.fillStyle = color;
-  ctx.fillRect(x - 3, y - 3, 6, 6);
+  ctx.fillRect(x - h, y - h, h * 2, h * 2);
   ctx.strokeStyle = "rgba(0,0,0,0.3)";
   ctx.lineWidth = 1;
-  ctx.strokeRect(x - 3, y - 3, 6, 6);
+  ctx.strokeRect(x - h, y - h, h * 2, h * 2);
 }
 
 function drawDotProjectile(x, y, color) {
   ctx.fillStyle = color;
   ctx.beginPath();
-  ctx.arc(x, y, 2.2, 0, Math.PI * 2);
+  ctx.arc(x, y, 2.2 * PROJECTILE_SIZE_MULT, 0, Math.PI * 2);
   ctx.fill();
 }
 
 function drawProjectileShape(p) {
   const type = p.sourceTower?.type;
   if (type === "tesla") {
-    drawBolt(p.x, p.y, p.target.x - p.x, p.target.y - p.y, 24, p.color);
+    drawBolt(p.x, p.y, p.target.x - p.x, p.target.y - p.y, 24 * PROJECTILE_SIZE_MULT, p.color);
   } else if (type === "grep") {
     drawBeamProjectile(p.x, p.y, p.dirX, p.dirY, p.color);
   } else if (type === "callback") {
@@ -5189,15 +5261,16 @@ function draw() {
   for (const a of state.allies) {
     const remaining = a.expiresAt - performance.now();
     const fade = Math.max(0, Math.min(1, remaining / 800));
+    const radius = a.radius || CELL * 0.22;
     ctx.globalAlpha = 0.4 + 0.6 * fade;
     ctx.fillStyle = a.color;
     ctx.beginPath();
-    ctx.arc(a.x, a.y, CELL * 0.22, 0, Math.PI * 2);
+    ctx.arc(a.x, a.y, radius, 0, Math.PI * 2);
     ctx.fill();
     ctx.strokeStyle = "#ffffff";
-    ctx.lineWidth = 1.5;
+    ctx.lineWidth = a.isBossAlly ? 2.5 : 1.5;
     ctx.stroke();
-    ctx.font = `${CELL * 0.26}px sans-serif`;
+    ctx.font = `${radius * 1.18}px sans-serif`;
     ctx.fillText(a.emoji, a.x, a.y + 1);
     ctx.globalAlpha = 1;
   }
