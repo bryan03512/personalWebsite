@@ -88,6 +88,23 @@
 
   <input type="text" id="cheatBox" class="cheat-box" placeholder="code" autocomplete="off" spellcheck="false" />
 
+  <div class="cheat-panel" id="cheatPanel" hidden>
+    <div class="cheat-panel-header">
+      <span>cheat panel</span>
+      <button class="cheat-panel-close" id="cheatPanelClose">&times;</button>
+    </div>
+    <div class="cheat-panel-row">
+      <label for="cheatGoldInput">credits</label>
+      <input type="number" id="cheatGoldInput" step="1" />
+      <button class="btn" id="cheatGoldSet">set</button>
+    </div>
+    <div class="cheat-panel-row">
+      <label for="cheatWaveInput">sprint</label>
+      <input type="number" id="cheatWaveInput" step="1" min="0" />
+      <button class="btn" id="cheatWaveSet">set</button>
+    </div>
+  </div>
+
   <div class="map-picker-overlay" id="mapPickerOverlay" hidden>
     <div class="map-picker-box">
       <h2 class="glow">choose a map</h2>

@@ -5524,18 +5524,57 @@ if (typeof createTutorial === "function") {
 }
 
 // ---- cheat box (bottom-left corner) ----
-// Type "MONEY123 <amount>" and press Enter to set credits directly.
+// Type "MONEY123 <amount>" and press Enter to set credits directly, or
+// "cheat123" (no amount) to open the bottom-right cheat panel instead -
+// a persistent small panel for repeatedly poking at credits/sprint mid-game,
+// rather than having to retype a one-shot command every time.
 const cheatBox = document.getElementById("cheatBox");
+const cheatPanel = document.getElementById("cheatPanel");
+const cheatPanelClose = document.getElementById("cheatPanelClose");
+const cheatGoldInput = document.getElementById("cheatGoldInput");
+const cheatWaveInput = document.getElementById("cheatWaveInput");
+const cheatGoldSet = document.getElementById("cheatGoldSet");
+const cheatWaveSet = document.getElementById("cheatWaveSet");
+
+function openCheatPanel() {
+  if (!cheatPanel) return;
+  cheatGoldInput.value = Math.round(state.gold);
+  cheatWaveInput.value = state.wave;
+  cheatPanel.hidden = false;
+}
+
 if (cheatBox) {
   cheatBox.addEventListener("keydown", (e) => {
     if (e.key !== "Enter") return;
-    const match = cheatBox.value.trim().match(/^MONEY123\s+(-?[\d.]+)$/i);
-    if (match) {
-      state.gold = Math.max(0, Number(match[1]));
+    const raw = cheatBox.value.trim();
+    const moneyMatch = raw.match(/^MONEY123\s+(-?[\d.]+)$/i);
+    if (moneyMatch) {
+      state.gold = Math.max(0, Number(moneyMatch[1]));
       updateStats();
       saveGame();
+    } else if (/^cheat123$/i.test(raw)) {
+      openCheatPanel();
     }
     cheatBox.value = "";
     cheatBox.blur();
+  });
+}
+
+if (cheatPanel) {
+  cheatPanelClose.addEventListener("click", () => { cheatPanel.hidden = true; });
+  cheatGoldSet.addEventListener("click", () => {
+    const val = Number(cheatGoldInput.value);
+    if (!Number.isFinite(val)) return;
+    state.gold = Math.max(0, val);
+    updateStats();
+    saveGame();
+  });
+  cheatWaveSet.addEventListener("click", () => {
+    const val = Math.round(Number(cheatWaveInput.value));
+    if (!Number.isFinite(val) || val < 0) return;
+    state.wave = val;
+    if (val > state.bestWave) state.bestWave = val;
+    updateStats();
+    saveGame();
   });
 }

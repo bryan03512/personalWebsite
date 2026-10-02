@@ -791,6 +791,81 @@ canvas {
   line-height: 1.4;
 }
 
+/* Unlocked by typing cheat123 into the hidden bottom-left cheat box - a
+   small always-available panel (not another full overlay) since it's meant
+   to be left open and poked at mid-game, not stepped through like a dialog. */
+.cheat-panel {
+  position: fixed;
+  right: 10px;
+  bottom: 10px;
+  z-index: 60;
+  background: var(--bg-panel);
+  border: 1px solid var(--cyan);
+  border-radius: 4px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-family: var(--font);
+  font-size: 0.72rem;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
+}
+
+.cheat-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--cyan);
+}
+
+.cheat-panel-close {
+  background: none;
+  border: none;
+  color: var(--green-faint);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+}
+
+.cheat-panel-close:hover {
+  color: var(--red);
+}
+
+.cheat-panel-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cheat-panel-row label {
+  color: var(--green-faint);
+  width: 40px;
+  flex-shrink: 0;
+}
+
+.cheat-panel-row input {
+  width: 80px;
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 0.72rem;
+  padding: 3px 5px;
+}
+
+.cheat-panel-row input:focus {
+  outline: none;
+  border-color: var(--cyan);
+}
+
+.cheat-panel-row .btn {
+  padding: 3px 8px;
+  font-size: 0.7rem;
+}
+
 .achievement-toast {
   position: fixed;
   top: 16px;
