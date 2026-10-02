@@ -4709,16 +4709,20 @@ function drawBeamProjectile(x, y, dirX, dirY, color) {
 // Callback's boomerang - a small spinning crescent so it visually reads as
 // a thrown boomerang rather than a plain dot, during both its outbound and
 // return legs.
+// Sized at roughly 8/10 of a typical enemy's own radius (basic/fast/tank run
+// 6-8.5) rather than off the shared PROJECTILE_SIZE_MULT like the other
+// shapes - it needs to read as a genuinely big, chunky boomerang the player
+// can track mid-chain, not just a slightly-larger sliver of a crescent.
 function drawBoomerangProjectile(x, y, color) {
   const spin = (performance.now() / 120) % (Math.PI * 2);
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate(spin);
   ctx.strokeStyle = color;
-  ctx.lineWidth = 2.6;
+  ctx.lineWidth = 4.5;
   ctx.lineCap = "round";
   ctx.beginPath();
-  ctx.arc(0, 0, 4.5 * PROJECTILE_SIZE_MULT, Math.PI * 0.15, Math.PI * 1.1);
+  ctx.arc(0, 0, 10, Math.PI * 0.15, Math.PI * 1.1);
   ctx.stroke();
   ctx.restore();
 }
