@@ -1106,7 +1106,10 @@ const TOWER_PATHS = {
         { desc: "even more damage, better falloff", cost: 270, apply: (t) => { t.pathDamageMult = 1.6; t.chainFalloff = 0.7; } },
         { desc: "chains to 2 more enemies than base", cost: 460, apply: (t) => { t.chainCount = 5; t.pathDamageMult = 2.0; } },
         { desc: "huge damage, better falloff still", cost: 780, apply: (t) => { t.pathDamageMult = 2.6; t.chainFalloff = 0.8; } },
-        { desc: "the whole lane lights up at once (T5 - a major investment)", cost: 1300, apply: (t) => { t.chainCount = 10; t.pathDamageMult = 5.2; t.chainFalloff = 0.92; } },
+        {
+          desc: "chains through every enemy on the map, ordered along the path, in one shot (T5 - a major investment)", cost: 1300,
+          apply: (t) => { t.pathDamageMult = 5.2; t.chainFalloff = 0.92; t.chainFullMapAlongPath = true; },
+        },
       ],
     },
     resonance: {
@@ -3998,6 +4001,7 @@ function updateTowers(dt) {
           chainCount: t.boomerang ? 0 : (t.chainCount || 0),
           chainFalloff: t.chainFalloff || 0.6,
           chainRange: t.chainRange || 90,
+          chainFullMapAlongPath: t.chainFullMapAlongPath || false,
           color: t.color,
           sourceTower: t,
         };
@@ -4307,7 +4311,9 @@ function separateProjectiles() {
 // Tesla's chain lightning: hits the primary target, then bounces to the
 // nearest not-yet-hit enemy within chainRange of the PREVIOUS hit (not the
 // tower), each bounce weaker by chainFalloff. Stops early if nothing else is
-// in range - chainCount is a cap, not a guarantee.
+// in range - chainCount is a cap, not a guarantee. Overload's T5
+// (chainFullMapAlongPath) replaces that nearest-neighbor hopping entirely -
+// see below.
 function resolveChainHit(p) {
   let dmg = p.damage;
   const hit = new Set([p.target]);
@@ -4315,6 +4321,28 @@ function resolveChainHit(p) {
   if (p.isCrit) spawnFloatingText(p.target.x, p.target.y - 20, "CRIT!", "#ffee58");
   let prevX = p.target.x;
   let prevY = p.target.y;
+
+  // T5 Overload: instead of hopping to the nearest not-yet-hit enemy within
+  // chainRange (a short local cluster), sweep through every OTHER enemy
+  // currently on screen exactly once, ordered by how far along the path they
+  // are (furthest first) rather than by distance - one continuous chain that
+  // spans the whole map in a single shot instead of being capped by range or
+  // chainCount.
+  if (p.chainFullMapAlongPath) {
+    const rest = state.enemies
+      .filter((e) => e !== p.target && isEnemyHalfOnScreen(e))
+      .sort((a, b) => enemyPathProgress(b) - enemyPathProgress(a));
+    for (const next of rest) {
+      dmg *= p.chainFalloff;
+      hit.add(next);
+      spawnChainBolt(prevX, prevY, next.x, next.y, p.color);
+      applyDamage(next, dmg, p.sourceTower);
+      prevX = next.x;
+      prevY = next.y;
+    }
+    return;
+  }
+
   for (let i = 0; i < p.chainCount; i++) {
     dmg *= p.chainFalloff;
     let next = null;
