@@ -733,6 +733,16 @@ const TOWER_PATHS = {
           desc: "the whole team hits like a wrecking crew (T5 - a major investment)", cost: 1090,
           apply: (t) => { t.pathBuffDamageMult = 8.0; t.pathBuffRateMult = 1.3; t.pathRangeMult = 2.4; },
         },
+        {
+          // Flat true-damage % of max hp, bypassing every resistance -
+          // see the bonus applied in applyDamage. Doesn't replace a dev's
+          // normal hit, it's added on top of it, on every hit, for every
+          // dev in range - meant to let a whole team actually keep pace
+          // with how absurd late-sprint boss hp gets instead of scaling
+          // damage numbers that fall further behind every sprint.
+          desc: "every dev in range also carves off a slice of max hp as true damage on every hit - ignores all resistances (T6 - an even bigger investment)", cost: 50000,
+          apply: (t) => { t.pathPercentHpPct = 0.02; },
+        },
       ],
     },
     teambuilding: {
@@ -2966,6 +2976,7 @@ function refreshTowerInfoPanel() {
   let statsLine;
   if (t.isSupport) {
     statsLine = `+${Math.round(t.buffDamagePct * 100)}% dmg, +${Math.round(t.buffRatePct * 100)}% rate to devs in range`;
+    if (t.pathPercentHpPct) statsLine += ` | devs also deal +${(t.pathPercentHpPct * 100).toFixed(1)}% max hp true dmg/hit`;
   } else if (t.isEconomy) {
     statsLine = `+${t.incomePerSec.toFixed(1)} credits/sec during sprints`;
   } else if (t.isRecruiter) {
@@ -3274,6 +3285,7 @@ function getTowerBuffs(tower) {
   let damageMult = 1;
   let rateMult = 1;
   let supported = false;
+  let percentHpPct = 0;
   for (const other of state.towers) {
     // grantsAura lets a tower buff nearby allies while also attacking on
     // its own (unlike isSupport towers, which only ever buff) - used by
@@ -3282,11 +3294,13 @@ function getTowerBuffs(tower) {
     if (distance(tower.x, tower.y, other.x, other.y) <= other.range) {
       damageMult += other.buffDamagePct;
       rateMult += other.buffRatePct;
+      // Manager's Tech Lead T6 - stacks if somehow in range of more than one.
+      percentHpPct += other.pathPercentHpPct || 0;
       supported = true;
     }
   }
   if (state.overclockActive) rateMult += 0.75;
-  return { damageMult, rateMult, supported };
+  return { damageMult, rateMult, supported, percentHpPct };
 }
 
 // Passive income from Consultant towers, and passive slow auras from
@@ -4078,6 +4092,22 @@ function applyDamage(enemy, amount, sourceTower) {
 
   enemy.hp -= amount;
   if (sourceTower) sourceTower.totalDamageDealt = (sourceTower.totalDamageDealt || 0) + amount;
+
+  // Manager's Tech Lead T6 - every hit from a real placed tower (not an
+  // ally, not a dot tick with no live sourceTower) sitting in range of a T6
+  // Manager also carves off a flat % of the target's max hp as true damage,
+  // bypassing resistances/shield entirely by going straight at enemy.hp -
+  // see pathPercentHpPct. Added on top of whatever the hit's own damage
+  // already did, not a replacement for it.
+  if (sourceTower && state.towers.includes(sourceTower)) {
+    const buffs = getTowerBuffs(sourceTower);
+    if (buffs.percentHpPct > 0) {
+      const bonus = enemy.maxHp * buffs.percentHpPct;
+      enemy.hp -= bonus;
+      sourceTower.totalDamageDealt = (sourceTower.totalDamageDealt || 0) + bonus;
+    }
+  }
+
   if (enemy.hp <= 0) {
     const idx = state.enemies.indexOf(enemy);
     if (idx !== -1) {
