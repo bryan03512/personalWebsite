@@ -3938,7 +3938,7 @@ function enemyPathProgress(e) {
 // one clean bouncing chain - this forces each hit to spread to a fresh enemy,
 // and lets a projectile legitimately loop back to one it already hit once
 // enough time has passed instead of being blocked by it forever.
-const CALLBACK_HIT_COOLDOWN_MS = 1500;
+const CALLBACK_HIT_COOLDOWN_MS = 500;
 // A boomerang's damage never falls below this fraction of its original hit
 // (see the floor applied in resolveBoomerangStep) - without it, chainFalloff
 // compounding every single bounce of a now-indefinite chain decays toward
