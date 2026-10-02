@@ -348,11 +348,10 @@ const TOWER_TYPES = {
   },
   // Chains through a sequence of enemies like Tesla, but as an actual
   // thrown projectile with travel time between jumps instead of an instant
-  // zap - and once it runs out of chain or targets, it flies back to the
-  // tower and disappears (see resolveBoomerangStep) rather than just
-  // vanishing on the last hit.
+  // zap - keeps bouncing indefinitely and only vanishes on the spot once it
+  // runs out of chain or the map is completely empty (see resolveBoomerangStep).
   callback: {
-    name: "Callback", desc: "a boomerang that chains through nearby enemies before flying back home", emoji: "🪃",
+    name: "Callback", desc: "a boomerang that keeps bouncing between enemies until it runs out of chain", emoji: "🪃",
     cost: 190, damage: 18, range: 120, fireRate: 1.4, color: "#2dd4bf", projectileSpeed: 550,
     boomerang: true, chainCount: 3, chainFalloff: 0.7, chainRange: 100,
   },
@@ -1219,7 +1218,7 @@ const TOWER_PATHS = {
       ],
     },
     fastReturn: {
-      name: "Fast Return",
+      name: "Rapid Throws",
       accentColor: "#fb923c",
       tiers: [
         { desc: "faster throws, bigger hits", cost: 90, apply: (t) => { t.pathRateMult = 1.3; t.pathDamageMult = 1.3; } },
@@ -3992,8 +3991,6 @@ function updateTowers(dt) {
 
         if (t.boomerang) {
           proj.boomerang = true;
-          proj.homeX = t.x;
-          proj.homeY = t.y;
           proj.chainsLeft = t.chainCount || 1;
           proj.phase = "outbound";
         }
@@ -4173,79 +4170,79 @@ function updateProjectiles(dt) {
   separateProjectiles();
 }
 
-// Callback's boomerang chain, one frame at a time. Outbound: flies to its
-// current target (or, if that target died en route, skips straight to
-// seeking the next one from its current position), deals damage+falloff and
-// marks the enemy as recently hit (see CALLBACK_HIT_COOLDOWN_MS), then either
-// retargets to the nearest eligible enemy anywhere on the map or - once
-// chainsLeft runs out (possibly never, at T5) or literally no enemy remains
-// anywhere on the map - switches to flying back home. There's no chainRange
-// cap on retargeting (unlike Tesla's instant chain) - a boomerang keeps
-// seeking across the whole map rather than stopping just because nothing is
-// near its last hit, so it only ever comes home early for running out of
-// chains, not for the map thinning out near it. Returning: flies to where
-// its tower stood at launch (towers don't move, so a fixed point is fine)
-// and disappears on arrival, a bit faster than it went out.
+// Callback's boomerang chain, one frame at a time. There's no "fly back
+// home" leg at all - it just disappears on the spot the instant it either
+// runs out of chain (chainsLeft hits 0, possibly never at T5) or the map is
+// completely empty, and keeps bouncing indefinitely between enemies until
+// then. Phases: "outbound" flies to its current target (or, if that target
+// died en route, skips straight to seeking the next one from its current
+// position), deals damage+falloff and marks the enemy as recently hit (see
+// CALLBACK_HIT_COOLDOWN_MS) on arrival. "waiting" is for the case where
+// chains remain and enemies still exist somewhere, but every one of them
+// happens to be on cooldown right now - it just hovers in place re-checking
+// every frame instead of disappearing, so it only ever gives up for running
+// out of chain or the map actually clearing, never for a momentary cooldown
+// gap. There's also no chainRange cap on retargeting (unlike Tesla's instant
+// chain) - it seeks the globally-nearest eligible enemy across the whole map.
 function resolveBoomerangStep(p, dt) {
-  if (p.phase === "outbound") {
-    if (state.enemies.length === 0) {
-      // Nothing left on the map at all - no point hanging around even
-      // mid-chain (this is what makes T5's infinite chain actually end).
-      p.phase = "returning";
-    } else if (!state.enemies.includes(p.target)) {
-      // Something else killed our current target before we got there -
-      // don't waste the trip, just seek the next one from here.
-      seekNextChainTarget(p, p.x, p.y);
-    } else {
-      const d = distance(p.x, p.y, p.target.x, p.target.y);
-      const step = p.speed * dt;
-      if (step >= d) {
-        p.target.lastCallbackHitAt = performance.now();
-        applyDamage(p.target, p.damage, p.sourceTower);
-        if (p.isCrit) spawnFloatingText(p.target.x, p.target.y - 20, "CRIT!", "#ffee58");
-        p.chainsLeft -= 1;
-        p.damage *= p.chainFalloff;
-        seekNextChainTarget(p, p.target.x, p.target.y);
-      } else {
-        p.x += ((p.target.x - p.x) / d) * step;
-        p.y += ((p.target.y - p.y) / d) * step;
-      }
-    }
+  if (state.enemies.length === 0) {
+    p.phase = "done";
+    return;
   }
-  if (p.phase === "returning") {
-    const d = distance(p.x, p.y, p.homeX, p.homeY);
-    const step = p.speed * dt * 1.6;
-    if (step >= d) {
-      p.phase = "done";
-    } else {
-      p.x += ((p.homeX - p.x) / d) * step;
-      p.y += ((p.homeY - p.y) / d) * step;
-    }
+  if (p.phase === "waiting") {
+    seekNextChainTarget(p, p.x, p.y);
+    return;
+  }
+  if (!state.enemies.includes(p.target)) {
+    // Something else killed our current target before we got there -
+    // don't waste the trip, just seek the next one from here.
+    seekNextChainTarget(p, p.x, p.y);
+    return;
+  }
+  const d = distance(p.x, p.y, p.target.x, p.target.y);
+  const step = p.speed * dt;
+  if (step >= d) {
+    p.target.lastCallbackHitAt = performance.now();
+    applyDamage(p.target, p.damage, p.sourceTower);
+    if (p.isCrit) spawnFloatingText(p.target.x, p.target.y - 20, "CRIT!", "#ffee58");
+    p.chainsLeft -= 1;
+    p.damage *= p.chainFalloff;
+    seekNextChainTarget(p, p.target.x, p.target.y);
+  } else {
+    p.x += ((p.target.x - p.x) / d) * step;
+    p.y += ((p.target.y - p.y) / d) * step;
   }
 }
 
 // Shared by resolveBoomerangStep: finds the nearest enemy anywhere on the
 // map that hasn't been hit by any Callback boomerang in the last
-// CALLBACK_HIT_COOLDOWN_MS and retargets p at it, or switches p to the
-// returning phase if chainsLeft is exhausted or nothing qualifies (either
-// every remaining enemy is on cooldown, or there's truly nothing left).
+// CALLBACK_HIT_COOLDOWN_MS and retargets p at it (switching to "outbound"),
+// or - if chainsLeft is already exhausted - ends the projectile outright, or
+// - if chains remain but nothing currently qualifies (everyone's on
+// cooldown) - parks it in "waiting" to keep re-checking next frame.
 function seekNextChainTarget(p, fromX, fromY) {
+  if (p.chainsLeft <= 0) {
+    p.phase = "done";
+    return;
+  }
+  const now = performance.now();
   let next = null;
-  if (p.chainsLeft > 0) {
-    const now = performance.now();
-    let bestDist = Infinity;
-    for (const e of state.enemies) {
-      if (!isEnemyHalfOnScreen(e)) continue;
-      if (now - (e.lastCallbackHitAt || -Infinity) < CALLBACK_HIT_COOLDOWN_MS) continue;
-      const dd = distance(fromX, fromY, e.x, e.y);
-      if (dd < bestDist) {
-        bestDist = dd;
-        next = e;
-      }
+  let bestDist = Infinity;
+  for (const e of state.enemies) {
+    if (!isEnemyHalfOnScreen(e)) continue;
+    if (now - (e.lastCallbackHitAt || -Infinity) < CALLBACK_HIT_COOLDOWN_MS) continue;
+    const dd = distance(fromX, fromY, e.x, e.y);
+    if (dd < bestDist) {
+      bestDist = dd;
+      next = e;
     }
   }
-  if (next) p.target = next;
-  else p.phase = "returning";
+  if (next) {
+    p.target = next;
+    p.phase = "outbound";
+  } else {
+    p.phase = "waiting";
+  }
 }
 
 // Keeps every in-flight projectile visible - pushes any two drawn closer
