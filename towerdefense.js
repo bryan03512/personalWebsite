@@ -275,6 +275,15 @@ function canPlaceTowerAt(x, y) {
 // wherever a range circle gets drawn. Far past the map's ~984px diagonal, so
 // it's functionally always-in-range without being non-finite.
 const GLOBAL_RANGE = 9999;
+// Callback's T5 Deep Chain "infinite" chain count - a large finite sentinel
+// rather than literal Infinity, since Infinity doesn't survive a save/load
+// round trip (JSON.stringify turns it into null, and t.chainCount || 1 would
+// then silently collapse a T5 tower down to a single hit per throw after
+// literally any reload - the autosave runs every 3s, so this could happen
+// within moments of buying the tier). Far more bounces than any single
+// projectile's lifetime could realistically use, so it's functionally
+// unlimited without being non-finite.
+const INFINITE_CHAIN_COUNT = 999999;
 // A flat ceiling every tower's fully computed range (base * level * path *
 // buffs) gets clamped to, unless the tower is explicitly flagged
 // isGlobalRange (the Sniper's whole gimmick) - no amount of leveling or
@@ -1213,7 +1222,7 @@ const TOWER_PATHS = {
         { desc: "chains to 7 more", cost: 600, apply: (t) => { t.chainCount = 10; t.pathDamageMult = 1.6; } },
         {
           desc: "infinite recursion - keeps calling back until nothing answers (T5 - a major investment)", cost: 1000,
-          apply: (t) => { t.chainCount = Infinity; t.pathDamageMult = 2.2; },
+          apply: (t) => { t.chainCount = INFINITE_CHAIN_COUNT; t.pathDamageMult = 2.2; },
         },
       ],
     },
@@ -2782,6 +2791,16 @@ const TARGET_PRIORITIES = [
 function recomputeTowerStats(t) {
   const def = TOWER_TYPES[t.type];
   if (!t.targetPriority) t.targetPriority = def.targetPriority || "first";
+  // Repairs a save already corrupted by the old literal-Infinity chainCount
+  // bug (see INFINITE_CHAIN_COUNT) - a save written while this tower held
+  // Infinity got null back out of JSON, which collapses to a single hit via
+  // the || 1 fallback in updateTowers. Restores the T5 Deep Chain sentinel
+  // for a tower on that path/tier, or the type's own base chainCount
+  // otherwise, so an old save picks up the fix without the player having to
+  // resell/rebuy anything.
+  if (t.boomerang && !t.chainCount) {
+    t.chainCount = (t.path === "chain" && t.pathTier >= 5) ? INFINITE_CHAIN_COUNT : (def.chainCount || 3);
+  }
   const levelFactor = 1 + 0.25 * (t.level - 1);
   const rangeLevelFactor = 1 + 0.06 * (t.level - 1);
   t.range = def.range * rangeLevelFactor * (t.pathRangeMult || 1);
