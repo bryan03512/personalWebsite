@@ -740,8 +740,16 @@ const TOWER_PATHS = {
           // dev in range - meant to let a whole team actually keep pace
           // with how absurd late-sprint boss hp gets instead of scaling
           // damage numbers that fall further behind every sprint.
-          desc: "every dev in range also carves off a slice of max hp as true damage on every hit - ignores all resistances (T6 - an even bigger investment)", cost: 50000,
-          apply: (t) => { t.pathPercentHpPct = 0.02; },
+          desc: "every dev in range also carves off a slice of max hp as true damage on every hit - ignores all resistances (T6 - an even bigger investment)", cost: 65000,
+          apply: (t) => { t.pathPercentHpPct = 0.03; },
+        },
+        {
+          desc: "a much bigger slice of max hp per hit for the whole team (T7 - a staggering investment)", cost: 100000,
+          apply: (t) => { t.pathPercentHpPct = 0.07; },
+        },
+        {
+          desc: "every dev tears off a huge chunk of max hp on every single hit (T8 - an absurd investment)", cost: 160000,
+          apply: (t) => { t.pathPercentHpPct = 0.15; },
         },
       ],
     },
