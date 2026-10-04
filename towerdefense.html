@@ -124,8 +124,39 @@
     <div class="pause-box">
       <h2 class="glow">paused</h2>
       <button class="btn" id="resumeBtn">resume</button>
+      <button class="btn" id="pauseSettingsBtn">settings</button>
       <button class="btn" id="pauseChangeMapBtn">change map</button>
       <button class="btn tower-sell-btn" id="pauseRestartBtn">restart --fresh</button>
+    </div>
+  </div>
+
+  <div class="codex-overlay" id="settingsOverlay" hidden>
+    <div class="codex-box">
+      <div class="codex-header">
+        <h2 class="glow"># settings.conf</h2>
+        <button class="codex-close" id="settingsClose">&times;</button>
+      </div>
+      <div class="codex-content">
+        <div class="setting-row">
+          <div class="setting-label">
+            <span>projectile size</span>
+            <span class="setting-value" id="settingProjectileSizeValue">140%</span>
+          </div>
+          <input type="range" id="settingProjectileSize" min="50" max="250" step="5" />
+        </div>
+        <div class="setting-row">
+          <div class="setting-label">
+            <span>death sound volume</span>
+            <span class="setting-value" id="settingDeathVolumeValue">100%</span>
+          </div>
+          <input type="range" id="settingDeathVolume" min="0" max="150" step="5" />
+        </div>
+        <div class="setting-row setting-row-toggle">
+          <span>screen shake</span>
+          <button class="btn auto-btn" id="settingScreenShake">on</button>
+        </div>
+        <button class="btn" id="settingsReset">reset to defaults</button>
+      </div>
     </div>
   </div>
 

@@ -869,6 +869,54 @@ canvas {
   font-size: 0.7rem;
 }
 
+.setting-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.setting-row:first-child {
+  padding-top: 0;
+}
+
+.setting-row:last-of-type {
+  border-bottom: none;
+}
+
+.setting-row-toggle {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.setting-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.82rem;
+  color: var(--text);
+}
+
+.setting-value {
+  color: var(--cyan);
+  font-weight: bold;
+}
+
+.setting-row input[type="range"] {
+  width: 100%;
+  accent-color: var(--green);
+  background: transparent;
+}
+
+#settingsReset {
+  margin-top: 14px;
+  width: 100%;
+  font-size: 0.78rem;
+  padding: 8px;
+}
+
 .achievement-toast {
   position: fixed;
   top: 16px;

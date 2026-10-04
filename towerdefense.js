@@ -1699,8 +1699,17 @@ const mapConfirmButtons = document.getElementById("mapConfirmButtons");
 const pauseBtn = document.getElementById("pauseBtn");
 const pauseOverlay = document.getElementById("pauseOverlay");
 const resumeBtn = document.getElementById("resumeBtn");
+const pauseSettingsBtn = document.getElementById("pauseSettingsBtn");
 const pauseChangeMapBtn = document.getElementById("pauseChangeMapBtn");
 const pauseRestartBtn = document.getElementById("pauseRestartBtn");
+const settingsOverlay = document.getElementById("settingsOverlay");
+const settingsClose = document.getElementById("settingsClose");
+const settingProjectileSize = document.getElementById("settingProjectileSize");
+const settingProjectileSizeValue = document.getElementById("settingProjectileSizeValue");
+const settingDeathVolume = document.getElementById("settingDeathVolume");
+const settingDeathVolumeValue = document.getElementById("settingDeathVolumeValue");
+const settingScreenShake = document.getElementById("settingScreenShake");
+const settingsReset = document.getElementById("settingsReset");
 const codexBtn = document.getElementById("codexBtn");
 const codexOverlay = document.getElementById("codexOverlay");
 const codexContent = document.getElementById("codexContent");
@@ -2312,6 +2321,59 @@ pauseBtn.addEventListener("click", () => {
 resumeBtn.addEventListener("click", () => {
   state.paused = false;
   pauseOverlay.hidden = true;
+});
+
+// Reflects the live settings values onto the panel's controls - called
+// whenever the panel opens, so it can't drift out of sync with whatever
+// loadSettings()/a previous change actually left PROJECTILE_SIZE_MULT etc at.
+function syncSettingsUI() {
+  settingProjectileSize.value = Math.round(PROJECTILE_SIZE_MULT * 100);
+  settingProjectileSizeValue.textContent = `${Math.round(PROJECTILE_SIZE_MULT * 100)}%`;
+  settingDeathVolume.value = Math.round(deathSoundVolumeMult * 100);
+  settingDeathVolumeValue.textContent = `${Math.round(deathSoundVolumeMult * 100)}%`;
+  settingScreenShake.textContent = screenShakeEnabled ? "on" : "off";
+  settingScreenShake.classList.toggle("active", screenShakeEnabled);
+}
+
+pauseSettingsBtn.addEventListener("click", () => {
+  pauseOverlay.hidden = true;
+  syncSettingsUI();
+  settingsOverlay.hidden = false;
+});
+
+settingsClose.addEventListener("click", () => {
+  settingsOverlay.hidden = true;
+  pauseOverlay.hidden = false;
+});
+
+settingProjectileSize.addEventListener("input", () => {
+  PROJECTILE_SIZE_MULT = Number(settingProjectileSize.value) / 100;
+  settingProjectileSizeValue.textContent = `${settingProjectileSize.value}%`;
+  saveSettings();
+});
+
+settingDeathVolume.addEventListener("input", () => {
+  deathSoundVolumeMult = Number(settingDeathVolume.value) / 100;
+  settingDeathVolumeValue.textContent = `${settingDeathVolume.value}%`;
+  saveSettings();
+});
+// A quick sample on release (not every drag tick) so the new level is
+// actually audible without spamming overlapping blips while dragging.
+settingDeathVolume.addEventListener("change", () => playDeathSound("boss"));
+
+settingScreenShake.addEventListener("click", () => {
+  screenShakeEnabled = !screenShakeEnabled;
+  settingScreenShake.textContent = screenShakeEnabled ? "on" : "off";
+  settingScreenShake.classList.toggle("active", screenShakeEnabled);
+  saveSettings();
+});
+
+settingsReset.addEventListener("click", () => {
+  PROJECTILE_SIZE_MULT = SETTINGS_DEFAULTS.projectileSizeMult;
+  deathSoundVolumeMult = SETTINGS_DEFAULTS.deathSoundVolumeMult;
+  screenShakeEnabled = SETTINGS_DEFAULTS.screenShakeEnabled;
+  saveSettings();
+  syncSettingsUI();
 });
 
 pauseChangeMapBtn.addEventListener("click", () => {
@@ -4505,7 +4567,7 @@ const DEATH_SOUNDS = {
 function playDeathSound(type) {
   const s = DEATH_SOUNDS[type];
   if (!s) return;
-  playBlip(s.freqStart, s.freqEnd, s.duration, s.waveType, s.volume);
+  playBlip(s.freqStart, s.freqEnd, s.duration, s.waveType, s.volume * deathSoundVolumeMult);
 }
 
 // ---------- Screen shake ----------
@@ -4514,8 +4576,45 @@ function playDeathSound(type) {
 // decaying linearly to nothing. Uses Math.max so overlapping triggers
 // (several bosses dying in the same frame) don't cut a bigger shake short.
 function triggerShake(mag, durationMs) {
+  if (!screenShakeEnabled) return;
   state.shakeMag = Math.max(state.shakeMag, mag);
   state.shakeUntil = Math.max(state.shakeUntil, performance.now() + durationMs);
+}
+
+// ---------- Settings (projectile size / death sound volume / screen shake) ----------
+// Deliberately kept separate from the per-map save system (towerDefenseSave)
+// - these are device/browser display-and-feel preferences, not game
+// progress, so they're not per-map, not cloud-synced, and never touched by
+// any map migration.
+const TD_SETTINGS_KEY = "towerDefenseSettings";
+const SETTINGS_DEFAULTS = { projectileSizeMult: 1.4, deathSoundVolumeMult: 1, screenShakeEnabled: true };
+let deathSoundVolumeMult = SETTINGS_DEFAULTS.deathSoundVolumeMult;
+let screenShakeEnabled = SETTINGS_DEFAULTS.screenShakeEnabled;
+
+function loadSettings() {
+  try {
+    const raw = localStorage.getItem(TD_SETTINGS_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    PROJECTILE_SIZE_MULT = typeof parsed.projectileSizeMult === "number" ? parsed.projectileSizeMult : SETTINGS_DEFAULTS.projectileSizeMult;
+    deathSoundVolumeMult = typeof parsed.deathSoundVolumeMult === "number" ? parsed.deathSoundVolumeMult : SETTINGS_DEFAULTS.deathSoundVolumeMult;
+    screenShakeEnabled = typeof parsed.screenShakeEnabled === "boolean" ? parsed.screenShakeEnabled : SETTINGS_DEFAULTS.screenShakeEnabled;
+  } catch {
+    PROJECTILE_SIZE_MULT = SETTINGS_DEFAULTS.projectileSizeMult;
+    deathSoundVolumeMult = SETTINGS_DEFAULTS.deathSoundVolumeMult;
+    screenShakeEnabled = SETTINGS_DEFAULTS.screenShakeEnabled;
+  }
+}
+
+function saveSettings() {
+  try {
+    localStorage.setItem(TD_SETTINGS_KEY, JSON.stringify({
+      projectileSizeMult: PROJECTILE_SIZE_MULT,
+      deathSoundVolumeMult,
+      screenShakeEnabled,
+    }));
+  } catch {
+    // ignore write failures (private browsing, storage full, etc.)
+  }
 }
 
 // ---------- Enemy death burst (visual only) ----------
@@ -4704,7 +4803,10 @@ function drawBolt(x, y, dx, dy, len, color) {
 // inline below rather than via a canvas-wide ctx.scale, since several of
 // these shapes are oriented/translated per-projectile and a shared scale
 // transform would have to re-derive that same per-shape origin anyway).
-const PROJECTILE_SIZE_MULT = 1.4;
+// A `let`, not a `const` - the settings panel (see loadSettings/saveSettings)
+// reassigns it live from the projectile-size slider, and every draw*Projectile
+// function below reads it fresh each frame rather than capturing it once.
+let PROJECTILE_SIZE_MULT = 1.4;
 
 function drawSparkProjectile(x, y, color, scale) {
   const s = 5 * PROJECTILE_SIZE_MULT * (scale || 1);
@@ -4822,10 +4924,13 @@ function drawBoomerangProjectile(x, y, color) {
   ctx.translate(x, y);
   ctx.rotate(spin);
   ctx.strokeStyle = color;
-  ctx.lineWidth = 4.5;
+  // 7.14/3.21 are the old fixed 10/4.5 values backed out to a base-1x size
+  // (10/1.4, 4.5/1.4) so this scales with the same PROJECTILE_SIZE_MULT as
+  // every other shape instead of staying fixed regardless of the setting.
+  ctx.lineWidth = 3.21 * PROJECTILE_SIZE_MULT;
   ctx.lineCap = "round";
   ctx.beginPath();
-  ctx.arc(0, 0, 10, Math.PI * 0.15, Math.PI * 1.1);
+  ctx.arc(0, 0, 7.14 * PROJECTILE_SIZE_MULT, Math.PI * 0.15, Math.PI * 1.1);
   ctx.stroke();
   ctx.restore();
 }
@@ -5530,6 +5635,7 @@ function resetGame() {
 restartBtn.addEventListener("click", resetGame);
 
 // ---------- Init ----------
+loadSettings();
 buildTowerButtons();
 loadGame();
 syncSpeedButton();
