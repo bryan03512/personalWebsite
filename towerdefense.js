@@ -4601,12 +4601,16 @@ function updateSpawning(dt) {
     state.gold += bonus;
     spawnFloatingText(COLS * CELL / 2, 50, `sprint bonus +${bonus}c`, "#ffd166");
 
-    // Consultant's T10 (any of its 3 paths) covers some uptime back every
-    // sprint - stacks across multiple T10 Consultants, capped at the same
-    // max uptime you start a map with.
+    // Consultant's T5+ (any of its 3 paths) covers some uptime back every
+    // sprint - stacks across multiple qualifying Consultants. Uncapped: it
+    // used to clamp to STARTING_LIVES (and skip entirely once already at or
+    // above it), which meant it did nothing at all once you'd never taken
+    // damage - several T5+ Consultants could sit there granting zero visible
+    // benefit. Now it just keeps adding, so uptime can climb past the
+    // starting value as a real payoff for investing in multiple of them.
     const livesBack = state.towers.reduce((sum, t) => sum + (t.pathLivesPerRound || 0), 0);
-    if (livesBack > 0 && state.lives < STARTING_LIVES) {
-      state.lives = Math.min(STARTING_LIVES, state.lives + livesBack);
+    if (livesBack > 0) {
+      state.lives += livesBack;
       spawnFloatingText(COLS * CELL / 2, 75, `+${livesBack} uptime`, "#39ff14");
     }
 
