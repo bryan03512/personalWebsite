@@ -4407,6 +4407,12 @@ function separateProjectiles() {
   for (let i = 0; i < list.length; i++) {
     for (let j = i + 1; j < list.length; j++) {
       const a = list[i], b = list[j];
+      // Boomerangs are exempt - several of them converging on the same
+      // enemy/cluster is normal (not a stacking glitch, unlike a volley of
+      // shotgun pellets), and pushing them apart just scatters them into a
+      // visibly spread-out "cloud" instead of letting them read as several
+      // projectiles naturally sharing the same space.
+      if (a.boomerang || b.boomerang) continue;
       const dx = b.x - a.x, dy = b.y - a.y;
       const dist = Math.hypot(dx, dy);
       if (dist === 0) {
