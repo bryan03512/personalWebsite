@@ -4031,6 +4031,11 @@ const CALLBACK_HIT_COOLDOWN_MS = 500;
 // compounding every single bounce of a now-indefinite chain decays toward
 // zero within a dozen or so hits.
 const CALLBACK_MIN_DAMAGE_FRACTION = 0.25;
+// Hard safety cap on how long a single boomerang can stay alive bouncing
+// indefinitely (T5 Deep Chain has no chainsLeft limit at all otherwise) -
+// wall-clock, not scaled by game speed, so it reads as a real 30s regardless
+// of how fast the game is currently running.
+const BOOMERANG_MAX_LIFETIME_MS = 30000;
 
 function findTargets(t, count, canSeeCamo, targetPriority, excludeRecentMs) {
   const now = excludeRecentMs ? performance.now() : 0;
@@ -4106,6 +4111,7 @@ function updateTowers(dt) {
           proj.chainsLeft = t.chainCount || 1;
           proj.phase = "outbound";
           proj.baseDamage = dmg;
+          proj.spawnedAt = performance.now();
         }
 
         state.projectiles.push(proj);
@@ -4313,7 +4319,14 @@ function updateProjectiles(dt) {
 // out of chain or the map actually clearing, never for a momentary cooldown
 // gap. There's also no chainRange cap on retargeting (unlike Tesla's instant
 // chain) - it seeks the globally-nearest eligible enemy across the whole map.
+// Also hard-capped at BOOMERANG_MAX_LIFETIME_MS regardless of any of the
+// above - a safety net for T5's uncapped chain so a single boomerang can
+// never realistically outlive a sprint or pile up indefinitely.
 function resolveBoomerangStep(p, dt) {
+  if (performance.now() - p.spawnedAt > BOOMERANG_MAX_LIFETIME_MS) {
+    p.phase = "done";
+    return;
+  }
   if (state.enemies.length === 0) {
     p.phase = "done";
     return;
