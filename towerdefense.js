@@ -388,6 +388,26 @@ const TOWER_TYPES = {
     isLegendary: true, unique: true, multiPath: true, autoLevels: true, autoLevelInterval: 30,
     unlockCheck: () => hasBeatenAllMaps(),
   },
+  // A tier past Singularity - permanent once earned, same as Singularity,
+  // but gated behind a harder bar (every core map's Hard medal specifically,
+  // not just a clear on any difficulty - see hasAllHardMedals).
+  staff: {
+    name: "Staff Engineer", desc: "a tier past legendary - unlocked by earning the Hard medal on all 3 maps, picks a path toward leading the team or carrying it personally", emoji: "🎖️",
+    cost: 8000, damage: 220, range: 150, fireRate: 0.5, color: "#c084fc", projectileSpeed: 850,
+    isLegendary: true, unique: true,
+    unlockCheck: () => hasAllHardMedals(),
+  },
+  // The true capstone - permanent once earned, gated behind a genuinely
+  // marathon milestone (bestWave, historical, so it never re-locks on
+  // restart). No path at all, same reasoning as Sentry: isSentry drives the
+  // same free-forever exponential level scaling already proven there,
+  // reused as-is rather than inventing a second scaling formula.
+  machine: {
+    name: "The Machine", desc: "the true endgame - unlocked by reaching sprint 300 once, no path, auto-levels for free forever", emoji: "🤖",
+    cost: 15000, damage: 260, range: 165, fireRate: 0.45, color: "#e879f9", projectileSpeed: 1000,
+    isLegendary: true, unique: true, isSentry: true, targetPriority: "strongest", autoLevels: true, autoLevelInterval: 25,
+    unlockCheck: () => state.bestWave > 300,
+  },
 };
 
 const TOWER100_UNLOCK_WAVE = 100;
@@ -1550,6 +1570,39 @@ const TOWER_PATHS = {
       ],
     },
   },
+  staff: {
+    officehours: {
+      name: "Office Hours",
+      accentColor: "#34d399",
+      tiers: [
+        { desc: "also buffs nearby devs' damage/rate, wider range", cost: 400, apply: (t) => { t.grantsAura = true; t.buffDamagePct = 0.18; t.buffRatePct = 0.18; t.pathRangeMult = 1.2; } },
+        { desc: "bigger buff to the team, bigger own hits", cost: 700, apply: (t) => { t.buffDamagePct = 0.26; t.buffRatePct = 0.26; t.pathDamageMult = 1.3; } },
+        {
+          desc: "even bigger buff, wider range, bigger hits", cost: 1100,
+          apply: (t) => { t.buffDamagePct = 0.36; t.buffRatePct = 0.36; t.pathRangeMult = 1.4; t.pathDamageMult = 1.6; },
+        },
+        { desc: "huge buff to the whole team", cost: 1700, apply: (t) => { t.buffDamagePct = 0.5; t.buffRatePct = 0.5; t.pathDamageMult = 2.0; } },
+        {
+          desc: "the whole team levels up alongside you (T5 - a massive investment)", cost: 2600,
+          apply: (t) => { t.buffDamagePct = 0.7; t.buffRatePct = 0.7; t.pathDamageMult = 2.6; t.pathRangeMult = 1.6; },
+        },
+      ],
+    },
+    deepwork: {
+      name: "Deep Work",
+      accentColor: "#f472b6",
+      tiers: [
+        { desc: "hits 2 targets at once", cost: 400, apply: (t) => { t.multiShot = 2; t.pathDamageMult = 1.3; } },
+        { desc: "chance to crit for big damage", cost: 700, apply: (t) => { t.critChance = 0.2; t.critMult = 2.0; t.pathDamageMult = 1.6; } },
+        { desc: "hits 3 targets at once", cost: 1100, apply: (t) => { t.multiShot = 3; t.pathDamageMult = 2.0; } },
+        { desc: "bigger crit chance and multiplier", cost: 1700, apply: (t) => { t.critChance = 0.32; t.critMult = 2.5; t.pathDamageMult = 2.6; } },
+        {
+          desc: "in the zone - hits 4 targets, huge crits (T5 - a massive investment)", cost: 2600,
+          apply: (t) => { t.multiShot = 4; t.critChance = 0.45; t.critMult = 3.2; t.pathDamageMult = 3.4; },
+        },
+      ],
+    },
+  },
 };
 
 // Visual radii halved from their pre-zoom values to match the smaller grid.
@@ -1948,6 +2001,17 @@ const CORE_MAP_IDS = ["map1", "map2", "map3"];
 function hasBeatenAllMaps() {
   const stored = readStoredPayload();
   return CORE_MAP_IDS.every((id) => (stored.maps[id]?.bestWave || 0) > TOWER100_UNLOCK_WAVE);
+}
+
+// Staff Engineer's unlock condition - a tier above Singularity's "beat all 3
+// maps on any difficulty": every core map has to have actually earned its
+// Hard medal specifically (see MEDAL_THRESHOLDS/checkMedals), not just been
+// cleared once on Easy/Normal. Same CORE_MAP_IDS-only, permanent-unlock
+// reasoning as hasBeatenAllMaps - adding more maps later never raises this
+// bar for someone who already earned it.
+function hasAllHardMedals() {
+  const stored = readStoredPayload();
+  return CORE_MAP_IDS.every((id) => stored.maps[id]?.medals?.hard);
 }
 
 // ---------- Achievements ----------
@@ -3288,7 +3352,7 @@ towerSellBtn.addEventListener("click", () => state.selectedTower && sellTower(st
 const TOWER_HOTKEYS = {
   q: "gamer", w: "coder", e: "hacker", r: "manager", t: "farmer",
   y: "recruiter", u: "quant", i: "freeze", o: "turret", p: "tenx", a: "singularity", s: "tesla",
-  d: "shotgun", f: "grep", g: "callback",
+  d: "shotgun", f: "grep", g: "callback", h: "staff", j: "machine",
 };
 
 // = deploys the next sprint, - toggles auto-run (neither needs a tower
@@ -4523,6 +4587,18 @@ function ensureAudioContext() {
   document.addEventListener(evt, ensureAudioContext, { capture: true });
 });
 
+// A mild soft-clip (tanh) curve shared by every blip's main oscillator -
+// computed once rather than per-call. Turns a clean, thin synth tone into
+// something with noticeably more punch/weight without distorting into noise.
+const BLIP_SATURATION_CURVE = (() => {
+  const curve = new Float32Array(256);
+  for (let i = 0; i < 256; i++) {
+    const x = (i / 255) * 2 - 1;
+    curve[i] = Math.tanh(x * 2.2);
+  }
+  return curve;
+})();
+
 function playBlip(freqStart, freqEnd, duration, waveType, volume) {
   if (!audioCtx) return;
   // Small per-call jitter so several simultaneous deaths (e.g. a splitsTo
@@ -4533,13 +4609,15 @@ function playBlip(freqStart, freqEnd, duration, waveType, volume) {
   const now = audioCtx.currentTime + Math.random() * 0.012;
 
   const osc = audioCtx.createOscillator();
+  const shaper = audioCtx.createWaveShaper();
   const gain = audioCtx.createGain();
+  shaper.curve = BLIP_SATURATION_CURVE;
   osc.type = waveType;
   osc.frequency.setValueAtTime(freqStart * jitter, now);
   osc.frequency.exponentialRampToValueAtTime(Math.max(20, freqEnd * jitter), now + duration);
   gain.gain.setValueAtTime(volume, now);
   gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
-  osc.connect(gain).connect(audioCtx.destination);
+  osc.connect(shaper).connect(gain).connect(audioCtx.destination);
   osc.start(now);
   osc.stop(now + duration);
 
@@ -4556,6 +4634,21 @@ function playBlip(freqStart, freqEnd, duration, waveType, volume) {
   osc2.connect(gain2).connect(audioCtx.destination);
   osc2.start(now);
   osc2.stop(now + shortDuration);
+
+  // A brief bright "sparkle" ping timed just after the main hit lands - the
+  // classic rewarding little "ding" on top of the thud, rather than just a
+  // flat pop with nothing to make a kill feel like a payoff.
+  const sparkleStart = now + duration * 0.5;
+  const sparkleDuration = Math.min(0.12, duration * 0.5);
+  const osc3 = audioCtx.createOscillator();
+  const gain3 = audioCtx.createGain();
+  osc3.type = "sine";
+  osc3.frequency.setValueAtTime(Math.max(300, freqStart * 3 * jitter), sparkleStart);
+  gain3.gain.setValueAtTime(volume * 0.22, sparkleStart);
+  gain3.gain.exponentialRampToValueAtTime(0.001, sparkleStart + sparkleDuration);
+  osc3.connect(gain3).connect(audioCtx.destination);
+  osc3.start(sparkleStart);
+  osc3.stop(sparkleStart + sparkleDuration);
 }
 
 // One entry per ENEMY_TYPES key - freqStart/freqEnd/duration/waveType/volume
