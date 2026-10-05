@@ -325,6 +325,18 @@ const TOWER_TYPES = {
     cost: 150, damage: 0, range: 0, fireRate: Infinity, color: "#f97316", projectileSpeed: 0,
     isRecruiter: true, deployInterval: 6, allyDamage: 14, allyRange: 34, allySpeed: 70, allyFireRate: 0.8, allyDuration: 6, allyCount: 1,
   },
+  bounty: {
+    name: "Bug Bounty", desc: "no damage - enemies that die in its range drop more gold, up to 3x fully upgraded", emoji: "💰",
+    cost: 170, damage: 0, range: 110, fireRate: Infinity, color: "#eab308", projectileSpeed: 0,
+    // bountyBonus is a flat additive multiplier bonus (1 + bountyBonus =
+    // total gold multiplier), checked against the DYING ENEMY's position at
+    // the moment of a kill (see bountyMultiplierAt in applyDamage) rather
+    // than which tower landed the killing blow - so it rewards covering the
+    // path itself, same spirit as Manager's range-based buff. Set directly
+    // by path tiers (like auraSlowPct), not derived from level - see
+    // recomputeTowerStats.
+    isBounty: true, bountyBonus: 0.3,
+  },
   quant: {
     name: "Quant", desc: "arcane exploits - true damage, ignores all resistances", emoji: "🔮",
     cost: 220, damage: 0.018, range: 120, fireRate: 1.8, color: "#a78bfa", projectileSpeed: 550,
@@ -918,6 +930,40 @@ const TOWER_PATHS = {
         {
           desc: "a balanced portfolio that never stops paying, and the firm covers 5 uptime a sprint (T10 - a massive investment)", cost: 8000,
           apply: (t) => { t.pathIncomeMult = 16; t.costDiscountPct = 0.4; state.gold += 4000; t.pathLivesPerRound = 5; },
+        },
+      ],
+    },
+  },
+  bounty: {
+    // Both paths reach the same 3x (bountyBonus = 2.0, on top of the 1x
+    // everyone always has) by their own T5 - the choice is in the path
+    // there, not the destination: Program is the steady multiplier-plus-
+    // range option, Payout front-loads cash at each tier instead of range.
+    program: {
+      name: "Bounty Program",
+      accentColor: "#facc15",
+      tiers: [
+        { desc: "bigger gold multiplier, wider range", cost: 90, apply: (t) => { t.bountyBonus = 0.5; t.pathRangeMult = 1.15; } },
+        { desc: "even bigger gold multiplier", cost: 170, apply: (t) => { t.bountyBonus = 0.8; } },
+        { desc: "huge gold multiplier, wider range still", cost: 280, apply: (t) => { t.bountyBonus = 1.2; t.pathRangeMult = 1.3; } },
+        { desc: "massive gold multiplier", cost: 450, apply: (t) => { t.bountyBonus = 1.6; } },
+        {
+          desc: "every kill in range pays out 3x gold (T5 - a major investment)", cost: 700,
+          apply: (t) => { t.bountyBonus = 2.0; t.pathRangeMult = 1.5; },
+        },
+      ],
+    },
+    payout: {
+      name: "Golden Payout",
+      accentColor: "#fb923c",
+      tiers: [
+        { desc: "signing bonus, bigger gold multiplier", cost: 90, apply: (t) => { t.bountyBonus = 0.4; state.gold += 80; } },
+        { desc: "another payout, even bigger multiplier", cost: 170, apply: (t) => { t.bountyBonus = 0.7; state.gold += 150; } },
+        { desc: "big payout, huge gold multiplier", cost: 280, apply: (t) => { t.bountyBonus = 1.1; state.gold += 250; } },
+        { desc: "bigger payout still, massive multiplier", cost: 450, apply: (t) => { t.bountyBonus = 1.5; state.gold += 400; } },
+        {
+          desc: "golden parachute - a massive payout, and every kill in range pays out 3x gold (T5 - a major investment)", cost: 700,
+          apply: (t) => { t.bountyBonus = 2.0; state.gold += 700; },
         },
       ],
     },
@@ -2510,6 +2556,7 @@ function renderCodex() {
       if (def.isSupport) typeNote = "support - no damage";
       else if (def.isEconomy) typeNote = "economy - no damage";
       else if (def.isRecruiter) typeNote = "deploys melee allies - normal damage";
+      else if (def.isBounty) typeNote = "economy - no damage";
       else typeNote = `${def.damageType || "normal"} damage`;
       return `
       <div class="codex-row">
@@ -2964,6 +3011,9 @@ function recomputeTowerStats(t) {
     t.allyFireRate = def.allyFireRate;
     t.allyDuration = def.allyDuration * (t.pathAllyDurationMult || 1);
     t.allyCount = def.allyCount + (t.pathAllyCountBonus || 0);
+  } else if (t.isBounty) {
+    // bountyBonus is set directly by path tiers (like auraSlowPct) - no
+    // level/path-multiplier formula to derive here, nothing to do.
   } else if (t.isSentry) {
     // No path system, but auto-levels forever for free - exponential
     // scaling rewards leaving it alone long-term instead of flattening out
@@ -3115,6 +3165,8 @@ function refreshTowerInfoPanel() {
     statsLine = `+${t.incomePerSec.toFixed(1)} credits/sec during sprints`;
   } else if (t.isRecruiter) {
     statsLine = `deploys ${t.allyCount} warrior${t.allyCount === 1 ? "" : "s"} for ${t.allyDuration.toFixed(1)}s every ${t.deployInterval.toFixed(1)}s`;
+  } else if (t.isBounty) {
+    statsLine = `enemies dying in range drop ${(1 + t.bountyBonus).toFixed(1)}x gold`;
   } else if (t.percentDamage) {
     statsLine = `dmg ${(t.damage * 100).toFixed(1)}% max hp | range ${def.isGlobalRange ? "∞" : Math.round(t.range)}`;
   } else {
@@ -3142,7 +3194,7 @@ function refreshTowerInfoPanel() {
 let lastTargetSectionTower = null;
 
 function refreshTowerTargetSection(t) {
-  if (t.isSupport || t.isEconomy || t.isRecruiter) {
+  if (t.isSupport || t.isEconomy || t.isRecruiter || t.isBounty) {
     towerTargetSection.innerHTML = "";
     lastTargetSectionTower = null;
     return;
@@ -3352,7 +3404,7 @@ towerSellBtn.addEventListener("click", () => state.selectedTower && sellTower(st
 const TOWER_HOTKEYS = {
   q: "gamer", w: "coder", e: "hacker", r: "manager", t: "farmer",
   y: "recruiter", u: "quant", i: "freeze", o: "turret", p: "tenx", a: "singularity", s: "tesla",
-  d: "shotgun", f: "grep", g: "callback", h: "staff", j: "machine",
+  d: "shotgun", f: "grep", g: "callback", h: "staff", j: "machine", k: "bounty",
 };
 
 // = deploys the next sprint, - toggles auto-run (neither needs a tower
@@ -3435,6 +3487,20 @@ function getTowerBuffs(tower) {
   }
   if (state.overclockActive) rateMult += 0.75;
   return { damageMult, rateMult, supported, percentHpPct };
+}
+
+// Bug Bounty's gold multiplier at a given point - checked against the DYING
+// ENEMY's position (see applyDamage), not which tower landed the kill, so it
+// rewards covering the path itself rather than any one attacker. Stacks
+// additively across multiple Bug Bounties in range, same pattern as
+// getTowerBuffs above.
+function bountyMultiplierAt(x, y) {
+  let mult = 1;
+  for (const t of state.towers) {
+    if (!t.isBounty) continue;
+    if (distance(x, y, t.x, t.y) <= t.range) mult += t.bountyBonus || 0;
+  }
+  return mult;
 }
 
 // Passive income from Consultant towers, and passive slow auras from
@@ -4123,7 +4189,7 @@ function findTargets(t, count, canSeeCamo, targetPriority, excludeRecentMs) {
 
 function updateTowers(dt) {
   for (const t of state.towers) {
-    if (t.isSupport || t.isEconomy || t.isRecruiter) continue; // don't attack
+    if (t.isSupport || t.isEconomy || t.isRecruiter || t.isBounty) continue; // don't attack
     t.cooldown -= dt;
     if (t.cooldown > 0) continue;
 
@@ -4254,7 +4320,7 @@ function applyDamage(enemy, amount, sourceTower) {
       state.enemies.splice(idx, 1);
       spawnDeathBurst(enemy.x, enemy.y, enemy.color);
       playDeathSound(enemy.type);
-      const goldEarned = enemy.reward * goldYieldMult();
+      const goldEarned = enemy.reward * goldYieldMult() * bountyMultiplierAt(enemy.x, enemy.y);
       state.gold += goldEarned;
       spawnFloatingText(enemy.x, enemy.y - 16, `+${Math.round(goldEarned)}c`, "#ffd166");
       if (sourceTower?.bonusGoldPerKill) state.gold += sourceTower.bonusGoldPerKill;
@@ -5324,7 +5390,7 @@ function draw() {
 
   // towers
   for (const t of state.towers) {
-    if (t.isSupport) {
+    if (t.isSupport || t.isBounty) {
       ctx.setLineDash([4, 4]);
       ctx.strokeStyle = t.color;
       ctx.globalAlpha = 0.4;
@@ -5495,7 +5561,7 @@ function draw() {
   // invisible to it, instead of the player wondering why it isn't firing.
   let selectedCanSeeCamo = false;
   const selT = state.selectedTower;
-  const selAttacks = selT && !selT.isSupport && !selT.isEconomy && !selT.isRecruiter;
+  const selAttacks = selT && !selT.isSupport && !selT.isEconomy && !selT.isRecruiter && !selT.isBounty;
   if (selAttacks) {
     const buffs = getTowerBuffs(selT);
     selectedCanSeeCamo = buffs.supported || selT.alwaysSeeCamo;
