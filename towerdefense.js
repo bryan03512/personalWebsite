@@ -415,10 +415,10 @@ const TOWER_TYPES = {
   // same free-forever exponential level scaling already proven there,
   // reused as-is rather than inventing a second scaling formula.
   machine: {
-    name: "The Machine", desc: "the true endgame - unlocked by reaching sprint 300 once, no path, auto-levels for free forever", emoji: "🤖",
+    name: "The Machine", desc: "the true endgame - unlocked permanently by clearing sprint 300 on Hard on any one map, no path, auto-levels for free forever", emoji: "🤖",
     cost: 15000, damage: 260, range: 165, fireRate: 0.45, color: "#e879f9", projectileSpeed: 1000,
     isLegendary: true, unique: true, isSentry: true, targetPriority: "strongest", autoLevels: true, autoLevelInterval: 25,
-    unlockCheck: () => state.bestWave > 300,
+    unlockCheck: () => hasHardWave300(),
   },
 };
 
@@ -2060,6 +2060,26 @@ function hasAllHardMedals() {
   return CORE_MAP_IDS.every((id) => stored.maps[id]?.medals?.hard);
 }
 
+// Grandmaster achievement - every medal (Easy, Normal, and Hard) on every
+// core map, 9 medals total. Same CORE_MAP_IDS-only, permanent reasoning as
+// hasBeatenAllMaps/hasAllHardMedals above.
+function hasAllMedalsEverywhere() {
+  const stored = readStoredPayload();
+  return CORE_MAP_IDS.every((id) => {
+    const medals = stored.maps[id]?.medals;
+    return medals?.easy && medals?.normal && medals?.hard;
+  });
+}
+
+// The Machine's unlock condition - any single map's HARD-difficulty best
+// wave specifically has to clear 300, not just the map's overall bestWave
+// (which doesn't track which difficulty it was reached on) and not summed/
+// combined across maps. See bestWaveByDifficulty, written in saveGame.
+function hasHardWave300() {
+  const stored = readStoredPayload();
+  return Object.values(stored.maps).some((slot) => (slot?.bestWaveByDifficulty?.hard || 0) > 300);
+}
+
 // ---------- Achievements ----------
 // Lifetime/account-wide (state.achievements, synced like everything else in
 // the towerdefense save). "threshold" ones are re-checked cheaply every
@@ -2078,6 +2098,7 @@ const ACHIEVEMENTS = [
   { id: "tenx_placed", name: "10x Engineer", desc: "place a 10x Engineer", hint: "there may be more to discover past sprint 100...", kind: "event" },
   { id: "singularity_placed", name: "Beyond Legendary", desc: "place a Singularity", hint: "some secrets require conquering everything", kind: "event" },
   { id: "conqueror", name: "Conqueror", desc: "beat all 3 maps", hint: "beat every map at least once", kind: "threshold" },
+  { id: "grandmaster", name: "Grandmaster", desc: "earn every medal (Easy, Normal, Hard) on every map", hint: "earn every medal on every map", kind: "threshold" },
   { id: "maxed_path", name: "Specialist", desc: "max out any tower's path all the way", hint: "fully commit to one tower's specialization", kind: "event" },
   { id: "big_spender", name: "Big Spender", desc: "accumulate 10,000 credits at once", hint: "accumulate 10,000 credits at once", kind: "threshold" },
   { id: "boss_slayer", name: "Boss Slayer", desc: "defeat 50 bosses", hint: "defeat 50 bosses total", kind: "threshold" },
@@ -2109,6 +2130,7 @@ function checkThresholdAchievements() {
   if (state.bestGold >= 10000) unlockAchievement("big_spender");
   if (state.totalBossKills >= 50) unlockAchievement("boss_slayer");
   if (!state.achievements.conqueror && hasBeatenAllMaps()) unlockAchievement("conqueror");
+  if (!state.achievements.grandmaster && hasAllMedalsEverywhere()) unlockAchievement("grandmaster");
   checkMedals();
 }
 
@@ -2190,7 +2212,29 @@ function saveGame() {
   mapSlot.activeDifficulty = state.difficulty;
   mapSlot.bestWave = Math.max(mapSlot.bestWave || 0, state.wave);
   mapSlot.bestGold = Math.max(mapSlot.bestGold || 0, state.gold);
-  mapSlot.medals = state.medals;
+  // Union, never a flat overwrite - medals are permanent once earned (see
+  // checkMedals), but resetTransientState() (restart --fresh, or entering a
+  // map/difficulty before applyMapDataToState re-applies the real persisted
+  // ones) zeroes the live state.medals first. A flat overwrite here would
+  // persist that zeroed state straight over an already-earned medal the
+  // instant saveGame() next runs - this keeps any medal already on disk
+  // even if the live session's copy is temporarily behind.
+  const existingMedals = mapSlot.medals || { easy: false, normal: false, hard: false };
+  mapSlot.medals = {
+    easy: existingMedals.easy || state.medals.easy,
+    normal: existingMedals.normal || state.medals.normal,
+    hard: existingMedals.hard || state.medals.hard,
+  };
+  // Historical best wave PER DIFFICULTY, separate from mapSlot.bestWave
+  // (which only tracks the single best across any difficulty) - needed so
+  // The Machine's unlock can check hard specifically (see hasHardWave300).
+  // Math.max against whatever's already on disk, same never-decreases
+  // reasoning as the medals union just above.
+  const existingBestByDiff = mapSlot.bestWaveByDifficulty || {};
+  mapSlot.bestWaveByDifficulty = {
+    ...existingBestByDiff,
+    [state.difficulty]: Math.max(existingBestByDiff[state.difficulty] || 0, state.wave),
+  };
   stored.maps[state.mapId] = mapSlot;
   stored.activeMap = state.mapId;
   stored.gameSpeed = state.gameSpeed;
