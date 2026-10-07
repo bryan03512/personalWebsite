@@ -485,17 +485,24 @@ const PATH_TIER_LEVELS = [3, 6, 10, 14, 18, 23, 28, 34, 40, 47];
 const PATH_TIER_COST_MULT = 2.2;
 // T5 (tierIndex 4) is a deliberate price+power spike: the capstone tier for
 // every regular (5-tier) tower, and a notable checkpoint partway through
-// Singularity's 10-tier paths. 10x Engineer is explicitly excluded (its
-// paths also happen to run 10 tiers, but it doesn't get a T5 spike at all -
-// keyed off towerType directly rather than a boolean so this can't
-// accidentally lump it in with either group).
+// Singularity's 10-tier paths. Legendary towers whose own paths aren't
+// multiPath (10x Engineer, Staff Engineer) are exempt entirely - their paths
+// run their own longer/steeper tier-by-tier curve (10 tiers for 10x) that's
+// already appropriately scaled on its own, so a tier-5-specifically spike on
+// top of that would just be an arbitrary cliff in the middle (10x) or the
+// end (Staff Engineer) of an already-expensive climb, not a meaningful
+// "capstone" moment the way it is for an ordinary 5-tier tower. multiPath
+// legendaries (Singularity) keep their own much larger spike instead - that
+// one actually is by design (see T5_COST_MULT_SINGULARITY).
 const T5_COST_MULT_REGULAR = 30;
 const T5_COST_MULT_SINGULARITY = 100;
 
 function pathTierCost(tier, tierIndex, towerType) {
   let mult = PATH_TIER_COST_MULT;
-  if (tierIndex === 4 && towerType !== "tenx") {
-    mult *= TOWER_TYPES[towerType]?.multiPath ? T5_COST_MULT_SINGULARITY : T5_COST_MULT_REGULAR;
+  const def = TOWER_TYPES[towerType];
+  const exemptLegendary = def?.isLegendary && !def?.multiPath;
+  if (tierIndex === 4 && !exemptLegendary) {
+    mult *= def?.multiPath ? T5_COST_MULT_SINGULARITY : T5_COST_MULT_REGULAR;
   }
   return Math.round(tier.cost * mult);
 }
@@ -1616,21 +1623,34 @@ const TOWER_PATHS = {
       ],
     },
   },
+  // Staff Engineer is exempt from the normal T5 cost spike (see
+  // pathTierCost) - its own 5 tiers are priced and powered to stand on their
+  // own as a legendary-tier curve, calibrated to clearly exceed 10x
+  // Engineer's own T10 ceiling on every path by its own T5, matching a
+  // permanent unlock that's strictly harder to earn (all 3 maps' Hard medals
+  // vs 10x's live-sprint-100, which also re-locks on restart). Office Hours'
+  // T5 (buffDamagePct/buffRatePct 2.0, pathDamageMult 7.0, pathRangeMult 2.2)
+  // beats Mentorship's T10 (1.5/1.5, 6.0, 2.0); Deep Work's T5 (pathDamageMult
+  // 8.0, critChance 0.65, critMult 5.5, bossDamageMult 4.0) beats Full
+  // Stack's T10 (7.0, 0.55, 4.5, 3.5) on every one of those - Deep Work just
+  // trades Full Stack's much higher multiShot ceiling (24 vs 6) for
+  // concentrating that power into fewer, much harder-hitting targets instead,
+  // a deliberate identity (personal focus over breadth), not a shortfall.
   staff: {
     officehours: {
       name: "Office Hours",
       accentColor: "#34d399",
       tiers: [
-        { desc: "also buffs nearby devs' damage/rate, wider range", cost: 400, apply: (t) => { t.grantsAura = true; t.buffDamagePct = 0.18; t.buffRatePct = 0.18; t.pathRangeMult = 1.2; } },
-        { desc: "bigger buff to the team, bigger own hits", cost: 700, apply: (t) => { t.buffDamagePct = 0.26; t.buffRatePct = 0.26; t.pathDamageMult = 1.3; } },
+        { desc: "also buffs nearby devs' damage/rate, wider range", cost: 500, apply: (t) => { t.grantsAura = true; t.buffDamagePct = 0.4; t.buffRatePct = 0.4; t.pathDamageMult = 1.8; t.pathRangeMult = 1.3; } },
+        { desc: "much bigger buff to the team, bigger own hits", cost: 1000, apply: (t) => { t.buffDamagePct = 0.7; t.buffRatePct = 0.7; t.pathDamageMult = 2.8; } },
         {
-          desc: "even bigger buff, wider range, bigger hits", cost: 1100,
-          apply: (t) => { t.buffDamagePct = 0.36; t.buffRatePct = 0.36; t.pathRangeMult = 1.4; t.pathDamageMult = 1.6; },
+          desc: "huge buff, wider range, bigger hits", cost: 1800,
+          apply: (t) => { t.buffDamagePct = 1.1; t.buffRatePct = 1.1; t.pathRangeMult = 1.7; t.pathDamageMult = 4.0; },
         },
-        { desc: "huge buff to the whole team", cost: 1700, apply: (t) => { t.buffDamagePct = 0.5; t.buffRatePct = 0.5; t.pathDamageMult = 2.0; } },
+        { desc: "massive buff to the whole team", cost: 3000, apply: (t) => { t.buffDamagePct = 1.5; t.buffRatePct = 1.5; t.pathDamageMult = 5.5; } },
         {
-          desc: "the whole team levels up alongside you (T5 - a massive investment)", cost: 2600,
-          apply: (t) => { t.buffDamagePct = 0.7; t.buffRatePct = 0.7; t.pathDamageMult = 2.6; t.pathRangeMult = 1.6; },
+          desc: "every dev on the map fights like a Staff Engineer (T5 - a major investment)", cost: 5000,
+          apply: (t) => { t.buffDamagePct = 2.0; t.buffRatePct = 2.0; t.pathDamageMult = 7.0; t.pathRangeMult = 2.2; },
         },
       ],
     },
@@ -1638,13 +1658,19 @@ const TOWER_PATHS = {
       name: "Deep Work",
       accentColor: "#f472b6",
       tiers: [
-        { desc: "hits 2 targets at once", cost: 400, apply: (t) => { t.multiShot = 2; t.pathDamageMult = 1.3; } },
-        { desc: "chance to crit for big damage", cost: 700, apply: (t) => { t.critChance = 0.2; t.critMult = 2.0; t.pathDamageMult = 1.6; } },
-        { desc: "hits 3 targets at once", cost: 1100, apply: (t) => { t.multiShot = 3; t.pathDamageMult = 2.0; } },
-        { desc: "bigger crit chance and multiplier", cost: 1700, apply: (t) => { t.critChance = 0.32; t.critMult = 2.5; t.pathDamageMult = 2.6; } },
+        { desc: "hits 2 targets at once, bigger crits", cost: 500, apply: (t) => { t.multiShot = 2; t.pathDamageMult = 2.0; t.critChance = 0.25; t.critMult = 2.2; } },
+        { desc: "hits 3 targets, even bigger crits", cost: 1000, apply: (t) => { t.multiShot = 3; t.pathDamageMult = 3.2; t.critChance = 0.35; t.critMult = 3.0; } },
         {
-          desc: "in the zone - hits 4 targets, huge crits (T5 - a massive investment)", cost: 2600,
-          apply: (t) => { t.multiShot = 4; t.critChance = 0.45; t.critMult = 3.2; t.pathDamageMult = 3.4; },
+          desc: "hits 4 targets, huge crits, extra dmg vs bosses", cost: 1800,
+          apply: (t) => { t.multiShot = 4; t.pathDamageMult = 4.5; t.critChance = 0.45; t.critMult = 3.8; t.bossDamageMult = 2.0; },
+        },
+        {
+          desc: "hits 5 targets, massive crits, bigger boss bonus", cost: 3000,
+          apply: (t) => { t.multiShot = 5; t.pathDamageMult = 6.0; t.critChance = 0.55; t.critMult = 4.6; t.bossDamageMult = 3.0; },
+        },
+        {
+          desc: "in the zone - hits 6 targets, nothing survives a crit (T5 - a major investment)", cost: 5000,
+          apply: (t) => { t.multiShot = 6; t.pathDamageMult = 8.0; t.critChance = 0.65; t.critMult = 5.5; t.bossDamageMult = 4.0; },
         },
       ],
     },
