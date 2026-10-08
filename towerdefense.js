@@ -290,6 +290,20 @@ const INFINITE_CHAIN_COUNT = 999999;
 // path investment can push a normal tower's range past this.
 const MAP_RANGE_CAP = 175;
 
+// Every tower belongs to one of 4 thematic groups, purely for the tower
+// list's background color-coding (see buildTowerButtons) - no gameplay
+// effect. Named to fit the game's software-office mood rather than the
+// generic primary/military/magic/support labels they map to: Engineering
+// (straightforward, reliable attackers), Ops (aggressive/heavy-hitting,
+// area or sustained damage), R&D (arcane/experimental mechanics - true
+// damage, crowd control, sci-fi), Business (non-combat economy/utility).
+const TOWER_GROUPS = {
+  engineering: { name: "Engineering", color: "#00e5ff" },
+  ops: { name: "Ops", color: "#fb7a3f" },
+  rnd: { name: "R&D", color: "#a78bfa" },
+  business: { name: "Business", color: "#eab308" },
+};
+
 // ---------- Tower & enemy definitions ----------
 const TOWER_TYPES = {
   // Ranges cut ~25% across the board (was 120/150/130/140/130/130/140/220/220)
@@ -299,35 +313,36 @@ const TOWER_TYPES = {
   gamer: {
     name: "Gamer", desc: "fast reflexes, rapid fire", emoji: "🎮",
     cost: 50, damage: 10, range: 105, fireRate: 0.6, color: "#39ff14", projectileSpeed: 500,
+    group: "engineering",
   },
   coder: {
     name: "Sniper", desc: "one precise shot, anywhere on the board - slow, but never needs repositioning", emoji: "🎯",
     cost: 260, damage: 60, range: GLOBAL_RANGE, fireRate: 2.5, color: "#00e5ff", projectileSpeed: 900,
-    isGlobalRange: true,
+    isGlobalRange: true, group: "engineering",
   },
   hacker: {
     name: "Hacker", desc: "slow, heavy AoE exploit", emoji: "👾",
     cost: 170, damage: 55, range: 130, fireRate: 2.2, color: "#ff4fd8", projectileSpeed: 400, splashRadius: 65,
-    damageType: "explosive",
+    damageType: "explosive", group: "ops",
   },
   manager: {
     name: "Manager", desc: "no damage - boosts nearby devs", emoji: "👔",
     cost: 120, damage: 0, range: 112, fireRate: Infinity, color: "#ffd166", projectileSpeed: 0,
-    isSupport: true, buffDamagePct: 0.2, buffRatePct: 0.2,
+    isSupport: true, buffDamagePct: 0.2, buffRatePct: 0.2, group: "business",
   },
   farmer: {
     name: "Consultant", desc: "no combat - earns credits during sprints", emoji: "💼",
     cost: 100, damage: 0, range: 0, fireRate: Infinity, color: "#34d399", projectileSpeed: 0,
-    isEconomy: true, incomePerSec: 3,
+    isEconomy: true, incomePerSec: 3, group: "business",
   },
   recruiter: {
     name: "Recruiter", desc: "deploys warriors that march backwards up the path to meet incoming bugs", emoji: "🧑‍💼",
     cost: 150, damage: 0, range: 0, fireRate: Infinity, color: "#f97316", projectileSpeed: 0,
-    isRecruiter: true, deployInterval: 6, allyDamage: 14, allyRange: 34, allySpeed: 70, allyFireRate: 0.8, allyDuration: 6, allyCount: 1,
+    isRecruiter: true, deployInterval: 6, allyDamage: 14, allyRange: 34, allySpeed: 70, allyFireRate: 0.8, allyDuration: 6, allyCount: 1, group: "business",
   },
   bounty: {
     name: "Bug Bounty", desc: "no damage - enemies that die in its range drop more gold, up to 3x fully upgraded", emoji: "💰",
-    cost: 170, damage: 0, range: 110, fireRate: Infinity, color: "#eab308", projectileSpeed: 0,
+    cost: 170, damage: 0, range: 110, fireRate: Infinity, color: "#eab308", projectileSpeed: 0, group: "business",
     // bountyBonus is a flat additive multiplier bonus (1 + bountyBonus =
     // total gold multiplier), checked against the DYING ENEMY's position at
     // the moment of a kill (see bountyMultiplierAt in applyDamage) rather
@@ -340,32 +355,32 @@ const TOWER_TYPES = {
   quant: {
     name: "Quant", desc: "arcane exploits - true damage, ignores all resistances", emoji: "🔮",
     cost: 220, damage: 0.018, range: 120, fireRate: 1.8, color: "#a78bfa", projectileSpeed: 550,
-    damageType: "magic", percentDamage: true,
+    damageType: "magic", percentDamage: true, group: "rnd",
   },
   freeze: {
     name: "Freeze", desc: "chills on every hit - a full stop instead of a slow", emoji: "🧊",
     cost: 140, damage: 8, range: 112, fireRate: 1.0, color: "#7dd3fc", projectileSpeed: 550,
-    slowOnHit: { pct: 1.0, duration: 1.2 },
+    slowOnHit: { pct: 1.0, duration: 1.2 }, group: "rnd",
   },
   tesla: {
     name: "Tesla", desc: "chains a shock through nearby enemies, weaker each bounce", emoji: "⚡",
     cost: 180, damage: 20, range: 112, fireRate: 1.2, color: "#fde047", projectileSpeed: 700,
-    chainCount: 3, chainFalloff: 0.6, chainRange: 90,
+    chainCount: 3, chainFalloff: 0.6, chainRange: 90, group: "ops",
   },
   turret: {
     name: "Sentry", desc: "no path - auto-levels for free over time, targets the strongest enemy in range, damage scales exponentially", emoji: "🗼",
     cost: 90, damage: 12, range: 120, fireRate: 1.3, color: "#94a3b8", projectileSpeed: 480,
-    isSentry: true, autoLevels: true, autoLevelInterval: 20, targetPriority: "strongest",
+    isSentry: true, autoLevels: true, autoLevelInterval: 20, targetPriority: "strongest", group: "engineering",
   },
   shotgun: {
     name: "Shotgun", desc: "point-blank spread - hits several enemies at once, brutal up close but very short range", emoji: "🔫",
     cost: 130, damage: 16, range: 70, fireRate: 1.1, color: "#f43f5e", projectileSpeed: 600,
-    multiShot: 3,
+    multiShot: 3, group: "engineering",
   },
   grep: {
     name: "Grep", desc: "a piercing beam that scans clean through everything in a line, hitting every enemy it passes", emoji: "🔍",
     cost: 160, damage: 24, range: 130, fireRate: 1.3, color: "#4ade80", projectileSpeed: 700,
-    piercing: true,
+    piercing: true, group: "engineering",
   },
   // Chains through a sequence of enemies like Tesla, but as an actual
   // thrown projectile with travel time between jumps instead of an instant
@@ -374,7 +389,7 @@ const TOWER_TYPES = {
   callback: {
     name: "Callback", desc: "a boomerang that keeps bouncing between enemies until it runs out of chain", emoji: "🪃",
     cost: 190, damage: 18, range: 120, fireRate: 1.4, color: "#2dd4bf", projectileSpeed: 550,
-    boomerang: true, chainCount: 3, chainFalloff: 0.7, chainRange: 100,
+    boomerang: true, chainCount: 3, chainFalloff: 0.7, chainRange: 100, group: "ops",
   },
   // Secret capstone towers - excluded from buildTowerButtons (and therefore
   // invisible/unknown) until each one's unlockCheck() passes. How many may
@@ -386,7 +401,7 @@ const TOWER_TYPES = {
     // Re-locks whenever the current sprint drops back below the threshold
     // (e.g. after a restart) - checks state.wave (live), not state.bestWave
     // (historical, never decreases), unlike an achievement.
-    isLegendary: true, unique: true, unlockCheck: () => state.wave > TOWER100_UNLOCK_WAVE,
+    isLegendary: true, unique: true, group: "ops", unlockCheck: () => state.wave > TOWER100_UNLOCK_WAVE,
   },
   singularity: {
     name: "Singularity", desc: "beyond legendary - unlocked by beating all 3 maps, can own every path at once (incl. an explosive one), auto-levels for free - stays mid until deep levels, then damage explodes", emoji: "🌌",
@@ -397,7 +412,7 @@ const TOWER_TYPES = {
     // its own path tiers being expensive (T5 costs 100x), so it stays a
     // mid-power option in the early/mid game and only becomes a standout once
     // you can afford to deeply invest in a path.
-    isLegendary: true, unique: true, multiPath: true, autoLevels: true, autoLevelInterval: 30,
+    isLegendary: true, unique: true, multiPath: true, autoLevels: true, autoLevelInterval: 30, group: "rnd",
     unlockCheck: () => hasBeatenAllMaps(),
   },
   // A tier past Singularity - permanent once earned, same as Singularity,
@@ -406,7 +421,7 @@ const TOWER_TYPES = {
   staff: {
     name: "Staff Engineer", desc: "a tier past legendary - unlocked by earning the Hard medal on all 3 maps, picks a path toward leading the team or carrying it personally", emoji: "🎖️",
     cost: 8000, damage: 220, range: 150, fireRate: 0.5, color: "#c084fc", projectileSpeed: 850,
-    isLegendary: true, unique: true,
+    isLegendary: true, unique: true, group: "ops",
     unlockCheck: () => hasAllHardMedals(),
   },
   // The true capstone - permanent once earned, gated behind a genuinely
@@ -417,7 +432,7 @@ const TOWER_TYPES = {
   machine: {
     name: "The Machine", desc: "the true endgame - unlocked permanently by clearing sprint 300 on Hard on any one map, no path, auto-levels for free forever", emoji: "🤖",
     cost: 15000, damage: 260, range: 165, fireRate: 0.45, color: "#e879f9", projectileSpeed: 1000,
-    isLegendary: true, unique: true, isSentry: true, targetPriority: "strongest", autoLevels: true, autoLevelInterval: 25,
+    isLegendary: true, unique: true, isSentry: true, targetPriority: "strongest", autoLevels: true, autoLevelInterval: 25, group: "rnd",
     unlockCheck: () => hasHardWave300(),
   },
 };
@@ -1862,6 +1877,14 @@ const towerInfoClose = document.getElementById("towerInfoClose");
 const towerUpgradeBtn = document.getElementById("towerUpgradeBtn");
 const towerSellBtn = document.getElementById("towerSellBtn");
 
+// #rrggbb -> "r, g, b", so a group's color can be dropped into an rgba()
+// background tint at a fixed alpha rather than needing a second hardcoded
+// color per group just for the softer list-button version.
+function hexToRgbComponents(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  return `${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}`;
+}
+
 function buildTowerButtons() {
   towerListEl.innerHTML = "";
   Object.entries(TOWER_TYPES).forEach(([key, def]) => {
@@ -1872,6 +1895,14 @@ function buildTowerButtons() {
     // double-click popup instead, so the list itself stays compact even as
     // the roster grows.
     btn.innerHTML = `<span class="emoji">${def.emoji}</span><span class="info"><span class="name">${def.name}</span></span><span class="cost">${def.cost}c</span>`;
+    // Group color-coding (see TOWER_GROUPS) - a soft tinted background, not a
+    // solid fill, so the existing hover/selected/disabled states (which only
+    // ever touch border-color/opacity/box-shadow) stay fully legible on top.
+    const group = TOWER_GROUPS[def.group];
+    if (group) {
+      btn.style.background = `rgba(${hexToRgbComponents(group.color)}, 0.16)`;
+      btn.title = `${group.name} dev`;
+    }
     btn.addEventListener("click", () => {
       pasteArmed = false;
       state.selectedTowerType = state.selectedTowerType === key ? null : key;
