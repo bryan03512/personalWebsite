@@ -561,6 +561,72 @@ canvas {
   font-size: 1.2rem;
 }
 
+.map-picker-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.map-picker-back {
+  position: absolute;
+  left: 0;
+  top: -2px;
+  padding: 5px 10px;
+  font-size: 0.72rem;
+}
+
+/* ---- Screen 1: map select - small path thumbnail + name only ---- */
+.map-thumb-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+}
+
+.map-thumb-svg {
+  width: 100%;
+  aspect-ratio: 26 / 20;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.map-thumb-name {
+  font-size: 0.95rem;
+  font-weight: bold;
+}
+
+/* ---- Screen 3: sub-difficulty / game mode select ---- */
+.mode-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+}
+
+.mode-card {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+  padding: 10px 12px;
+  border-left-width: 4px;
+  border-left-style: solid;
+}
+
+.mode-card .mode-name {
+  font-weight: bold;
+  color: var(--text);
+}
+
+.mode-card .mode-desc {
+  font-size: 0.72rem;
+  color: var(--green-faint);
+  line-height: 1.35;
+}
+
 .map-picker-list {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

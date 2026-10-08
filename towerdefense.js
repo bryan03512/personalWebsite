@@ -122,6 +122,13 @@ const MAP_TIER_LABELS = { easy: "Easy map", medium: "Medium map", hard: "Hard ma
 // reads these bindings live, so no other code needs to change.
 let GRID_WAYPOINTS = MAP_DEFS.map1.waypoints;
 let PATH_POINTS = GRID_WAYPOINTS.map(cellCenter);
+// Mirrors PATH_POINTS backwards - kept alongside it (reassigned together in
+// applyMapLayout) rather than reversed on the fly, so Rollback mode (see
+// GAME_MODES/pathPointsForMovement) can make enemies walk the same visual
+// path in the opposite direction by just indexing into this array instead
+// of PATH_POINTS, with zero changes to the increment/target-lookup logic in
+// spawnEnemy/updateEnemies/enemyForwardDir itself.
+let REVERSED_PATH_POINTS = [...PATH_POINTS].reverse();
 let mapObstacles = MAP_DEFS.map1.obstacles;
 // Ground decor, path stones, and obstacle blob shapes are all randomized
 // once per map load (here) rather than every draw() call, so the texture
@@ -132,6 +139,7 @@ let pathStones = [];
 function applyMapLayout(mapId) {
   GRID_WAYPOINTS = MAP_DEFS[mapId].waypoints;
   PATH_POINTS = GRID_WAYPOINTS.map(cellCenter);
+  REVERSED_PATH_POINTS = [...PATH_POINTS].reverse();
   mapObstacles = MAP_DEFS[mapId].obstacles || [];
   generateGrassDecor();
   generatePathStones();
@@ -303,6 +311,96 @@ const TOWER_GROUPS = {
   rnd: { name: "R&D", color: "#a78bfa" },
   business: { name: "Business", color: "#eab308" },
 };
+
+// ---------- Game modes (sub-difficulties) ----------
+// Picked per (map, difficulty) from the map picker's 3rd screen - 2 on Easy,
+// 3 on Medium, 6 on Hard, same spread as Bloons TD6's own per-difficulty
+// challenge modes, reinterpreted for this game's theme. "standard" (the
+// regular game) isn't listed here - it's just the absence of any mode, see
+// currentMode()'s fallback. Every field here is read by a specific system
+// (buildWave, computeEnemyStats, goldYieldMult, updateEconomy,
+// updateSpawning, applyDamage, the 3 abilities, sellTower,
+// resetTransientState, isTowerAllowedByMode) - adding a new mode is just
+// adding a new combination of these, no new plumbing needed.
+const GAME_MODES = {
+  engineeringOnly: {
+    name: "Engineering Only", tier: "easy",
+    desc: "only Engineering-group devs can be deployed (Gamer, Sniper, Sentry, Shotgun, Grep) - everything outside the group is banned, Business included.",
+    restrictGroup: "engineering",
+  },
+  techDebt: {
+    name: "Tech Debt", tier: "easy",
+    desc: "starts on sprint 31 with a lump sum of credits instead of a fresh start - but fixing bugs pays nothing extra from then on, so that lump sum is all you get.",
+    startWave: 31, startGoldLumpSum: 3000, noKillGold: true, noSprintBonus: true,
+  },
+  opsOnly: {
+    name: "Ops Only", tier: "normal",
+    desc: "only Ops-group devs can be deployed (Hacker, Tesla, Callback, 10x Engineer, Staff Engineer).",
+    restrictGroup: "ops",
+  },
+  incident: {
+    name: "Incident", tier: "normal",
+    desc: "a live incident - bugs never stop coming, sprint after sprint with no downtime to prep in between.",
+    continuousSpawn: true,
+  },
+  rollback: {
+    name: "Rollback", tier: "normal",
+    desc: "the deploy got rolled back - bugs travel the path in reverse, and each sprint's lineup arrives in reverse order too.",
+    reversePath: true, reverseSpawnOrder: true,
+  },
+  chaosPipeline: {
+    name: "Chaos Pipeline", tier: "hard",
+    desc: "the build pipeline has no safety gates left - any bug type can show up starting sprint 1, none of the usual wave-gated ramp-up.",
+    randomizeComposition: true,
+  },
+  zeroDowntime: {
+    name: "Zero Downtime", tier: "hard",
+    desc: "a strict production SLA - no passive income, no uptime regen, no abilities, and devs can't be sold once deployed.",
+    noPassiveIncome: true, noLivesRegen: true, noAbilities: true, noSelling: true,
+  },
+  doubleBossHp: {
+    name: "Double HP Bosses", tier: "hard",
+    desc: "every boss spawns with double hp.",
+    bossHpMult: 2,
+  },
+  payCut: {
+    name: "Pay Cut", tier: "hard",
+    desc: "credits are cut in half across the board - starting credits, bug bounties, sprint bonuses, passive income, all of it.",
+    goldMult: 0.5,
+  },
+  oneLife: {
+    name: "One Life", tier: "hard",
+    desc: "uptime starts at just 1 - a single bug reaching the end ends the run. Devs also cost 25% more, and bosses have 50% more hp.",
+    startLives: 1, costMult: 1.25, bossHpMult: 1.5,
+  },
+  rndOnly: {
+    name: "R&D Only", tier: "hard",
+    desc: "only R&D-group devs can be deployed (Quant, Freeze, Singularity, The Machine).",
+    restrictGroup: "rnd",
+  },
+};
+
+// Empty-object fallback (not an explicit "standard" entry) - every modifier
+// field below reads as undefined/falsy off {}, so standard play needs no
+// special-casing anywhere a mode check happens.
+function currentMode() {
+  return GAME_MODES[state.gameMode] || {};
+}
+
+function isTowerAllowedByMode(type) {
+  const mode = currentMode();
+  if (!mode.restrictGroup) return true;
+  return TOWER_TYPES[type]?.group === mode.restrictGroup;
+}
+
+// Rollback's reversePath - every caller that walks enemies along the path
+// (spawnEnemy's entrance point, updateEnemies'/enemyForwardDir's target
+// lookup) reads through this instead of PATH_POINTS directly, so the whole
+// path just runs backwards for the enemies without needing separate
+// increment/decrement code paths anywhere.
+function pathPointsForMovement() {
+  return currentMode().reversePath ? REVERSED_PATH_POINTS : PATH_POINTS;
+}
 
 // ---------- Tower & enemy definitions ----------
 const TOWER_TYPES = {
@@ -1773,6 +1871,7 @@ const RESISTANCES = {
 const state = {
   mapId: "map1",
   difficulty: "normal",
+  gameMode: "standard",
   medals: { easy: false, normal: false, hard: false },
   gold: STARTING_GOLD,
   bestGold: STARTING_GOLD,
@@ -1832,6 +1931,8 @@ const restartBtn = document.getElementById("restartBtn");
 const changeMapBtn = document.getElementById("changeMapBtn");
 const mapPickerOverlay = document.getElementById("mapPickerOverlay");
 const mapPickerList = document.getElementById("mapPickerList");
+const mapPickerTitle = document.getElementById("mapPickerTitle");
+const mapPickerBack = document.getElementById("mapPickerBack");
 const mapConfirmOverlay = document.getElementById("mapConfirmOverlay");
 const mapConfirmTitle = document.getElementById("mapConfirmTitle");
 const mapConfirmMessage = document.getElementById("mapConfirmMessage");
@@ -1927,6 +2028,7 @@ function countPlacedOfType(type) {
 }
 
 function refreshTowerButtons() {
+  const mode = currentMode();
   [...towerListEl.children].forEach((btn) => {
     const key = btn.dataset.type;
     const def = TOWER_TYPES[key];
@@ -1936,6 +2038,14 @@ function refreshTowerButtons() {
       btn.hidden = !def.unlockCheck();
       if (btn.hidden) return;
     }
+    // A restricted-group mode (Engineering/Ops/R&D Only) hides every dev
+    // outside that one group entirely, same treatment as a locked legendary
+    // - re-evaluated every call, so leaving the mode un-hides them again.
+    if (mode.restrictGroup && def.group !== mode.restrictGroup) {
+      btn.hidden = true;
+      return;
+    }
+    btn.hidden = false;
     const atCap = def.unique && countPlacedOfType(key) >= tenxMaxCopies();
     btn.classList.toggle("selected", state.selectedTowerType === key);
     btn.disabled = state.gold < def.cost || atCap;
@@ -1962,7 +2072,7 @@ function updateStats() {
   } else {
     overclockBtn.textContent = "overclock!";
   }
-  overclockBtn.disabled = state.overclockCooldown > 0;
+  overclockBtn.disabled = state.overclockCooldown > 0 || currentMode().noAbilities;
 
   if (state.fundraiserActive) {
     fundraiserBtn.textContent = `fundraising (${state.fundraiserTimer.toFixed(1)}s)`;
@@ -1971,7 +2081,7 @@ function updateStats() {
   } else {
     fundraiserBtn.textContent = `fundraiser! (${FUNDRAISER_MULT}x credits)`;
   }
-  fundraiserBtn.disabled = state.fundraiserCooldown > 0;
+  fundraiserBtn.disabled = state.fundraiserCooldown > 0 || currentMode().noAbilities;
 
   const airstrikeCost = airstrikeCurrentCost();
   if (state.airstrikeCooldown > 0) {
@@ -1979,7 +2089,7 @@ function updateStats() {
   } else {
     airstrikeBtn.textContent = `airstrike! (${airstrikeCost}c)`;
   }
-  airstrikeBtn.disabled = state.airstrikeCooldown > 0 || state.gold < airstrikeCost;
+  airstrikeBtn.disabled = state.airstrikeCooldown > 0 || state.gold < airstrikeCost || currentMode().noAbilities;
 }
 
 // ---------- Save / load (local + cloud) ----------
@@ -2007,6 +2117,7 @@ function currentDifficultySave() {
     wave: state.wave,
     kills: state.kills,
     towers: state.towers,
+    mode: state.gameMode,
   };
 }
 
@@ -2237,6 +2348,7 @@ function applyMapDataToState(mapSlot, difficulty) {
   if (typeof save.lives === "number") state.lives = save.lives;
   if (typeof save.wave === "number") state.wave = save.wave;
   if (typeof save.kills === "number") state.kills = save.kills;
+  if (typeof save.mode === "string") state.gameMode = save.mode;
   // Guard against a stale/incomplete snapshot (e.g. a cloud push that lost a
   // race with navigating away mid-round) silently deleting placed towers -
   // never adopt an incoming towers list that's smaller than what's already here.
@@ -2330,8 +2442,17 @@ function loadGame() {
 // current map, so the picker never discards up-to-3-seconds of unsaved
 // progress by reading a stale snapshot. wipe=true deletes any existing save
 // for that difficulty before loading - the caller (confirmWipeSave) is
-// responsible for having confirmed that with the player first.
-function enterMap(mapId, diffId, wipe) {
+// responsible for having confirmed that with the player first. modeId
+// defaults to "standard" for every pre-existing call site (the map name/
+// difficulty buttons never pass one) - the new sub-mode picker screen is the
+// only caller that does. Always set BEFORE resetTransientState (not just on
+// a wipe) so that function's startGoldLumpSum/startLives/startWave reads a
+// known value instead of whatever gameMode happened to be left over from
+// the previously active map/difficulty - for a load (wipe=false) that
+// transient value gets overwritten a moment later anyway once
+// applyMapDataToState restores the real save.mode, but leaving it stale in
+// the meantime could otherwise trip the wave-regression guard there.
+function enterMap(mapId, diffId, wipe, modeId = "standard") {
   if (!MAP_DEFS[mapId] || !DIFFICULTY_SETTINGS[diffId]) return;
   // The whole body is wrapped so a thrown error partway through can never
   // leave the picker/confirm dialogs stuck open over a half-switched game -
@@ -2351,6 +2472,7 @@ function enterMap(mapId, diffId, wipe) {
 
     const preservedGameSpeed = state.gameSpeed; // gameSpeed is a global preference, not per-map
     state.mapId = mapId;
+    state.gameMode = modeId;
     applyMapLayout(mapId);
     resetTransientState();
     state.gameSpeed = preservedGameSpeed;
@@ -2386,20 +2508,6 @@ function showMapConfirm({ title, message, options }) {
     mapConfirmButtons.appendChild(btn);
   });
   mapConfirmOverlay.hidden = false;
-}
-
-// The map name button's quick-resume path: no prompt if you've already got
-// an active difficulty there (nothing at risk, just continuing) - otherwise
-// falls through to the same "start a new game?" confirmation as clicking
-// Normal directly, since there's nothing to resume yet either way.
-function onMapNameClick(mapId) {
-  const stored = readStoredPayload();
-  const activeDiff = stored.maps[mapId]?.activeDifficulty;
-  if (activeDiff && DIFFICULTY_SETTINGS[activeDiff]) {
-    enterMap(mapId, activeDiff, false);
-  } else {
-    onDifficultyClick(mapId, "normal");
-  }
 }
 
 // A difficulty button's click: if that difficulty already has a save on
@@ -2447,79 +2555,153 @@ function confirmWipeSave(mapId, diffId) {
   });
 }
 
-// ---------- Map picker ----------
-function renderMapPicker() {
-  const stored = readStoredPayload();
+// ---------- Map picker: 3 screens (map -> difficulty -> sub-mode) ----------
+// pickerScreen/pickerMapId track where in that flow the overlay currently
+// is, purely for the back button - none of it is persisted, it always
+// starts fresh at the map list whenever the overlay is (re)opened.
+let pickerScreen = "maps";
+let pickerMapId = null;
+
+// Screen 1: every map as just a small schematic of its path (an inline SVG
+// polyline straight from its own waypoints - genuinely that map's shape, not
+// a generic icon) plus its name and difficulty tier. No stats/difficulty
+// buttons here anymore - this screen is purely "which map", click through to
+// screen 2 for everything else.
+function renderMapScreen() {
+  pickerScreen = "maps";
+  pickerMapId = null;
+  mapPickerBack.hidden = true;
+  mapPickerTitle.textContent = "choose a map";
+  mapPickerList.className = "map-picker-list";
   mapPickerList.innerHTML = "";
+  const stored = readStoredPayload();
   Object.entries(MAP_DEFS).forEach(([id, def]) => {
-    const mapSlot = stored.maps[id];
-    const activeDiff = mapSlot?.activeDifficulty && DIFFICULTY_SETTINGS[mapSlot.activeDifficulty] ? mapSlot.activeDifficulty : null;
-    const activeSave = activeDiff ? mapSlot.saves?.[activeDiff] : null;
-    // The main line shows the CURRENT (in-progress) sprint/credits for
-    // whichever difficulty was last played here, not the lifetime best -
-    // best moves to a small aside instead (see .map-picker-best).
-    const current = activeSave
-      ? `${DIFFICULTY_SETTINGS[activeDiff].label}: sprint ${activeSave.wave || 0} | ${Math.floor(activeSave.gold || 0)}c`
-      : "not started yet";
-    const best = `best\nsprint ${mapSlot?.bestWave || 0}\n${Math.floor(mapSlot?.bestGold || 0)}c`;
-    const medals = { easy: false, normal: false, hard: false, ...(mapSlot?.medals || {}) };
+    const medals = { easy: false, normal: false, hard: false, ...(stored.maps[id]?.medals || {}) };
     const mastered = medals.easy && medals.normal && medals.hard;
+    const points = def.waypoints.map(([c, r]) => `${c},${r}`).join(" ");
 
-    const card = document.createElement("div");
-    card.className = "map-picker-card" + (mastered ? " map-picker-card-mastered" : "");
-
-    const headerRow = document.createElement("div");
-    headerRow.className = "map-picker-header-row";
-
-    const tierLabel = MAP_TIER_LABELS[def.tier] || "";
-    const btn = document.createElement("button");
-    btn.className = "btn map-picker-btn";
-    btn.innerHTML = `<span class="map-picker-name">${def.name}</span><span class="map-picker-tier map-picker-tier-${def.tier}">${tierLabel}</span><span class="map-picker-meta">${current}</span>`;
-    btn.addEventListener("click", () => onMapNameClick(id));
-    headerRow.appendChild(btn);
-
-    const bestEl = document.createElement("div");
-    bestEl.className = "map-picker-best";
-    bestEl.textContent = best;
-    bestEl.style.whiteSpace = "pre-line";
-    headerRow.appendChild(bestEl);
-
-    card.appendChild(headerRow);
-
-    const diffRow = document.createElement("div");
-    diffRow.className = "map-picker-diff-row";
-    Object.entries(DIFFICULTY_SETTINGS).forEach(([diffId, diffDef]) => {
-      const hasSave = !!mapSlot?.saves?.[diffId];
-      const diffBtn = document.createElement("button");
-      diffBtn.className = "btn map-picker-diff-btn"
-        + (diffId === activeDiff ? " active" : "")
-        + (hasSave ? " has-save" : "");
-      diffBtn.textContent = diffDef.label;
-      diffBtn.title = hasSave ? `${diffDef.label}: has a save` : `${diffDef.label}: not started`;
-      diffBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        onDifficultyClick(id, diffId);
-      });
-      diffRow.appendChild(diffBtn);
-    });
-    card.appendChild(diffRow);
-
-    const medalRow = document.createElement("div");
-    medalRow.className = "map-picker-medal-row";
-    medalRow.innerHTML = Object.entries(DIFFICULTY_SETTINGS)
-      .map(([diffId, diffDef]) => {
-        const earned = medals[diffId];
-        return `<span class="map-picker-medal${earned ? " earned" : ""}" title="${diffDef.label}: sprint ${MEDAL_THRESHOLDS[diffId]}+">${earned ? "🏅" : "⚪"} ${diffDef.label}</span>`;
-      })
-      .join("");
-    card.appendChild(medalRow);
-
+    const card = document.createElement("button");
+    card.className = "btn map-thumb-card" + (mastered ? " map-picker-card-mastered" : "");
+    card.innerHTML = `
+      <svg class="map-thumb-svg" viewBox="-2 -2 ${COLS + 4} ${ROWS + 4}" preserveAspectRatio="xMidYMid meet">
+        <polyline points="${points}" fill="none" stroke="#39ff14" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round" opacity="0.85" />
+      </svg>
+      <span class="map-thumb-name">${def.name}</span>
+      <span class="map-picker-tier map-picker-tier-${def.tier}">${MAP_TIER_LABELS[def.tier] || ""}</span>
+    `;
+    card.addEventListener("click", () => renderDifficultyScreen(id));
     mapPickerList.appendChild(card);
   });
 }
 
+// Screen 2 ("modes screen" per the map - Easy/Normal/Hard, same current-run/
+// best-ever/medal info the old single-screen picker showed, just scoped to
+// one map now). Clicking a difficulty no longer enters it directly - it
+// moves on to screen 3 to choose Standard or one of that tier's game modes.
+function renderDifficultyScreen(mapId) {
+  pickerScreen = "difficulty";
+  pickerMapId = mapId;
+  const def = MAP_DEFS[mapId];
+  const stored = readStoredPayload();
+  const mapSlot = stored.maps[mapId];
+  const activeDiff = mapSlot?.activeDifficulty && DIFFICULTY_SETTINGS[mapSlot.activeDifficulty] ? mapSlot.activeDifficulty : null;
+  const activeSave = activeDiff ? mapSlot.saves?.[activeDiff] : null;
+  const current = activeSave
+    ? `${DIFFICULTY_SETTINGS[activeDiff].label}: sprint ${activeSave.wave || 0} | ${Math.floor(activeSave.gold || 0)}c`
+    : "not started yet";
+  const best = `best: sprint ${mapSlot?.bestWave || 0} | ${Math.floor(mapSlot?.bestGold || 0)}c`;
+  const medals = { easy: false, normal: false, hard: false, ...(mapSlot?.medals || {}) };
+
+  mapPickerBack.hidden = false;
+  mapPickerTitle.textContent = def.name;
+  mapPickerList.className = "map-picker-list";
+  mapPickerList.innerHTML = "";
+
+  const card = document.createElement("div");
+  card.className = "map-picker-card";
+  card.style.gridColumn = "1 / -1";
+
+  const metaEl = document.createElement("div");
+  metaEl.className = "map-picker-meta";
+  metaEl.textContent = current;
+  card.appendChild(metaEl);
+
+  const bestEl = document.createElement("div");
+  bestEl.className = "map-picker-best";
+  bestEl.style.textAlign = "center";
+  bestEl.textContent = best;
+  card.appendChild(bestEl);
+
+  const diffRow = document.createElement("div");
+  diffRow.className = "map-picker-diff-row";
+  Object.entries(DIFFICULTY_SETTINGS).forEach(([diffId, diffDef]) => {
+    const hasSave = !!mapSlot?.saves?.[diffId];
+    const diffBtn = document.createElement("button");
+    diffBtn.className = "btn map-picker-diff-btn"
+      + (diffId === activeDiff ? " active" : "")
+      + (hasSave ? " has-save" : "");
+    diffBtn.textContent = diffDef.label;
+    diffBtn.title = hasSave ? `${diffDef.label}: has a save` : `${diffDef.label}: not started`;
+    diffBtn.addEventListener("click", () => renderModeScreen(mapId, diffId));
+    diffRow.appendChild(diffBtn);
+  });
+  card.appendChild(diffRow);
+
+  const medalRow = document.createElement("div");
+  medalRow.className = "map-picker-medal-row";
+  medalRow.innerHTML = Object.entries(DIFFICULTY_SETTINGS)
+    .map(([diffId, diffDef]) => {
+      const earned = medals[diffId];
+      return `<span class="map-picker-medal${earned ? " earned" : ""}" title="${diffDef.label}: sprint ${MEDAL_THRESHOLDS[diffId]}+">${earned ? "🏅" : "⚪"} ${diffDef.label}</span>`;
+    })
+    .join("");
+  card.appendChild(medalRow);
+
+  mapPickerList.appendChild(card);
+}
+
+// Screen 3 ("sub-difficulties"): Standard (the regular game - reuses the
+// existing load-vs-new confirm flow unchanged) plus every GAME_MODES entry
+// for that difficulty's tier. A mode always wipes and starts fresh
+// immediately on click, no confirmation - these are one-off challenge runs,
+// not something worth a confirm dialog the way overwriting real progress is.
+function renderModeScreen(mapId, diffId) {
+  pickerScreen = "modes";
+  pickerMapId = mapId;
+  const def = MAP_DEFS[mapId];
+  const diffDef = DIFFICULTY_SETTINGS[diffId];
+
+  mapPickerBack.hidden = false;
+  mapPickerTitle.textContent = `${def.name} - ${diffDef.label}`;
+  mapPickerList.className = "mode-list";
+  mapPickerList.innerHTML = "";
+
+  const standardBtn = document.createElement("button");
+  standardBtn.className = "btn mode-card";
+  standardBtn.style.borderLeftColor = "var(--green)";
+  standardBtn.innerHTML = `<span class="mode-name">Standard</span><span class="mode-desc">the regular game, no modifiers.</span>`;
+  standardBtn.addEventListener("click", () => onDifficultyClick(mapId, diffId));
+  mapPickerList.appendChild(standardBtn);
+
+  Object.entries(GAME_MODES)
+    .filter(([, mode]) => mode.tier === diffId)
+    .forEach(([modeId, mode]) => {
+      const btn = document.createElement("button");
+      btn.className = "btn mode-card";
+      btn.style.borderLeftColor = mode.restrictGroup ? TOWER_GROUPS[mode.restrictGroup].color : "var(--cyan)";
+      btn.innerHTML = `<span class="mode-name">${mode.name}</span><span class="mode-desc">${mode.desc}</span>`;
+      btn.addEventListener("click", () => enterMap(mapId, diffId, true, modeId));
+      mapPickerList.appendChild(btn);
+    });
+}
+
+mapPickerBack.addEventListener("click", () => {
+  if (pickerScreen === "modes") renderDifficultyScreen(pickerMapId);
+  else renderMapScreen();
+});
+
 changeMapBtn.addEventListener("click", () => {
-  renderMapPicker();
+  renderMapScreen();
   mapPickerOverlay.hidden = false;
 });
 
@@ -2590,7 +2772,7 @@ settingsReset.addEventListener("click", () => {
 pauseChangeMapBtn.addEventListener("click", () => {
   state.paused = false;
   pauseOverlay.hidden = true;
-  renderMapPicker();
+  renderMapScreen();
   mapPickerOverlay.hidden = false;
 });
 
@@ -2849,6 +3031,7 @@ window.addEventListener("account:login", pullCloudSave);
 // tied to account identity).
 window.addEventListener("account:logout", () => {
   state.mapId = "map1";
+  state.gameMode = "standard";
   applyMapLayout("map1");
   resetTransientState();
   state.bestWave = 0;
@@ -2929,6 +3112,7 @@ function commitPaste(x, y) {
   const bp = towerClipboard.blueprint;
   const def = TOWER_TYPES[bp.type];
   if (def.isLegendary && !def.unlockCheck()) return;
+  if (!isTowerAllowedByMode(bp.type)) return;
   if (def.unique && countPlacedOfType(bp.type) >= tenxMaxCopies()) return;
   const cost = towerClipboard.cost;
   if (state.gold < cost) return;
@@ -2970,8 +3154,9 @@ function handlePlacementOrSelection(pos) {
 
   const def = TOWER_TYPES[state.selectedTowerType];
   if (def.isLegendary && !def.unlockCheck()) return;
+  if (!isTowerAllowedByMode(state.selectedTowerType)) return;
   if (def.unique && countPlacedOfType(state.selectedTowerType) >= tenxMaxCopies()) return;
-  const cost = Math.round(def.cost * (1 - getCostDiscount()));
+  const cost = Math.round(def.cost * (1 - getCostDiscount()) * (currentMode().costMult || 1));
   if (state.gold < cost) return;
 
   state.gold -= cost;
@@ -3233,6 +3418,7 @@ function buyPathTier(t, pathId) {
 }
 
 function sellTower(t) {
+  if (currentMode().noSelling) return;
   const idx = state.towers.indexOf(t);
   if (idx === -1) return;
   state.gold += Math.round(t.totalInvested * 0.6);
@@ -3281,7 +3467,13 @@ function refreshTowerInfoPanel() {
   const cost = towerUpgradeCost(t);
   towerUpgradeBtn.textContent = `upgrade (${cost}c)`;
   towerUpgradeBtn.disabled = state.gold < cost;
-  towerSellBtn.textContent = `sell (+${Math.round(t.totalInvested * 0.6)}c)`;
+  if (currentMode().noSelling) {
+    towerSellBtn.textContent = "sell (disabled)";
+    towerSellBtn.disabled = true;
+  } else {
+    towerSellBtn.textContent = `sell (+${Math.round(t.totalInvested * 0.6)}c)`;
+    towerSellBtn.disabled = false;
+  }
 
   refreshTowerTargetSection(t);
   refreshTowerPathSection(t);
@@ -3535,6 +3727,7 @@ document.addEventListener("keydown", (e) => {
   if (hotkeyType) {
     const def = TOWER_TYPES[hotkeyType];
     if (def.isLegendary && !def.unlockCheck()) return;
+    if (!isTowerAllowedByMode(hotkeyType)) return;
     state.selectedTowerType = state.selectedTowerType === hotkeyType ? null : hotkeyType;
     refreshTowerButtons();
     return;
@@ -3608,6 +3801,7 @@ function bountyMultiplierAt(x, y) {
 // upgraded Debuggers - both run continuously regardless of fire cooldown.
 function updateEconomy(dt) {
   if (!state.waveInProgress) return; // Consultants only earn while a sprint is active
+  if (currentMode().noPassiveIncome) return;
   for (const t of state.towers) {
     if (t.isEconomy) state.gold += t.incomePerSec * dt * goldYieldMult();
   }
@@ -3784,7 +3978,7 @@ function updateAllies(dt) {
 
 // ---------- Overclock ability ----------
 function activateOverclock() {
-  if (state.overclockCooldown > 0 || state.gameOver) return;
+  if (state.overclockCooldown > 0 || state.gameOver || currentMode().noAbilities) return;
   state.overclockActive = true;
   state.overclockTimer = OVERCLOCK_DURATION;
   state.overclockCooldown = OVERCLOCK_COOLDOWN;
@@ -3805,11 +3999,11 @@ overclockBtn.addEventListener("click", activateOverclock);
 
 // ---------- Fundraiser ability (temporary credit-yield boost) ----------
 function goldYieldMult() {
-  return state.fundraiserActive ? FUNDRAISER_MULT : 1;
+  return (state.fundraiserActive ? FUNDRAISER_MULT : 1) * (currentMode().goldMult || 1);
 }
 
 function activateFundraiser() {
-  if (state.fundraiserCooldown > 0 || state.gameOver) return;
+  if (state.fundraiserCooldown > 0 || state.gameOver || currentMode().noAbilities) return;
   state.fundraiserActive = true;
   state.fundraiserTimer = FUNDRAISER_DURATION;
   state.fundraiserCooldown = FUNDRAISER_COOLDOWN;
@@ -3834,7 +4028,7 @@ function airstrikeCurrentCost() {
 }
 
 function activateAirstrike() {
-  if (state.airstrikeCooldown > 0 || state.gameOver) return;
+  if (state.airstrikeCooldown > 0 || state.gameOver || currentMode().noAbilities) return;
   const cost = airstrikeCurrentCost();
   if (state.gold < cost) return;
   state.gold -= cost;
@@ -3884,6 +4078,11 @@ function isSwarmWave(waveNum) {
 }
 
 function buildWave(waveNum) {
+  const mode = currentMode();
+  // Chaos Pipeline: every type's wave-gate below is written in terms of
+  // waveNum, so pretending it's already at least 25 (the highest gate) lets
+  // any type roll from sprint 1 on, with zero duplicated gating logic.
+  const gateWave = mode.randomizeComposition ? Math.max(waveNum, 25) : waveNum;
   const swarm = isSwarmWave(waveNum);
   const count = swarm ? (6 + waveNum * 2) * 2 : 6 + waveNum * 2;
   const queue = [];
@@ -3896,15 +4095,15 @@ function buildWave(waveNum) {
     const roll = Math.random();
     // Each resistant/camo/special type is gated to later waves, per roll
     // ranges that widen as the wave number climbs.
-    if (waveNum >= 25 && roll < 0.08) type = "encrypted";
-    else if (waveNum >= 20 && roll < 0.16) type = "shielded";
-    else if (waveNum >= 18 && roll < 0.24) type = "firewalled";
-    else if (waveNum >= 16 && roll < 0.32) type = "healer";
-    else if (waveNum >= 14 && roll < 0.42) type = "obfuscated";
-    else if (waveNum >= 10 && roll < 0.52) type = "legacy";
-    else if (waveNum >= 6 && roll < 0.62) type = "splitter";
-    else if (waveNum >= 5 && roll < 0.72) type = "tank";
-    else if (waveNum >= 2 && roll < 0.88) type = "fast";
+    if (gateWave >= 25 && roll < 0.08) type = "encrypted";
+    else if (gateWave >= 20 && roll < 0.16) type = "shielded";
+    else if (gateWave >= 18 && roll < 0.24) type = "firewalled";
+    else if (gateWave >= 16 && roll < 0.32) type = "healer";
+    else if (gateWave >= 14 && roll < 0.42) type = "obfuscated";
+    else if (gateWave >= 10 && roll < 0.52) type = "legacy";
+    else if (gateWave >= 6 && roll < 0.62) type = "splitter";
+    else if (gateWave >= 5 && roll < 0.72) type = "tank";
+    else if (gateWave >= 2 && roll < 0.88) type = "fast";
     queue.push(type);
   }
   if (waveNum % bossIntervalFor(waveNum) === 0) {
@@ -3916,6 +4115,8 @@ function buildWave(waveNum) {
     queue.push("megaboss");
   }
   queue.push(...splitBossQueueFor(waveNum));
+  // Rollback: the whole sprint's lineup arrives in reverse order.
+  if (mode.reverseSpawnOrder) queue.reverse();
   return queue;
 }
 
@@ -3998,7 +4199,7 @@ function computeEnemyStats(type) {
   const diff = DIFFICULTY_SETTINGS[state.difficulty] || DIFFICULTY_SETTINGS.normal;
   const lateWaves = Math.max(0, state.wave - 50);
   let hp = Math.round(def.hp * (1 + state.wave * 0.18) * Math.pow(1.11, lateWaves) * diff.hpMult);
-  if (isBossType) hp = Math.round(hp * bossHpMultiplier(type, state.wave));
+  if (isBossType) hp = Math.round(hp * bossHpMultiplier(type, state.wave) * (currentMode().bossHpMult || 1));
   const reward = Math.round((def.reward + state.wave * (isBossType ? 4 : 1)) * diff.rewardMult);
   // Every enemy gets a little faster each wave, on top of any type-specific
   // base speed (bossTank stays slow, bossCamo stays fast, relative to each other).
@@ -4009,10 +4210,11 @@ function computeEnemyStats(type) {
 
 function spawnEnemy(type) {
   const { def, isBossType, hp, reward, speed, maxShield } = computeEnemyStats(type);
+  const entrance = pathPointsForMovement()[0];
   state.enemies.push({
     type,
-    x: PATH_POINTS[0].x,
-    y: PATH_POINTS[0].y,
+    x: entrance.x,
+    y: entrance.y,
     hp,
     maxHp: hp,
     speed,
@@ -4120,7 +4322,7 @@ function updateEnemies(dt) {
       applyDamage(e, e.dotPerSec * dt, null);
       if (!state.enemies.includes(e)) continue; // the dot tick killed it
     }
-    const target = PATH_POINTS[e.segment];
+    const target = pathPointsForMovement()[e.segment];
     if (!target) {
       state.lives -= e.lifeDamage;
       state.enemies.splice(i, 1);
@@ -4162,7 +4364,7 @@ const ENEMY_MAX_PATH_OFFSET = PATH_VISUAL_WIDTH / 2;
 // The enemy's current unit direction toward its next waypoint - used so
 // separation can never shove it backward along the path (only sideways).
 function enemyForwardDir(e) {
-  const target = PATH_POINTS[e.segment];
+  const target = pathPointsForMovement()[e.segment];
   if (!target) return { x: 0, y: 0 };
   const dx = target.x - e.x, dy = target.y - e.y;
   const len = Math.hypot(dx, dy) || 1;
@@ -4241,7 +4443,7 @@ function isEnemyHalfOnScreen(e) {
 // state.enemies has a valid PATH_POINTS[e.segment] (see updateEnemies, which
 // removes an enemy the instant its segment runs out), so no bounds guard needed.
 function enemyPathProgress(e) {
-  const target = PATH_POINTS[e.segment];
+  const target = pathPointsForMovement()[e.segment];
   const distToNext = distance(e.x, e.y, target.x, target.y);
   return e.segment * 100000 - distToNext;
 }
@@ -4421,10 +4623,14 @@ function applyDamage(enemy, amount, sourceTower) {
       state.enemies.splice(idx, 1);
       spawnDeathBurst(enemy.x, enemy.y, enemy.color);
       playDeathSound(enemy.type);
-      const goldEarned = enemy.reward * goldYieldMult() * bountyMultiplierAt(enemy.x, enemy.y);
-      state.gold += goldEarned;
-      spawnFloatingText(enemy.x, enemy.y - 16, `+${Math.round(goldEarned)}c`, "#ffd166");
-      if (sourceTower?.bonusGoldPerKill) state.gold += sourceTower.bonusGoldPerKill;
+      // Tech Debt: fixing bugs pays nothing extra, the upfront lump sum is
+      // all there is - skips kill gold, bounty, and ally bonus gold alike.
+      if (!currentMode().noKillGold) {
+        const goldEarned = enemy.reward * goldYieldMult() * bountyMultiplierAt(enemy.x, enemy.y);
+        state.gold += goldEarned;
+        spawnFloatingText(enemy.x, enemy.y - 16, `+${Math.round(goldEarned)}c`, "#ffd166");
+        if (sourceTower?.bonusGoldPerKill) state.gold += sourceTower.bonusGoldPerKill;
+      }
       state.kills += 1;
       if (enemy.isBoss) {
         state.totalBossKills = (state.totalBossKills || 0) + 1;
@@ -4959,6 +5165,14 @@ function updateChainBolts(dt) {
 
 function updateSpawning(dt) {
   if (!state.waveInProgress) {
+    // Incident: the chain-call at the bottom of this function only ever
+    // restarts a wave that just finished - it can't kick off the very FIRST
+    // one on a fresh map entry, since nothing has finished yet to trigger
+    // it. This covers that one case; every wave after it is the chain-call.
+    if (currentMode().continuousSpawn && !state.gameOver) {
+      startNextWave();
+      return;
+    }
     if (state.autoRun && state.autoRunTimer > 0) {
       state.autoRunTimer -= dt;
       if (state.autoRunTimer <= 0) startNextWave();
@@ -4972,12 +5186,16 @@ function updateSpawning(dt) {
   }
   if (state.spawnQueue.length === 0 && state.enemies.length === 0) {
     state.waveInProgress = false;
+    const mode = currentMode();
     // End-of-sprint bonus, on top of normal kill gold - grows linearly with
     // wave number so clearing a sprint stays worth doing at any point in a
-    // run, not just early on.
-    const bonus = Math.round(WAVE_BONUS_BASE + state.wave * WAVE_BONUS_PER_WAVE);
-    state.gold += bonus;
-    spawnFloatingText(COLS * CELL / 2, 50, `sprint bonus +${bonus}c`, "#ffd166");
+    // run, not just early on. Tech Debt disables it (fixing bugs pays
+    // nothing extra there, only the upfront lump sum).
+    if (!mode.noSprintBonus) {
+      const bonus = Math.round((WAVE_BONUS_BASE + state.wave * WAVE_BONUS_PER_WAVE) * (mode.goldMult || 1));
+      state.gold += bonus;
+      spawnFloatingText(COLS * CELL / 2, 50, `sprint bonus +${bonus}c`, "#ffd166");
+    }
 
     // Consultant's T5+ (any of its 3 paths) covers some uptime back every
     // sprint - stacks across multiple qualifying Consultants. Uncapped: it
@@ -4986,7 +5204,8 @@ function updateSpawning(dt) {
     // damage - several T5+ Consultants could sit there granting zero visible
     // benefit. Now it just keeps adding, so uptime can climb past the
     // starting value as a real payoff for investing in multiple of them.
-    const livesBack = state.towers.reduce((sum, t) => sum + (t.pathLivesPerRound || 0), 0);
+    // Zero Downtime disables it entirely (no uptime regen, full stop).
+    const livesBack = mode.noLivesRegen ? 0 : state.towers.reduce((sum, t) => sum + (t.pathLivesPerRound || 0), 0);
     if (livesBack > 0) {
       state.lives += livesBack;
       spawnFloatingText(COLS * CELL / 2, 75, `+${livesBack} uptime`, "#39ff14");
@@ -4995,6 +5214,12 @@ function updateSpawning(dt) {
     waveBtn.disabled = false;
     waveBtn.textContent = `deploy sprint ${state.wave + 1}`;
     if (state.autoRun) state.autoRunTimer = AUTO_RUN_DELAY;
+
+    // Incident: the next sprint starts immediately, no downtime to prep in
+    // between - startNextWave() is safe to call directly here since
+    // waveInProgress was just set false above, the only thing that would
+    // otherwise block it.
+    if (mode.continuousSpawn) startNextWave();
   }
 }
 
@@ -5862,9 +6087,14 @@ function loop(now) {
 // Shared by "restart after a loss" (resetGame) and "logged out" - the two
 // differ only in whether bestWave/ownerId (tied to account identity) reset.
 function resetTransientState() {
-  state.gold = STARTING_GOLD;
-  state.lives = STARTING_LIVES;
-  state.wave = 0;
+  // Reads whatever state.gameMode is already set to - this function never
+  // touches gameMode itself (see enterMap, which sets it BEFORE calling this
+  // when a mode change is actually intended, and resetGame's restart --fresh
+  // deliberately leaves it alone so a restart stays in the same mode).
+  const mode = currentMode();
+  state.gold = Math.round((mode.startGoldLumpSum ?? STARTING_GOLD) * (mode.goldMult || 1));
+  state.lives = mode.startLives || STARTING_LIVES;
+  state.wave = mode.startWave ? mode.startWave - 1 : 0;
   state.kills = 0;
   state.medals = { easy: false, normal: false, hard: false };
   state.selectedTowerType = null;
@@ -5919,7 +6149,7 @@ buildTowerButtons();
 loadGame();
 syncSpeedButton();
 updateStats();
-renderMapPicker();
+renderMapScreen();
 mapPickerOverlay.hidden = false;
 requestAnimationFrame(loop);
 setInterval(saveGame, 3000);
