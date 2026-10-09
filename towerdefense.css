@@ -608,12 +608,21 @@ canvas {
 
 .mode-card {
   display: flex;
-  flex-direction: column;
-  gap: 3px;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
   width: 100%;
   padding: 10px 12px;
   border-left-width: 4px;
   border-left-style: solid;
+}
+
+.mode-card-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
 }
 
 .mode-card .mode-name {
@@ -625,6 +634,30 @@ canvas {
   font-size: 0.72rem;
   color: var(--green-faint);
   line-height: 1.35;
+}
+
+/* Each mode (and Standard) gets its own colored medal icon - grey/dim "⚪"
+   while unearned, the mode's own unique emoji+color (--medal-color, set
+   inline per mode) once that difficulty's sprint threshold is cleared. */
+.mode-medal {
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.15rem;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  opacity: 0.5;
+  filter: grayscale(1);
+}
+
+.mode-medal.earned {
+  opacity: 1;
+  filter: none;
+  border-color: var(--medal-color, var(--yellow));
+  box-shadow: 0 0 8px var(--medal-color, var(--yellow));
 }
 
 .map-picker-list {
@@ -752,8 +785,9 @@ canvas {
 }
 
 .map-picker-medal.earned {
-  color: var(--yellow);
+  color: var(--medal-color, var(--yellow));
   opacity: 1;
+  text-shadow: 0 0 6px var(--medal-color, var(--yellow));
 }
 
 .map-picker-card-mastered {

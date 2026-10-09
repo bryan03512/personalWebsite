@@ -327,58 +327,89 @@ const GAME_MODES = {
     name: "Engineering Only", tier: "easy",
     desc: "only Engineering-group devs can be deployed (Gamer, Sniper, Sentry, Shotgun, Grep) - everything outside the group is banned, Business included.",
     restrictGroup: "engineering",
+    medal: { emoji: "🔧", color: "#00e5ff" },
   },
   techDebt: {
     name: "Tech Debt", tier: "easy",
     desc: "starts on sprint 31 with a lump sum of credits instead of a fresh start - but fixing bugs pays nothing extra from then on, so that lump sum is all you get.",
     startWave: 31, startGoldLumpSum: 3000, noKillGold: true, noSprintBonus: true,
+    medal: { emoji: "💸", color: "#f59e0b" },
   },
   opsOnly: {
     name: "Ops Only", tier: "normal",
     desc: "only Ops-group devs can be deployed (Hacker, Tesla, Callback, 10x Engineer, Staff Engineer).",
     restrictGroup: "ops",
+    medal: { emoji: "📟", color: "#fb7a3f" },
   },
   incident: {
     name: "Incident", tier: "normal",
     desc: "a live incident - bugs never stop coming, sprint after sprint with no downtime to prep in between.",
     continuousSpawn: true,
+    medal: { emoji: "🔥", color: "#ef4444" },
   },
   rollback: {
     name: "Rollback", tier: "normal",
     desc: "the deploy got rolled back - bugs travel the path in reverse, and each sprint's lineup arrives in reverse order too.",
     reversePath: true, reverseSpawnOrder: true,
+    medal: { emoji: "⏪", color: "#38bdf8" },
   },
   chaosPipeline: {
     name: "Chaos Pipeline", tier: "hard",
     desc: "the build pipeline has no safety gates left - any bug type can show up starting sprint 1, none of the usual wave-gated ramp-up.",
     randomizeComposition: true,
+    medal: { emoji: "🌀", color: "#f472b6" },
   },
   zeroDowntime: {
     name: "Zero Downtime", tier: "hard",
     desc: "a strict production SLA - no passive income, no uptime regen, no abilities, and devs can't be sold once deployed.",
     noPassiveIncome: true, noLivesRegen: true, noAbilities: true, noSelling: true,
+    medal: { emoji: "🔒", color: "#94a3b8" },
   },
   doubleBossHp: {
     name: "Double HP Bosses", tier: "hard",
     desc: "every boss spawns with double hp.",
     bossHpMult: 2,
+    medal: { emoji: "💀", color: "#991b1b" },
   },
   payCut: {
     name: "Pay Cut", tier: "hard",
     desc: "credits are cut in half across the board - starting credits, bug bounties, sprint bonuses, passive income, all of it.",
     goldMult: 0.5,
+    medal: { emoji: "✂️", color: "#22c55e" },
   },
   oneLife: {
     name: "One Life", tier: "hard",
     desc: "uptime starts at just 1 - a single bug reaching the end ends the run. Devs also cost 25% more, and bosses have 50% more hp.",
     startLives: 1, costMult: 1.25, bossHpMult: 1.5,
+    medal: { emoji: "💔", color: "#f43f5e" },
   },
   rndOnly: {
     name: "R&D Only", tier: "hard",
     desc: "only R&D-group devs can be deployed (Quant, Freeze, Singularity, The Machine).",
     restrictGroup: "rnd",
+    medal: { emoji: "🧪", color: "#a78bfa" },
   },
 };
+
+// Bronze/silver/gold, same metal-tier idea as the modes' own colored medal
+// icons below - gives Easy/Normal/Hard a visually distinct medal too,
+// instead of the single flat "earned" look they used to share.
+const DIFFICULTY_MEDAL_STYLES = {
+  easy: { emoji: "🥉", color: "#cd7f32" },
+  normal: { emoji: "🥈", color: "#c0c0c0" },
+  hard: { emoji: "🥇", color: "#ffd700" },
+};
+
+// Every medal key a map slot can ever have: the 3 difficulty medals (always
+// present, pre-dating game modes) plus one per GAME_MODES entry. Used
+// everywhere a medals object is created or defaulted so a map slot always
+// has every key present (additive - old saves missing the newer mode keys
+// just pick up `false` here rather than `undefined`).
+function emptyMedals() {
+  const medals = { easy: false, normal: false, hard: false };
+  Object.keys(GAME_MODES).forEach((id) => { medals[id] = false; });
+  return medals;
+}
 
 // Empty-object fallback (not an explicit "standard" entry) - every modifier
 // field below reads as undefined/falsy off {}, so standard play needs no
@@ -1872,7 +1903,7 @@ const state = {
   mapId: "map1",
   difficulty: "normal",
   gameMode: "standard",
-  medals: { easy: false, normal: false, hard: false },
+  medals: emptyMedals(),
   gold: STARTING_GOLD,
   bestGold: STARTING_GOLD,
   lives: STARTING_LIVES,
@@ -2185,7 +2216,7 @@ function migrateMapLayout(stored) {
     migratedMaps[id] = {
       bestWave: old?.bestWave || 0,
       bestGold: old?.bestGold || STARTING_GOLD,
-      medals: old?.medals || { easy: false, normal: false, hard: false },
+      medals: { ...emptyMedals(), ...(old?.medals || {}) },
       activeDifficulty: hadLiveRun ? oldDiff : null,
       saves,
     };
@@ -2310,12 +2341,19 @@ let medalToastTimer = null;
 // Checked every updateStats() call (same cadence as achievements) - fires
 // once per map+difficulty the instant the live wave crosses that
 // difficulty's threshold, then persists immediately so it survives a crash.
+// A mode run (state.gameMode !== "standard") earns its OWN medal keyed by
+// the mode id instead of the difficulty - a separate, unique medal per
+// mode, on top of (not instead of) that difficulty's own Standard medal -
+// using the same difficulty's threshold since a mode run uses that
+// difficulty's wave-scaling the whole time.
 function checkMedals() {
   const threshold = MEDAL_THRESHOLDS[state.difficulty];
-  if (!threshold || state.wave <= threshold || state.medals[state.difficulty]) return;
-  state.medals[state.difficulty] = true;
-  const diffLabel = (DIFFICULTY_SETTINGS[state.difficulty] || DIFFICULTY_SETTINGS.normal).label;
-  medalToast.textContent = `medal earned: ${diffLabel} - ${MAP_DEFS[state.mapId]?.name || state.mapId}`;
+  if (!threshold || state.wave <= threshold) return;
+  const medalKey = state.gameMode !== "standard" ? state.gameMode : state.difficulty;
+  if (state.medals[medalKey]) return;
+  state.medals[medalKey] = true;
+  const label = state.gameMode !== "standard" ? currentMode().name : (DIFFICULTY_SETTINGS[state.difficulty] || DIFFICULTY_SETTINGS.normal).label;
+  medalToast.textContent = `medal earned: ${label} - ${MAP_DEFS[state.mapId]?.name || state.mapId}`;
   medalToast.classList.add("visible");
   clearTimeout(medalToastTimer);
   medalToastTimer = setTimeout(() => medalToast.classList.remove("visible"), 3500);
@@ -2333,7 +2371,7 @@ function applyMapDataToState(mapSlot, difficulty) {
   if (!mapSlot) return;
   if (typeof mapSlot.bestWave === "number") state.bestWave = mapSlot.bestWave;
   if (typeof mapSlot.bestGold === "number") state.bestGold = mapSlot.bestGold;
-  state.medals = { easy: false, normal: false, hard: false, ...(mapSlot.medals || {}) };
+  state.medals = { ...emptyMedals(), ...(mapSlot.medals || {}) };
 
   const save = mapSlot.saves?.[difficulty];
   if (!save) return;
@@ -2373,7 +2411,7 @@ function saveGame() {
   const stored = readStoredPayload();
   const mapSlot = stored.maps[state.mapId] || {
     bestWave: 0, bestGold: STARTING_GOLD,
-    medals: { easy: false, normal: false, hard: false },
+    medals: emptyMedals(),
     activeDifficulty: null, saves: {},
   };
   mapSlot.saves = mapSlot.saves || {};
@@ -2387,13 +2425,16 @@ function saveGame() {
   // ones) zeroes the live state.medals first. A flat overwrite here would
   // persist that zeroed state straight over an already-earned medal the
   // instant saveGame() next runs - this keeps any medal already on disk
-  // even if the live session's copy is temporarily behind.
-  const existingMedals = mapSlot.medals || { easy: false, normal: false, hard: false };
-  mapSlot.medals = {
-    easy: existingMedals.easy || state.medals.easy,
-    normal: existingMedals.normal || state.medals.normal,
-    hard: existingMedals.hard || state.medals.hard,
-  };
+  // even if the live session's copy is temporarily behind. Iterates every
+  // key in emptyMedals() (the 3 difficulty medals plus one per game mode)
+  // rather than hardcoding easy/normal/hard, so mode medals get the same
+  // never-decreases union.
+  const existingMedals = { ...emptyMedals(), ...(mapSlot.medals || {}) };
+  const liveMedals = { ...emptyMedals(), ...state.medals };
+  mapSlot.medals = {};
+  Object.keys(existingMedals).forEach((key) => {
+    mapSlot.medals[key] = existingMedals[key] || liveMedals[key];
+  });
   // Historical best wave PER DIFFICULTY, separate from mapSlot.bestWave
   // (which only tracks the single best across any difficulty) - needed so
   // The Machine's unlock can check hard specifically (see hasHardWave300).
@@ -2462,7 +2503,7 @@ function enterMap(mapId, diffId, wipe, modeId = "standard") {
     const stored = readStoredPayload();
     let mapSlot = stored.maps[mapId];
     if (!mapSlot) {
-      mapSlot = { bestWave: 0, bestGold: STARTING_GOLD, medals: { easy: false, normal: false, hard: false }, activeDifficulty: null, saves: {} };
+      mapSlot = { bestWave: 0, bestGold: STARTING_GOLD, medals: emptyMedals(), activeDifficulty: null, saves: {} };
       stored.maps[mapId] = mapSlot;
     }
     mapSlot.saves = mapSlot.saves || {};
@@ -2576,7 +2617,7 @@ function renderMapScreen() {
   mapPickerList.innerHTML = "";
   const stored = readStoredPayload();
   Object.entries(MAP_DEFS).forEach(([id, def]) => {
-    const medals = { easy: false, normal: false, hard: false, ...(stored.maps[id]?.medals || {}) };
+    const medals = { ...emptyMedals(), ...(stored.maps[id]?.medals || {}) };
     const mastered = medals.easy && medals.normal && medals.hard;
     const points = def.waypoints.map(([c, r]) => `${c},${r}`).join(" ");
 
@@ -2610,7 +2651,7 @@ function renderDifficultyScreen(mapId) {
     ? `${DIFFICULTY_SETTINGS[activeDiff].label}: sprint ${activeSave.wave || 0} | ${Math.floor(activeSave.gold || 0)}c`
     : "not started yet";
   const best = `best: sprint ${mapSlot?.bestWave || 0} | ${Math.floor(mapSlot?.bestGold || 0)}c`;
-  const medals = { easy: false, normal: false, hard: false, ...(mapSlot?.medals || {}) };
+  const medals = { ...emptyMedals(), ...(mapSlot?.medals || {}) };
 
   mapPickerBack.hidden = false;
   mapPickerTitle.textContent = def.name;
@@ -2636,23 +2677,29 @@ function renderDifficultyScreen(mapId) {
   diffRow.className = "map-picker-diff-row";
   Object.entries(DIFFICULTY_SETTINGS).forEach(([diffId, diffDef]) => {
     const hasSave = !!mapSlot?.saves?.[diffId];
+    const modeIdsForTier = Object.keys(GAME_MODES).filter((id) => GAME_MODES[id].tier === diffId);
+    const modeMedalsEarned = modeIdsForTier.filter((id) => medals[id]).length;
     const diffBtn = document.createElement("button");
     diffBtn.className = "btn map-picker-diff-btn"
       + (diffId === activeDiff ? " active" : "")
       + (hasSave ? " has-save" : "");
     diffBtn.textContent = diffDef.label;
-    diffBtn.title = hasSave ? `${diffDef.label}: has a save` : `${diffDef.label}: not started`;
+    diffBtn.title = `${diffDef.label}: ${hasSave ? "has a save" : "not started"} - mode medals ${modeMedalsEarned}/${modeIdsForTier.length}`;
     diffBtn.addEventListener("click", () => renderModeScreen(mapId, diffId));
     diffRow.appendChild(diffBtn);
   });
   card.appendChild(diffRow);
 
+  // Bronze/silver/gold per difficulty (DIFFICULTY_MEDAL_STYLES) - gives
+  // Easy/Normal/Hard their own distinct medal look, same idea as each
+  // mode's own colored icon on screen 3 (see renderModeScreen).
   const medalRow = document.createElement("div");
   medalRow.className = "map-picker-medal-row";
   medalRow.innerHTML = Object.entries(DIFFICULTY_SETTINGS)
     .map(([diffId, diffDef]) => {
       const earned = medals[diffId];
-      return `<span class="map-picker-medal${earned ? " earned" : ""}" title="${diffDef.label}: sprint ${MEDAL_THRESHOLDS[diffId]}+">${earned ? "🏅" : "⚪"} ${diffDef.label}</span>`;
+      const style = DIFFICULTY_MEDAL_STYLES[diffId];
+      return `<span class="map-picker-medal${earned ? " earned" : ""}" style="--medal-color:${style.color}" title="${diffDef.label}: sprint ${MEDAL_THRESHOLDS[diffId]}+">${earned ? style.emoji : "⚪"} ${diffDef.label}</span>`;
     })
     .join("");
   card.appendChild(medalRow);
@@ -2670,26 +2717,42 @@ function renderModeScreen(mapId, diffId) {
   pickerMapId = mapId;
   const def = MAP_DEFS[mapId];
   const diffDef = DIFFICULTY_SETTINGS[diffId];
+  const stored = readStoredPayload();
+  const medals = { ...emptyMedals(), ...(stored.maps[mapId]?.medals || {}) };
 
   mapPickerBack.hidden = false;
   mapPickerTitle.textContent = `${def.name} - ${diffDef.label}`;
   mapPickerList.className = "mode-list";
   mapPickerList.innerHTML = "";
 
+  // Standard shows that difficulty's own bronze/silver/gold medal (shared
+  // with screen 2's medal row); every mode below shows its own unique
+  // medal (GAME_MODES[id].medal) instead - same earned/unearned (grey "⚪")
+  // treatment, just a different color+icon per mode so none of them look
+  // alike.
+  const diffMedal = DIFFICULTY_MEDAL_STYLES[diffId];
+  const standardEarned = medals[diffId];
   const standardBtn = document.createElement("button");
   standardBtn.className = "btn mode-card";
   standardBtn.style.borderLeftColor = "var(--green)";
-  standardBtn.innerHTML = `<span class="mode-name">Standard</span><span class="mode-desc">the regular game, no modifiers.</span>`;
+  standardBtn.innerHTML = `
+    <span class="mode-medal${standardEarned ? " earned" : ""}" style="--medal-color:${diffMedal.color}" title="${diffDef.label} medal: sprint ${MEDAL_THRESHOLDS[diffId]}+">${standardEarned ? diffMedal.emoji : "⚪"}</span>
+    <span class="mode-card-text"><span class="mode-name">Standard</span><span class="mode-desc">the regular game, no modifiers.</span></span>
+  `;
   standardBtn.addEventListener("click", () => onDifficultyClick(mapId, diffId));
   mapPickerList.appendChild(standardBtn);
 
   Object.entries(GAME_MODES)
     .filter(([, mode]) => mode.tier === diffId)
     .forEach(([modeId, mode]) => {
+      const earned = medals[modeId];
       const btn = document.createElement("button");
       btn.className = "btn mode-card";
-      btn.style.borderLeftColor = mode.restrictGroup ? TOWER_GROUPS[mode.restrictGroup].color : "var(--cyan)";
-      btn.innerHTML = `<span class="mode-name">${mode.name}</span><span class="mode-desc">${mode.desc}</span>`;
+      btn.style.borderLeftColor = mode.medal.color;
+      btn.innerHTML = `
+        <span class="mode-medal${earned ? " earned" : ""}" style="--medal-color:${mode.medal.color}" title="${mode.name} medal: sprint ${MEDAL_THRESHOLDS[diffId]}+">${earned ? mode.medal.emoji : "⚪"}</span>
+        <span class="mode-card-text"><span class="mode-name">${mode.name}</span><span class="mode-desc">${mode.desc}</span></span>
+      `;
       btn.addEventListener("click", () => enterMap(mapId, diffId, true, modeId));
       mapPickerList.appendChild(btn);
     });
@@ -6096,7 +6159,7 @@ function resetTransientState() {
   state.lives = mode.startLives || STARTING_LIVES;
   state.wave = mode.startWave ? mode.startWave - 1 : 0;
   state.kills = 0;
-  state.medals = { easy: false, normal: false, hard: false };
+  state.medals = emptyMedals();
   state.selectedTowerType = null;
   state.selectedTower = null;
   state.towers = [];
