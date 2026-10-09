@@ -411,6 +411,28 @@ function emptyMedals() {
   return medals;
 }
 
+// Looks up a medal key's {emoji, color, label} regardless of whether it's
+// one of the 3 plain difficulties or one of the GAME_MODES entries - the
+// one place that knows how to turn either kind of key into a look.
+function medalStyleFor(key) {
+  if (DIFFICULTY_MEDAL_STYLES[key]) return { ...DIFFICULTY_MEDAL_STYLES[key], label: DIFFICULTY_SETTINGS[key].label };
+  const mode = GAME_MODES[key];
+  return mode ? { ...mode.medal, label: mode.name } : null;
+}
+
+// Small grey/colored dot strip - every medal key at a glance, used on the
+// map-select screen so all 14 medals (3 difficulties + 11 modes) show up
+// per map without having to drill into the difficulty/mode screens.
+function renderMedalStrip(medals) {
+  return Object.keys(emptyMedals())
+    .map((key) => {
+      const style = medalStyleFor(key);
+      const earned = medals[key];
+      return `<span class="medal-dot${earned ? " earned" : ""}" style="--medal-color:${style.color}" title="${style.label}${earned ? " - earned" : " - not earned yet"}">${earned ? style.emoji : "⚪"}</span>`;
+    })
+    .join("");
+}
+
 // Empty-object fallback (not an explicit "standard" entry) - every modifier
 // field below reads as undefined/falsy off {}, so standard play needs no
 // special-casing anywhere a mode check happens.
@@ -2596,6 +2618,56 @@ function confirmWipeSave(mapId, diffId) {
   });
 }
 
+// A mode card's click (screen 3) - same load-vs-start-new shape as
+// onDifficultyClick above, since a mode shares that difficulty's single
+// save slot (mapSlot.saves[diffId]) and starting fresh wipes it exactly
+// the same way, whether what's there belongs to Standard or some other
+// mode on this tier. "Load saved game" ignores modeId entirely - whatever
+// save is actually there carries its own mode (save.mode, restored by
+// applyMapDataToState), so loading always resumes the real thing on disk.
+function onModeClick(mapId, diffId, modeId, modeName) {
+  const stored = readStoredPayload();
+  const hasSave = !!stored.maps[mapId]?.saves?.[diffId];
+  const mapName = MAP_DEFS[mapId].name;
+  const diffLabel = DIFFICULTY_SETTINGS[diffId].label;
+  if (hasSave) {
+    showMapConfirm({
+      title: `${mapName} - ${modeName}`,
+      message: `You have a save on ${diffLabel} for this map. Load it, or start a new ${modeName} game?`,
+      options: [
+        { label: "Load saved game", action: () => enterMap(mapId, diffId, false) },
+        { label: "Create new", action: () => confirmWipeModeSave(mapId, diffId, modeId, modeName) },
+        { label: "Cancel", action: () => {} },
+      ],
+    });
+  } else {
+    showMapConfirm({
+      title: `${mapName} - ${modeName}`,
+      message: `Start a new ${modeName} game?`,
+      options: [
+        { label: "Start new game", action: () => enterMap(mapId, diffId, true, modeId) },
+        { label: "Cancel", action: () => {} },
+      ],
+    });
+  }
+}
+
+// Same one-more-step-for-destruction idea as confirmWipeSave, worded for a
+// mode run since what's being overwritten may well be a Standard save
+// rather than another mode run.
+function confirmWipeModeSave(mapId, diffId, modeId, modeName) {
+  const mapName = MAP_DEFS[mapId].name;
+  const diffLabel = DIFFICULTY_SETTINGS[diffId].label;
+  showMapConfirm({
+    title: "Are you sure?",
+    message: `This deletes your existing ${diffLabel} save on ${mapName} and starts a fresh ${modeName} game. This can't be undone.`,
+    options: [
+      { label: "Delete & start new", action: () => enterMap(mapId, diffId, true, modeId), danger: true },
+      { label: "Cancel", action: () => {} },
+    ],
+  });
+}
+
 // ---------- Map picker: 3 screens (map -> difficulty -> sub-mode) ----------
 // pickerScreen/pickerMapId track where in that flow the overlay currently
 // is, purely for the back button - none of it is persisted, it always
@@ -2629,6 +2701,7 @@ function renderMapScreen() {
       </svg>
       <span class="map-thumb-name">${def.name}</span>
       <span class="map-picker-tier map-picker-tier-${def.tier}">${MAP_TIER_LABELS[def.tier] || ""}</span>
+      <div class="map-thumb-medals">${renderMedalStrip(medals)}</div>
     `;
     card.addEventListener("click", () => renderDifficultyScreen(id));
     mapPickerList.appendChild(card);
@@ -2709,9 +2782,10 @@ function renderDifficultyScreen(mapId) {
 
 // Screen 3 ("sub-difficulties"): Standard (the regular game - reuses the
 // existing load-vs-new confirm flow unchanged) plus every GAME_MODES entry
-// for that difficulty's tier. A mode always wipes and starts fresh
-// immediately on click, no confirmation - these are one-off challenge runs,
-// not something worth a confirm dialog the way overwriting real progress is.
+// for that difficulty's tier. Modes go through the same load-vs-start-new
+// confirm as Standard (see onModeClick) since they share that difficulty's
+// one save slot - clicking a mode can otherwise silently wipe a real
+// Standard (or different-mode) run on the same tier.
 function renderModeScreen(mapId, diffId) {
   pickerScreen = "modes";
   pickerMapId = mapId;
@@ -2753,7 +2827,7 @@ function renderModeScreen(mapId, diffId) {
         <span class="mode-medal${earned ? " earned" : ""}" style="--medal-color:${mode.medal.color}" title="${mode.name} medal: sprint ${MEDAL_THRESHOLDS[diffId]}+">${earned ? mode.medal.emoji : "⚪"}</span>
         <span class="mode-card-text"><span class="mode-name">${mode.name}</span><span class="mode-desc">${mode.desc}</span></span>
       `;
-      btn.addEventListener("click", () => enterMap(mapId, diffId, true, modeId));
+      btn.addEventListener("click", () => onModeClick(mapId, diffId, modeId, mode.name));
       mapPickerList.appendChild(btn);
     });
 }
@@ -6212,8 +6286,18 @@ buildTowerButtons();
 loadGame();
 syncSpeedButton();
 updateStats();
-renderMapScreen();
-mapPickerOverlay.hidden = false;
+// Resume straight into the last active map+difficulty's live save if one
+// exists, instead of always forcing the map picker open over it - the
+// picker now only opens automatically on a genuinely fresh visit (nothing
+// saved on the active map/difficulty yet). It's still always one click
+// away via changeMapBtn/pauseChangeMapBtn.
+const hasLiveSaveOnLoad = !!readStoredPayload().maps[state.mapId]?.saves?.[state.difficulty];
+if (hasLiveSaveOnLoad) {
+  mapPickerOverlay.hidden = true;
+} else {
+  renderMapScreen();
+  mapPickerOverlay.hidden = false;
+}
 requestAnimationFrame(loop);
 setInterval(saveGame, 3000);
 pullCloudSave();

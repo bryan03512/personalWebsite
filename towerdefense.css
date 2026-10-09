@@ -598,6 +598,39 @@ canvas {
   font-weight: bold;
 }
 
+/* All 14 medals (3 difficulties + 11 modes) at a glance per map, so
+   earning one shows up right on the map-select screen, not just the
+   difficulty/mode screens behind it. */
+.map-thumb-medals {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 2px;
+  max-width: 100%;
+}
+
+.medal-dot {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.55rem;
+  line-height: 1;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  opacity: 0.45;
+  filter: grayscale(1);
+}
+
+.medal-dot.earned {
+  opacity: 1;
+  filter: none;
+  border-color: var(--medal-color, var(--yellow));
+  box-shadow: 0 0 4px var(--medal-color, var(--yellow));
+}
+
 /* ---- Screen 3: sub-difficulty / game mode select ---- */
 .mode-list {
   display: flex;
