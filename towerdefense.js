@@ -2010,6 +2010,11 @@ const waveBtn = document.getElementById("waveBtn");
 const gameOverOverlay = document.getElementById("gameOverOverlay");
 const gameOverText = document.getElementById("gameOverText");
 const restartBtn = document.getElementById("restartBtn");
+const medalOverlay = document.getElementById("medalOverlay");
+const medalOverlayTitle = document.getElementById("medalOverlayTitle");
+const medalOverlayText = document.getElementById("medalOverlayText");
+const medalHomeBtn = document.getElementById("medalHomeBtn");
+const medalFreeplayBtn = document.getElementById("medalFreeplayBtn");
 const changeMapBtn = document.getElementById("changeMapBtn");
 const mapPickerOverlay = document.getElementById("mapPickerOverlay");
 const mapPickerList = document.getElementById("mapPickerList");
@@ -2432,12 +2437,27 @@ function checkMedals() {
   const medalKey = state.gameMode !== "standard" ? state.gameMode : state.difficulty;
   if (state.medals[medalKey]) return;
   state.medals[medalKey] = true;
-  const label = state.gameMode !== "standard" ? currentMode().name : (DIFFICULTY_SETTINGS[state.difficulty] || DIFFICULTY_SETTINGS.normal).label;
-  medalToast.textContent = `medal earned: ${label} - ${MAP_DEFS[state.mapId]?.name || state.mapId}`;
-  medalToast.classList.add("visible");
-  clearTimeout(medalToastTimer);
-  medalToastTimer = setTimeout(() => medalToast.classList.remove("visible"), 3500);
   saveGame();
+  // A loss landing on the exact same frame the threshold is crossed (lives
+  // hit 0 and the wave ticked over at once) should show the game-over
+  // panel, not fight it with a congratulations panel - the medal is still
+  // earned and saved either way, just silently.
+  if (!state.gameOver) showMedalOverlay(medalKey);
+}
+
+// Pauses the run and shows a full "you beat it" panel the instant a medal
+// is earned, instead of a small corner toast - clearing a difficulty/mode
+// is a real stopping-point milestone, not something to let scroll by while
+// sprints keep spawning underneath it. "home" exits to the map picker
+// (medalHomeBtn below); "freeplay" just dismisses the panel and unpauses
+// the SAME run (medalFreeplayBtn) - nothing about the live game state
+// changes either way, the choice is purely what happens next.
+function showMedalOverlay(medalKey) {
+  state.paused = true;
+  const label = state.gameMode !== "standard" ? currentMode().name : (DIFFICULTY_SETTINGS[state.difficulty] || DIFFICULTY_SETTINGS.normal).label;
+  medalOverlayTitle.textContent = `You beat ${label}!`;
+  medalOverlayText.textContent = `${MAP_DEFS[state.mapId]?.name || state.mapId} cleared sprint ${state.wave}. Keep going in freeplay, or head home.`;
+  medalOverlay.classList.add("visible");
 }
 
 // Applies one map's saved slot (bestWave/bestGold/medals - permanent, plus
@@ -3007,6 +3027,18 @@ pauseRestartBtn.addEventListener("click", () => {
   state.paused = false;
   pauseOverlay.hidden = true;
   resetGame();
+});
+
+medalHomeBtn.addEventListener("click", () => {
+  state.paused = false;
+  medalOverlay.classList.remove("visible");
+  renderMapScreen();
+  mapPickerOverlay.hidden = false;
+});
+
+medalFreeplayBtn.addEventListener("click", () => {
+  state.paused = false;
+  medalOverlay.classList.remove("visible");
 });
 
 // ---------- Codex ----------
@@ -6352,6 +6384,7 @@ function resetTransientState() {
   state.autoRun = false;
   state.autoRunTimer = 0;
   gameOverOverlay.classList.remove("visible");
+  medalOverlay.classList.remove("visible");
   pauseOverlay.hidden = true;
   waveBtn.disabled = false;
   waveBtn.textContent = "deploy sprint 1";

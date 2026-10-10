@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Tower Defense</title>
 <link rel="stylesheet" href="theme.css?v=20261009">
-<link rel="stylesheet" href="towerdefense.css?v=20261009">
+<link rel="stylesheet" href="towerdefense.css?v=20261009b">
 <link rel="stylesheet" href="account.css?v=20261009">
 <link rel="stylesheet" href="tutorial.css?v=20261009">
 </head>
@@ -31,6 +31,16 @@
               <h2 class="glow">SYSTEM CRASH</h2>
               <p id="gameOverText"></p>
               <button class="btn" id="restartBtn">restart --fresh</button>
+            </div>
+          </div>
+          <div class="medal-overlay" id="medalOverlay">
+            <div class="medal-box">
+              <h2 class="glow" id="medalOverlayTitle"></h2>
+              <p id="medalOverlayText"></p>
+              <div class="medal-overlay-buttons">
+                <button class="btn" id="medalHomeBtn">home</button>
+                <button class="btn" id="medalFreeplayBtn">freeplay</button>
+              </div>
             </div>
           </div>
         </div>
@@ -196,6 +206,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script src="account.js?v=20261009"></script>
   <script src="tutorial.js?v=20261009"></script>
-  <script src="towerdefense.js?v=20261009"></script>
+  <script src="towerdefense.js?v=20261009b"></script>
 </body>
 </html>

@@ -469,6 +469,53 @@ canvas {
   font-size: 0.9rem;
 }
 
+/* Shown in place of a plain toast the instant a difficulty/mode medal is
+   earned (see showMedalOverlay) - same canvas-scoped overlay pattern as
+   .game-over-overlay/.game-over-box (its "you won" sibling), gold-themed
+   instead of red so the two read as opposites at a glance. */
+.medal-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  border-radius: 4px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+
+.medal-overlay.visible {
+  display: flex;
+}
+
+.medal-box {
+  text-align: center;
+  background: var(--bg-panel);
+  border: 1px solid var(--yellow);
+  border-radius: 6px;
+  padding: 24px 32px;
+  box-shadow: 0 0 30px rgba(255, 215, 0, 0.25);
+  animation: popIn 0.2s ease;
+}
+
+.medal-box h2 {
+  margin: 0 0 10px;
+  color: var(--yellow);
+  font-size: 1.4rem;
+}
+
+.medal-box p {
+  color: var(--text);
+  font-size: 0.9rem;
+  margin: 0 0 16px;
+  max-width: 280px;
+}
+
+.medal-overlay-buttons {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
 .change-map-btn, .pause-btn, .codex-btn {
   margin-left: 10px;
   padding: 4px 10px;
