@@ -2187,19 +2187,22 @@ function updateStats() {
 // "your best across any map".
 const TD_SAVE_KEY = "towerDefenseSave";
 
-// The live, in-progress save for whatever (map, difficulty) is currently
-// active - nested under maps.<mapId>.saves.<difficulty>. bestWave/bestGold/
-// medals live one level up (on the map slot itself, see saveGame) since
-// they're permanent lifetime facts about the map, not tied to any one
-// difficulty's save and never wiped by starting a new game on it.
-function currentDifficultySave() {
+// The live, in-progress save for whatever map is currently active - one
+// per map (maps.<mapId>.save), not one per difficulty, so starting a game
+// on a different difficulty or mode replaces it rather than sitting
+// alongside it. Carries its own difficulty/mode since there's no longer a
+// difficulty key to imply it. bestWave/bestGold/medals live one level up
+// (on the map slot itself, see saveGame) since they're permanent lifetime
+// facts about the map, never wiped by starting a new game.
+function currentSaveSnapshot() {
   return {
+    difficulty: state.difficulty,
+    mode: state.gameMode,
     gold: state.gold,
     lives: state.lives,
     wave: state.wave,
     kills: state.kills,
     towers: state.towers,
-    mode: state.gameMode,
   };
 }
 
@@ -2241,22 +2244,48 @@ function normalizePayload(parsed) {
 // misplaced/misinterpreted. Migration always keeps bestWave/bestGold/medals
 // (progression/leaderboard history, Singularity's permanent unlock, earned
 // medals) - never wiped. v3 restructured a map's slot from one flat
-// gold/wave/towers save into one save PER DIFFICULTY (maps.<id>.saves.<diff>)
-// - an old flat save's live progress is carried into the difficulty it was
-// already set to (falling back to normal) rather than discarded, since
-// there's no ambiguity about which difficulty it belonged to.
-const MAP_LAYOUT_VERSION = 3;
+// gold/wave/towers save into one save PER DIFFICULTY (maps.<id>.saves.<diff>).
+// v4 restructured it again, down to just ONE save per map (maps.<id>.save,
+// carrying its own difficulty/mode) - starting a game on a different
+// difficulty/mode now replaces that one save instead of sitting alongside
+// it. A v3 payload may have up to 3 live saves per map; only one survives
+// the migration (see the picking logic below) since the new shape has no
+// room for more than one and there's no sane way to merge 3 runs into 1.
+const MAP_LAYOUT_VERSION = 4;
 
 function migrateMapLayout(stored) {
   if (stored.mapLayoutVersion === MAP_LAYOUT_VERSION) return stored;
   const migratedMaps = {};
   Object.keys(MAP_DEFS).forEach((id) => {
     const old = stored.maps[id];
-    const oldDiff = old?.difficulty && DIFFICULTY_SETTINGS[old.difficulty] ? old.difficulty : "normal";
-    const hadLiveRun = old && (old.wave > 0 || (Array.isArray(old.towers) && old.towers.length > 0));
-    const saves = {};
-    if (hadLiveRun) {
-      saves[oldDiff] = {
+    let save = null;
+    if (old?.saves && typeof old.saves === "object") {
+      // v3 shape (one save per difficulty) - keep whichever difficulty was
+      // actually active, falling back to any difficulty that has a save at
+      // all (easy/normal/hard order) so a real run is never silently
+      // dropped just because activeDifficulty didn't line up with it.
+      const candidateDiffs = [old.activeDifficulty, "easy", "normal", "hard"].filter(Boolean);
+      const pickedDiff = candidateDiffs.find((d) => old.saves[d]);
+      if (pickedDiff) {
+        const s = old.saves[pickedDiff];
+        save = {
+          difficulty: pickedDiff,
+          mode: typeof s.mode === "string" ? s.mode : "standard",
+          gold: typeof s.gold === "number" ? s.gold : STARTING_GOLD,
+          lives: typeof s.lives === "number" ? s.lives : STARTING_LIVES,
+          wave: s.wave || 0,
+          kills: s.kills || 0,
+          towers: Array.isArray(s.towers) ? s.towers : [],
+        };
+      }
+    } else if (old && (old.wave > 0 || (Array.isArray(old.towers) && old.towers.length > 0))) {
+      // Oldest flat shape (pre-v3, a single save with no per-difficulty
+      // nesting at all) - same oldDiff-guess-falls-back-to-normal reasoning
+      // v3's migration originally used.
+      const oldDiff = old.difficulty && DIFFICULTY_SETTINGS[old.difficulty] ? old.difficulty : "normal";
+      save = {
+        difficulty: oldDiff,
+        mode: "standard",
         gold: typeof old.gold === "number" ? old.gold : STARTING_GOLD,
         lives: typeof old.lives === "number" ? old.lives : STARTING_LIVES,
         wave: old.wave || 0,
@@ -2268,8 +2297,8 @@ function migrateMapLayout(stored) {
       bestWave: old?.bestWave || 0,
       bestGold: old?.bestGold || STARTING_GOLD,
       medals: { ...emptyMedals(), ...(old?.medals || {}) },
-      activeDifficulty: hadLiveRun ? oldDiff : null,
-      saves,
+      bestWaveByDifficulty: old?.bestWaveByDifficulty || {},
+      save,
     };
   });
   stored.maps = migratedMaps;
@@ -2412,11 +2441,13 @@ function checkMedals() {
 }
 
 // Applies one map's saved slot (bestWave/bestGold/medals - permanent, plus
-// whichever difficulty's save exists) onto the live (currently active)
-// state - used on ordinary load and after entering a map/difficulty.
-// Caller is responsible for having already reset to fresh defaults first
-// (see resetTransientState in enterMap) - a mapSlot with no save yet for
-// this difficulty just leaves those fresh defaults in place.
+// its one save if it belongs to the requested difficulty) onto the live
+// (currently active) state - used on ordinary load and after entering a
+// map/difficulty. Caller is responsible for having already reset to fresh
+// defaults first (see resetTransientState in enterMap) - a mapSlot with no
+// save, or whose save belongs to a DIFFERENT difficulty than requested
+// (there's only ever one, see currentSaveSnapshot), just leaves those
+// fresh defaults in place.
 function applyMapDataToState(mapSlot, difficulty) {
   state.difficulty = difficulty;
   if (!mapSlot) return;
@@ -2424,8 +2455,8 @@ function applyMapDataToState(mapSlot, difficulty) {
   if (typeof mapSlot.bestGold === "number") state.bestGold = mapSlot.bestGold;
   state.medals = { ...emptyMedals(), ...(mapSlot.medals || {}) };
 
-  const save = mapSlot.saves?.[difficulty];
-  if (!save) return;
+  const save = mapSlot.save;
+  if (!save || save.difficulty !== difficulty) return;
   // Wave only ever climbs during a live run, so an incoming save reporting a
   // LOWER wave than what's already live here means it's a stale snapshot
   // (e.g. a cloud push that lost a race with navigating away mid-round) -
@@ -2463,11 +2494,9 @@ function saveGame() {
   const mapSlot = stored.maps[state.mapId] || {
     bestWave: 0, bestGold: STARTING_GOLD,
     medals: emptyMedals(),
-    activeDifficulty: null, saves: {},
+    save: null,
   };
-  mapSlot.saves = mapSlot.saves || {};
-  mapSlot.saves[state.difficulty] = currentDifficultySave();
-  mapSlot.activeDifficulty = state.difficulty;
+  mapSlot.save = currentSaveSnapshot();
   mapSlot.bestWave = Math.max(mapSlot.bestWave || 0, state.wave);
   mapSlot.bestGold = Math.max(mapSlot.bestGold || 0, state.gold);
   // Union, never a flat overwrite - medals are permanent once earned (see
@@ -2524,21 +2553,25 @@ function loadGame() {
   state.achievements = { ...stored.achievements };
   state.totalBossKills = stored.totalBossKills || 0;
   const mapSlot = stored.maps[state.mapId];
-  const diff = mapSlot?.activeDifficulty && DIFFICULTY_SETTINGS[mapSlot.activeDifficulty] ? mapSlot.activeDifficulty : "normal";
+  const diff = mapSlot?.save?.difficulty && DIFFICULTY_SETTINGS[mapSlot.save.difficulty] ? mapSlot.save.difficulty : "normal";
   applyMapDataToState(mapSlot, diff);
 }
 
 // Enters a (map, difficulty) combo: saves whatever's being left, then loads
 // (or starts fresh on, if wipe is true or nothing's saved there yet) that
-// map+difficulty's own save. Always saves first even when re-entering the
-// current map, so the picker never discards up-to-3-seconds of unsaved
-// progress by reading a stale snapshot. wipe=true deletes any existing save
-// for that difficulty before loading - the caller (confirmWipeSave) is
-// responsible for having confirmed that with the player first. modeId
-// defaults to "standard" for every pre-existing call site (the map name/
-// difficulty buttons never pass one) - the new sub-mode picker screen is the
-// only caller that does. Always set BEFORE resetTransientState (not just on
-// a wipe) so that function's startGoldLumpSum/startLives/startWave reads a
+// map's one save. Always saves first even when re-entering the current
+// map, so the picker never discards up-to-3-seconds of unsaved progress by
+// reading a stale snapshot. wipe=true deletes that map's save before
+// loading (there's only one per map - starting fresh on ANY difficulty/
+// mode replaces it, not just a matching one) - the caller (confirmWipeSave/
+// confirmWipeModeSave) is responsible for having confirmed that with the
+// player first. A "Load"/"Continue" caller always passes the save's OWN
+// difficulty as diffId (never some other difficulty being browsed), so
+// wipe=false here never has to reconcile a mismatch. modeId defaults to
+// "standard" for every pre-existing call site (the map name/difficulty
+// buttons never pass one) - the new sub-mode picker screen is the only
+// caller that does. Always set BEFORE resetTransientState (not just on a
+// wipe) so that function's startGoldLumpSum/startLives/startWave reads a
 // known value instead of whatever gameMode happened to be left over from
 // the previously active map/difficulty - for a load (wipe=false) that
 // transient value gets overwritten a moment later anyway once
@@ -2554,11 +2587,10 @@ function enterMap(mapId, diffId, wipe, modeId = "standard") {
     const stored = readStoredPayload();
     let mapSlot = stored.maps[mapId];
     if (!mapSlot) {
-      mapSlot = { bestWave: 0, bestGold: STARTING_GOLD, medals: emptyMedals(), activeDifficulty: null, saves: {} };
+      mapSlot = { bestWave: 0, bestGold: STARTING_GOLD, medals: emptyMedals(), save: null };
       stored.maps[mapId] = mapSlot;
     }
-    mapSlot.saves = mapSlot.saves || {};
-    if (wipe) delete mapSlot.saves[diffId];
+    if (wipe) mapSlot.save = null;
     localStorage.setItem(TD_SAVE_KEY, JSON.stringify(stored));
     scheduleCloudSync();
 
@@ -2602,20 +2634,25 @@ function showMapConfirm({ title, message, options }) {
   mapConfirmOverlay.hidden = false;
 }
 
-// A difficulty button's click: if that difficulty already has a save on
-// this map, offers load-vs-start-new; if not, confirms starting a fresh one
-// (per explicit preference - even though nothing's at risk yet, still asks).
+// A difficulty button's click (screen 3 entry point via renderModeScreen):
+// if this map already has a save (there's only ever one, on whatever
+// difficulty/mode it was last played) offers load-vs-start-new; if not,
+// confirms starting a fresh one (per explicit preference - even though
+// nothing's at risk yet, still asks). "Load saved game" always resumes the
+// save's OWN difficulty (save.difficulty), not necessarily diffId - the
+// player may have browsed to a different difficulty's screen 3 than the
+// one their save is actually on.
 function onDifficultyClick(mapId, diffId) {
   const stored = readStoredPayload();
-  const hasSave = !!stored.maps[mapId]?.saves?.[diffId];
+  const save = stored.maps[mapId]?.save || null;
   const mapName = MAP_DEFS[mapId].name;
   const diffLabel = DIFFICULTY_SETTINGS[diffId].label;
-  if (hasSave) {
+  if (save) {
     showMapConfirm({
       title: `${mapName} - ${diffLabel}`,
-      message: `You have a save on ${diffLabel} for this map. Load it, or start a new game?`,
+      message: `You have a save on ${saveDescription(save)} for this map - only one save per map. Load it, or delete it and start a new ${diffLabel} game?`,
       options: [
-        { label: "Load saved game", action: () => enterMap(mapId, diffId, false) },
+        { label: "Load saved game", action: () => enterMap(mapId, save.difficulty, false) },
         { label: "Create new", action: () => confirmWipeSave(mapId, diffId) },
         { label: "Cancel", action: () => {} },
       ],
@@ -2632,14 +2669,29 @@ function onDifficultyClick(mapId, diffId) {
   }
 }
 
-// The destructive path (overwriting an existing save) gets one more explicit
-// confirmation beyond the load-vs-new choice, since it can't be undone.
+// `save.difficulty`/`save.mode` as a short label, e.g. "Normal" or
+// "Hard (Incident)" - used anywhere a confirm dialog needs to describe the
+// one save that's about to be replaced.
+function saveDescription(save) {
+  const diffLabel = DIFFICULTY_SETTINGS[save.difficulty]?.label || save.difficulty;
+  const modeLabel = save.mode && save.mode !== "standard" ? ` (${GAME_MODES[save.mode]?.name || save.mode})` : "";
+  return `${diffLabel}${modeLabel}`;
+}
+
+// The destructive path (overwriting the existing save) gets one more
+// explicit confirmation beyond the load-vs-new choice, since it can't be
+// undone. Re-reads the save to describe what's ACTUALLY being deleted -
+// diffId is the difficulty being started fresh on, which may not be the
+// save's own difficulty.
 function confirmWipeSave(mapId, diffId) {
+  const stored = readStoredPayload();
+  const save = stored.maps[mapId]?.save || null;
   const mapName = MAP_DEFS[mapId].name;
   const diffLabel = DIFFICULTY_SETTINGS[diffId].label;
+  const existingLabel = save ? saveDescription(save) : diffLabel;
   showMapConfirm({
     title: "Are you sure?",
-    message: `This deletes your existing ${diffLabel} save on ${mapName} and starts a fresh game. This can't be undone.`,
+    message: `This deletes your existing ${existingLabel} save on ${mapName} and starts a fresh ${diffLabel} game. This can't be undone.`,
     options: [
       { label: "Delete & start new", action: () => enterMap(mapId, diffId, true), danger: true },
       { label: "Cancel", action: () => {} },
@@ -2648,23 +2700,22 @@ function confirmWipeSave(mapId, diffId) {
 }
 
 // A mode card's click (screen 3) - same load-vs-start-new shape as
-// onDifficultyClick above, since a mode shares that difficulty's single
-// save slot (mapSlot.saves[diffId]) and starting fresh wipes it exactly
-// the same way, whether what's there belongs to Standard or some other
-// mode on this tier. "Load saved game" ignores modeId entirely - whatever
-// save is actually there carries its own mode (save.mode, restored by
-// applyMapDataToState), so loading always resumes the real thing on disk.
+// onDifficultyClick above, since a mode shares the map's one save slot and
+// starting fresh wipes it exactly the same way, whether what's there
+// belongs to Standard, a different mode, or a different difficulty
+// entirely. "Load saved game" ignores modeId/diffId and always resumes the
+// save's own difficulty (save.mode, restored by applyMapDataToState from
+// save.mode itself), so loading always resumes the real thing on disk.
 function onModeClick(mapId, diffId, modeId, modeName) {
   const stored = readStoredPayload();
-  const hasSave = !!stored.maps[mapId]?.saves?.[diffId];
+  const save = stored.maps[mapId]?.save || null;
   const mapName = MAP_DEFS[mapId].name;
-  const diffLabel = DIFFICULTY_SETTINGS[diffId].label;
-  if (hasSave) {
+  if (save) {
     showMapConfirm({
       title: `${mapName} - ${modeName}`,
-      message: `You have a save on ${diffLabel} for this map. Load it, or start a new ${modeName} game?`,
+      message: `You have a save on ${saveDescription(save)} for this map - only one save per map. Load it, or delete it and start a new ${modeName} game?`,
       options: [
-        { label: "Load saved game", action: () => enterMap(mapId, diffId, false) },
+        { label: "Load saved game", action: () => enterMap(mapId, save.difficulty, false) },
         { label: "Create new", action: () => confirmWipeModeSave(mapId, diffId, modeId, modeName) },
         { label: "Cancel", action: () => {} },
       ],
@@ -2682,14 +2733,16 @@ function onModeClick(mapId, diffId, modeId, modeName) {
 }
 
 // Same one-more-step-for-destruction idea as confirmWipeSave, worded for a
-// mode run since what's being overwritten may well be a Standard save
-// rather than another mode run.
+// mode run since what's being overwritten may well be a Standard save (or
+// a different difficulty entirely) rather than another mode run.
 function confirmWipeModeSave(mapId, diffId, modeId, modeName) {
+  const stored = readStoredPayload();
+  const save = stored.maps[mapId]?.save || null;
   const mapName = MAP_DEFS[mapId].name;
-  const diffLabel = DIFFICULTY_SETTINGS[diffId].label;
+  const existingLabel = save ? saveDescription(save) : DIFFICULTY_SETTINGS[diffId].label;
   showMapConfirm({
     title: "Are you sure?",
-    message: `This deletes your existing ${diffLabel} save on ${mapName} and starts a fresh ${modeName} game. This can't be undone.`,
+    message: `This deletes your existing ${existingLabel} save on ${mapName} and starts a fresh ${modeName} game. This can't be undone.`,
     options: [
       { label: "Delete & start new", action: () => enterMap(mapId, diffId, true, modeId), danger: true },
       { label: "Cancel", action: () => {} },
@@ -2738,21 +2791,22 @@ function renderMapScreen() {
   });
 }
 
-// Screen 2 ("modes screen" per the map - Easy/Normal/Hard, same current-run/
-// best-ever/medal info the old single-screen picker showed, just scoped to
-// one map now). Clicking a difficulty no longer enters it directly - it
-// moves on to screen 3 to choose Standard or one of that tier's game modes.
+// Screen 2 ("modes screen" per the map - Easy/Normal/Hard, same best-ever/
+// medal info the old single-screen picker showed, just scoped to one map
+// now). There's only one save per map (mapSlot.save), so when it exists it
+// shows here as a directly clickable "Continue" button - one click resumes
+// it, no need to drill into screen 3 just to load what's already there.
+// The 3 difficulty buttons still always go to screen 3 (even the one
+// matching the save) since that's still how you start something NEW -
+// Standard or a different mode, on the same difficulty as the save or a
+// different one - which replaces the one save after a confirm.
 function renderDifficultyScreen(mapId) {
   pickerScreen = "difficulty";
   pickerMapId = mapId;
   const def = MAP_DEFS[mapId];
   const stored = readStoredPayload();
   const mapSlot = stored.maps[mapId];
-  const activeDiff = mapSlot?.activeDifficulty && DIFFICULTY_SETTINGS[mapSlot.activeDifficulty] ? mapSlot.activeDifficulty : null;
-  const activeSave = activeDiff ? mapSlot.saves?.[activeDiff] : null;
-  const current = activeSave
-    ? `${DIFFICULTY_SETTINGS[activeDiff].label}: sprint ${activeSave.wave || 0} | ${Math.floor(activeSave.gold || 0)}c`
-    : "not started yet";
+  const save = mapSlot?.save || null;
   const best = `best: sprint ${mapSlot?.bestWave || 0} | ${Math.floor(mapSlot?.bestGold || 0)}c`;
   const medals = { ...emptyMedals(), ...(mapSlot?.medals || {}) };
 
@@ -2765,10 +2819,18 @@ function renderDifficultyScreen(mapId) {
   card.className = "map-picker-card";
   card.style.gridColumn = "1 / -1";
 
-  const metaEl = document.createElement("div");
-  metaEl.className = "map-picker-meta";
-  metaEl.textContent = current;
-  card.appendChild(metaEl);
+  if (save) {
+    const continueBtn = document.createElement("button");
+    continueBtn.className = "btn map-picker-continue-btn";
+    continueBtn.innerHTML = `<span class="map-picker-continue-label">▶ Continue</span><span class="map-picker-continue-meta">${saveDescription(save)}: sprint ${save.wave || 0} | ${Math.floor(save.gold || 0)}c</span>`;
+    continueBtn.addEventListener("click", () => enterMap(mapId, save.difficulty, false));
+    card.appendChild(continueBtn);
+  } else {
+    const metaEl = document.createElement("div");
+    metaEl.className = "map-picker-meta";
+    metaEl.textContent = "not started yet";
+    card.appendChild(metaEl);
+  }
 
   const bestEl = document.createElement("div");
   bestEl.className = "map-picker-best";
@@ -2779,15 +2841,13 @@ function renderDifficultyScreen(mapId) {
   const diffRow = document.createElement("div");
   diffRow.className = "map-picker-diff-row";
   Object.entries(DIFFICULTY_SETTINGS).forEach(([diffId, diffDef]) => {
-    const hasSave = !!mapSlot?.saves?.[diffId];
+    const isSaveDiff = save?.difficulty === diffId;
     const modeIdsForTier = Object.keys(GAME_MODES).filter((id) => GAME_MODES[id].tier === diffId);
     const modeMedalsEarned = modeIdsForTier.filter((id) => medals[id]).length;
     const diffBtn = document.createElement("button");
-    diffBtn.className = "btn map-picker-diff-btn"
-      + (diffId === activeDiff ? " active" : "")
-      + (hasSave ? " has-save" : "");
+    diffBtn.className = "btn map-picker-diff-btn" + (isSaveDiff ? " active has-save" : "");
     diffBtn.textContent = diffDef.label;
-    diffBtn.title = `${diffDef.label}: ${hasSave ? "has a save" : "not started"} - mode medals ${modeMedalsEarned}/${modeIdsForTier.length}`;
+    diffBtn.title = `${diffDef.label}: ${isSaveDiff ? "has the save" : "start something new"} - mode medals ${modeMedalsEarned}/${modeIdsForTier.length}`;
     diffBtn.addEventListener("click", () => renderModeScreen(mapId, diffId));
     diffRow.appendChild(diffBtn);
   });
@@ -3168,7 +3228,7 @@ async function pullCloudSave() {
   state.achievements = { ...winner.achievements };
   state.totalBossKills = winner.totalBossKills || 0;
   const winnerMapSlot = winner.maps[state.mapId];
-  const winnerDiff = winnerMapSlot?.activeDifficulty && DIFFICULTY_SETTINGS[winnerMapSlot.activeDifficulty] ? winnerMapSlot.activeDifficulty : "normal";
+  const winnerDiff = winnerMapSlot?.save?.difficulty && DIFFICULTY_SETTINGS[winnerMapSlot.save.difficulty] ? winnerMapSlot.save.difficulty : "normal";
   // Only clear the live towers/wave when actually switching to a different
   // map/difficulty than what's already loaded (e.g. cloud progress from
   // another device) - otherwise applyMapDataToState's own guards (never
@@ -6321,7 +6381,7 @@ updateStats();
 // picker now only opens automatically on a genuinely fresh visit (nothing
 // saved on the active map/difficulty yet). It's still always one click
 // away via changeMapBtn/pauseChangeMapBtn.
-const hasLiveSaveOnLoad = !!readStoredPayload().maps[state.mapId]?.saves?.[state.difficulty];
+const hasLiveSaveOnLoad = !!readStoredPayload().maps[state.mapId]?.save;
 if (hasLiveSaveOnLoad) {
   mapPickerOverlay.hidden = true;
 } else {

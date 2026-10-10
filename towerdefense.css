@@ -765,6 +765,32 @@ canvas {
   color: var(--green-faint);
 }
 
+/* The map's one save, shown as a directly clickable "resume" button
+   instead of plain text (see .map-picker-meta above, still used for the
+   "not started yet" case) - one click loads it, no detour through the
+   mode screen required. */
+.map-picker-continue-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+  padding: 10px;
+  border-color: var(--green);
+  background: rgba(57, 255, 20, 0.08);
+}
+
+.map-picker-continue-label {
+  font-size: 0.85rem;
+  font-weight: bold;
+  color: var(--green);
+}
+
+.map-picker-continue-meta {
+  font-size: 0.68rem;
+  color: var(--green-faint);
+}
+
 .map-picker-best {
   font-size: 0.65rem;
   color: var(--green-faint);
