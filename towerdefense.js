@@ -492,7 +492,11 @@ const TOWER_TYPES = {
   // board from a single placement.
   gamer: {
     name: "Gamer", desc: "fast reflexes, rapid fire", emoji: "🎮",
-    cost: 50, damage: 10, range: 105, fireRate: 0.6, color: "#39ff14", projectileSpeed: 500,
+    // damage bumped 10 -> 13 - cheapest tower in the game (50c) and meant to
+    // be THE opener that carries the first few sprints on its own before
+    // anything pricier is affordable; the old 10 just wasn't hitting hard
+    // enough early on to feel like it was pulling its weight.
+    cost: 50, damage: 13, range: 105, fireRate: 0.6, color: "#39ff14", projectileSpeed: 500,
     group: "engineering",
   },
   coder: {
