@@ -823,9 +823,14 @@ canvas {
   text-shadow: 0 0 6px var(--medal-color, var(--yellow));
 }
 
-.map-picker-card-mastered {
-  border-color: var(--yellow);
-  box-shadow: 0 0 12px rgba(255, 215, 0, 0.35);
+/* Border color reflects the HIGHEST difficulty tier fully mastered (every
+   medal in that tier, including all its modes, not just the plain
+   difficulty medal) - bronze/silver/gold via --medal-color, set inline per
+   card (see renderMapScreen) from the same DIFFICULTY_MEDAL_STYLES colors
+   used everywhere else a difficulty gets a medal look. */
+.map-thumb-card-mastered {
+  border-color: var(--medal-color, var(--yellow));
+  box-shadow: 0 0 12px color-mix(in srgb, var(--medal-color, var(--yellow)) 45%, transparent);
 }
 
 .codex-overlay {

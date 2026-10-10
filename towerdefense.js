@@ -433,6 +433,26 @@ function renderMedalStrip(medals) {
     .join("");
 }
 
+// Every medal key that belongs to one difficulty tier: that tier's own
+// plain difficulty medal plus every GAME_MODES entry with that tier -
+// "fully mastering" a tier means every one of these keys is earned, not
+// just the plain difficulty medal alone.
+function tierMedalKeys(diffId) {
+  return [diffId, ...Object.keys(GAME_MODES).filter((id) => GAME_MODES[id].tier === diffId)];
+}
+
+// The highest difficulty tier (hard > normal > easy) where every medal in
+// tierMedalKeys is earned, or null if none are fully cleared yet. Tiers
+// aren't cumulative (clearing every Hard mode doesn't require having
+// cleared Easy's), so this reports the single best fully-cleared tier
+// rather than "every tier up to X" - used to color a map's border.
+function highestMasteredTier(medals) {
+  if (tierMedalKeys("hard").every((key) => medals[key])) return "hard";
+  if (tierMedalKeys("normal").every((key) => medals[key])) return "normal";
+  if (tierMedalKeys("easy").every((key) => medals[key])) return "easy";
+  return null;
+}
+
 // Empty-object fallback (not an explicit "standard" entry) - every modifier
 // field below reads as undefined/falsy off {}, so standard play needs no
 // special-casing anywhere a mode check happens.
@@ -2690,11 +2710,12 @@ function renderMapScreen() {
   const stored = readStoredPayload();
   Object.entries(MAP_DEFS).forEach(([id, def]) => {
     const medals = { ...emptyMedals(), ...(stored.maps[id]?.medals || {}) };
-    const mastered = medals.easy && medals.normal && medals.hard;
+    const masteredTier = highestMasteredTier(medals);
     const points = def.waypoints.map(([c, r]) => `${c},${r}`).join(" ");
 
     const card = document.createElement("button");
-    card.className = "btn map-thumb-card" + (mastered ? " map-picker-card-mastered" : "");
+    card.className = "btn map-thumb-card" + (masteredTier ? " map-thumb-card-mastered" : "");
+    if (masteredTier) card.style.setProperty("--medal-color", DIFFICULTY_MEDAL_STYLES[masteredTier].color);
     card.innerHTML = `
       <svg class="map-thumb-svg" viewBox="-2 -2 ${COLS + 4} ${ROWS + 4}" preserveAspectRatio="xMidYMid meet">
         <polyline points="${points}" fill="none" stroke="#39ff14" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round" opacity="0.85" />
