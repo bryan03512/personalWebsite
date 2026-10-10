@@ -754,6 +754,41 @@ canvas {
   box-shadow: 0 0 8px var(--medal-color, var(--yellow));
 }
 
+/* The Gauntlet (secret, Full-Clear-reward mode) - same "no single color
+   fits this" reasoning as .map-thumb-card-prismatic. The card's left
+   border cycles through the rainbow (a single edge can't use the
+   gradient-clip trick); the circular medal badge reuses that same
+   gradient-clip + prismaticShift animation since it IS a full border. */
+.mode-card-prismatic {
+  animation: prismaticBorderCycle 3s linear infinite;
+}
+
+@keyframes prismaticBorderCycle {
+  0% { border-left-color: #ff3b3b; }
+  16% { border-left-color: #ffae00; }
+  33% { border-left-color: #fff700; }
+  50% { border-left-color: #3bff6e; }
+  66% { border-left-color: #3bb0ff; }
+  83% { border-left-color: #a13bff; }
+  100% { border-left-color: #ff3b3b; }
+}
+
+/* Grey/dim like every other unearned medal until actually beaten - only
+   .earned gets the rainbow treatment, same earned/unearned contract as
+   .mode-medal.earned above. */
+.mode-medal-prismatic.earned {
+  border: 2px solid transparent;
+  background-image:
+    linear-gradient(var(--bg-panel), var(--bg-panel)),
+    linear-gradient(90deg, #ff3b3b, #ffae00, #fff700, #3bff6e, #3bb0ff, #a13bff, #ff3b3b);
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+  background-size: 100% 100%, 300% 100%;
+  animation: prismaticShift 5s linear infinite;
+  opacity: 1;
+  filter: none;
+}
+
 .map-picker-list {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -918,6 +953,27 @@ canvas {
 .map-thumb-card-mastered {
   border-color: var(--medal-color, var(--yellow));
   box-shadow: 0 0 12px color-mix(in srgb, var(--medal-color, var(--yellow)) 45%, transparent);
+}
+
+/* Full Clear (every one of the 14 medals on this one map) - a step above
+   the flat bronze/silver/gold mastered border: an animated rainbow
+   gradient border instead of a single --medal-color, since no one flat
+   color fits "beat literally everything". */
+.map-thumb-card-prismatic {
+  border: 3px solid transparent;
+  background-image:
+    linear-gradient(var(--bg-panel), var(--bg-panel)),
+    linear-gradient(90deg, #ff3b3b, #ffae00, #fff700, #3bff6e, #3bb0ff, #a13bff, #ff3b3b);
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+  background-size: 100% 100%, 300% 100%;
+  animation: prismaticShift 5s linear infinite;
+  box-shadow: 0 0 16px rgba(255, 255, 255, 0.35);
+}
+
+@keyframes prismaticShift {
+  from { background-position: 0 0, 0% 0; }
+  to { background-position: 0 0, 300% 0; }
 }
 
 .codex-overlay {

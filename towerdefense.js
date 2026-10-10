@@ -389,6 +389,20 @@ const GAME_MODES = {
     restrictGroup: "rnd",
     medal: { emoji: "🧪", color: "#a78bfa" },
   },
+  // Secret 12th mode - hidden from the normal Hard mode list until that
+  // SPECIFIC map earns its own Full Clear (every medal below, see
+  // FULL_CLEAR_MEDAL_KEYS/isMapFullyCleared) - a reward for clearing
+  // everything else, not a prerequisite for it, so `secret: true` keeps it
+  // excluded from tierMedalKeys/FULL_CLEAR_MEDAL_KEYS to avoid a circular
+  // requirement. Just a combination of modifiers every other mode already
+  // uses individually - the hardest pieces of Chaos Pipeline, Double HP
+  // Bosses, Zero Downtime, and One Life all at once.
+  gauntlet: {
+    name: "The Gauntlet", tier: "hard", secret: true,
+    desc: "unlocked by fully clearing this map - every bug type from sprint 1, double boss hp, no passive income or abilities, devs can't be sold, and uptime starts at 1. everything, all at once.",
+    randomizeComposition: true, bossHpMult: 2, noPassiveIncome: true, noAbilities: true, noSelling: true, startLives: 1,
+    medal: { emoji: "🏆", color: "prismatic" },
+  },
 };
 
 // Bronze/silver/gold, same metal-tier idea as the modes' own colored medal
@@ -445,9 +459,22 @@ function renderMedalStrip(medals) {
 // Every medal key that belongs to one difficulty tier: that tier's own
 // plain difficulty medal plus every GAME_MODES entry with that tier -
 // "fully mastering" a tier means every one of these keys is earned, not
-// just the plain difficulty medal alone.
+// just the plain difficulty medal alone. Excludes `secret` modes (just
+// Gauntlet today) - those unlock AS A REWARD for mastering a tier/map, so
+// they can't also count toward earning that mastery without being
+// circular.
 function tierMedalKeys(diffId) {
-  return [diffId, ...Object.keys(GAME_MODES).filter((id) => GAME_MODES[id].tier === diffId)];
+  return [diffId, ...Object.keys(GAME_MODES).filter((id) => GAME_MODES[id].tier === diffId && !GAME_MODES[id].secret)];
+}
+
+// The 14 medals (3 difficulties + 11 ordinary modes) that count toward a
+// map's "Full Clear" - same secret-exclusion reasoning as tierMedalKeys,
+// just spanning all 3 tiers at once instead of one.
+const FULL_CLEAR_MEDAL_KEYS = ["easy", "normal", "hard", ...Object.keys(GAME_MODES).filter((id) => !GAME_MODES[id].secret)];
+
+function isMapFullyCleared(medals) {
+  if (!medals) return false;
+  return FULL_CLEAR_MEDAL_KEYS.every((key) => medals[key]);
 }
 
 // The highest difficulty tier (hard > normal > easy) where every medal in
@@ -455,7 +482,10 @@ function tierMedalKeys(diffId) {
 // aren't cumulative (clearing every Hard mode doesn't require having
 // cleared Easy's), so this reports the single best fully-cleared tier
 // rather than "every tier up to X" - used to color a map's border.
+// "prismatic" is a step above "hard" - every one of the 14 Full Clear
+// medals on this one map, not just the 7 Hard-tier ones.
 function highestMasteredTier(medals) {
+  if (isMapFullyCleared(medals)) return "prismatic";
   if (tierMedalKeys("hard").every((key) => medals[key])) return "hard";
   if (tierMedalKeys("normal").every((key) => medals[key])) return "normal";
   if (tierMedalKeys("easy").every((key) => medals[key])) return "easy";
@@ -618,6 +648,21 @@ const TOWER_TYPES = {
     cost: 15000, damage: 260, range: 165, fireRate: 0.45, color: "#e879f9", projectileSpeed: 1000,
     isLegendary: true, unique: true, isSentry: true, targetPriority: "strongest", autoLevels: true, autoLevelInterval: 25, group: "rnd",
     unlockCheck: () => hasHardWave300(),
+  },
+  // The true capstone past The Machine - permanent once earned, gated
+  // behind the single biggest bar in the game (see hasFullClearEverywhere:
+  // every difficulty AND every mode medal on all 5 maps, including every
+  // Gauntlet). Combines three mechanics that were previously each other
+  // towers' whole identity - global range (Sniper), true damage that
+  // ignores every resistance (Quant), auto-leveling forever for free
+  // (Sentry/The Machine) - into one, since earning this means you've
+  // already mastered what each of those towers represents individually.
+  founder: {
+    name: "The Founder", desc: "the true capstone - unlocked permanently by earning every medal on every map, sees the whole board, ignores every resistance, auto-levels for free forever", emoji: "👑",
+    cost: 20000, damage: 300, range: GLOBAL_RANGE, fireRate: 0.5, color: "#fff2b3", projectileSpeed: 1100,
+    damageType: "magic", isGlobalRange: true,
+    isLegendary: true, unique: true, isSentry: true, targetPriority: "strongest", autoLevels: true, autoLevelInterval: 22, group: "rnd",
+    unlockCheck: () => hasFullClearEverywhere(),
   },
 };
 
@@ -2332,6 +2377,20 @@ function readStoredPayload() {
 // someone who already permanently earned it (see [[project_singularity_unlock]]).
 const CORE_MAP_IDS = ["map1", "map2", "map3"];
 
+// Full Clear's map list - deliberately every map that exists right now
+// (map1-5), explicitly listed rather than Object.keys(MAP_DEFS) so a
+// FUTURE 6th map never raises this bar and re-locks Full Clear for anyone
+// who already earned it on today's 5 maps - same reasoning as
+// CORE_MAP_IDS, just covering all of today's maps instead of only the
+// original 3 (the user's explicit call: Full Clear should mean literally
+// every map that exists today, not just the core set).
+const FULL_CLEAR_MAP_IDS = ["map1", "map2", "map3", "map4", "map5"];
+
+function hasFullClearEverywhere(stored) {
+  const payload = stored || readStoredPayload();
+  return FULL_CLEAR_MAP_IDS.every((id) => isMapFullyCleared(payload.maps[id]?.medals));
+}
+
 function hasBeatenAllMaps() {
   const stored = readStoredPayload();
   return CORE_MAP_IDS.every((id) => (stored.maps[id]?.bestWave || 0) > TOWER100_UNLOCK_WAVE);
@@ -2387,6 +2446,7 @@ const ACHIEVEMENTS = [
   { id: "singularity_placed", name: "Beyond Legendary", desc: "place a Singularity", hint: "some secrets require conquering everything", kind: "event" },
   { id: "conqueror", name: "Conqueror", desc: "beat all 3 maps", hint: "beat every map at least once", kind: "threshold" },
   { id: "grandmaster", name: "Grandmaster", desc: "earn every medal (Easy, Normal, Hard) on every map", hint: "earn every medal on every map", kind: "threshold" },
+  { id: "full_clear", name: "Full Clear", desc: "earn every medal (every difficulty + every mode) on all 5 maps", hint: "there may be more past Grandmaster...", kind: "threshold" },
   { id: "maxed_path", name: "Specialist", desc: "max out any tower's path all the way", hint: "fully commit to one tower's specialization", kind: "event" },
   { id: "big_spender", name: "Big Spender", desc: "accumulate 10,000 credits at once", hint: "accumulate 10,000 credits at once", kind: "threshold" },
   { id: "boss_slayer", name: "Boss Slayer", desc: "defeat 50 bosses", hint: "defeat 50 bosses total", kind: "threshold" },
@@ -2419,6 +2479,7 @@ function checkThresholdAchievements() {
   if (state.totalBossKills >= 50) unlockAchievement("boss_slayer");
   if (!state.achievements.conqueror && hasBeatenAllMaps()) unlockAchievement("conqueror");
   if (!state.achievements.grandmaster && hasAllMedalsEverywhere()) unlockAchievement("grandmaster");
+  if (!state.achievements.full_clear && hasFullClearEverywhere()) unlockAchievement("full_clear");
   checkMedals();
 }
 
@@ -2557,6 +2618,11 @@ function saveGame() {
   const allMaps = Object.values(stored.maps);
   stored.bestWave = Math.max(0, ...allMaps.map((m) => m.bestWave || 0));
   stored.bestGold = Math.max(0, ...allMaps.map((m) => m.bestGold || 0));
+  // Computed fresh from `stored` itself (already has this save's own
+  // mapSlot update above) rather than re-reading localStorage, so it's
+  // never a save-cycle stale - pushed to Supabase wholesale via
+  // flushCloudSync, read by the leaderboard view as td_full_clear.
+  stored.fullClear = hasFullClearEverywhere(stored);
   // Achievements are lifetime/account-wide, not per-map - union with
   // whatever's already stored (never un-unlock one) rather than overwrite.
   stored.achievements = { ...(stored.achievements || {}), ...state.achievements };
@@ -2800,8 +2866,9 @@ function renderMapScreen() {
     const points = def.waypoints.map(([c, r]) => `${c},${r}`).join(" ");
 
     const card = document.createElement("button");
-    card.className = "btn map-thumb-card" + (masteredTier ? " map-thumb-card-mastered" : "");
-    if (masteredTier) card.style.setProperty("--medal-color", DIFFICULTY_MEDAL_STYLES[masteredTier].color);
+    card.className = "btn map-thumb-card"
+      + (masteredTier === "prismatic" ? " map-thumb-card-prismatic" : masteredTier ? " map-thumb-card-mastered" : "");
+    if (masteredTier && masteredTier !== "prismatic") card.style.setProperty("--medal-color", DIFFICULTY_MEDAL_STYLES[masteredTier].color);
     card.innerHTML = `
       <svg class="map-thumb-svg" viewBox="-2 -2 ${COLS + 4} ${ROWS + 4}" preserveAspectRatio="xMidYMid meet">
         <polyline points="${points}" fill="none" stroke="#39ff14" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round" opacity="0.85" />
@@ -2866,7 +2933,7 @@ function renderDifficultyScreen(mapId) {
   diffRow.className = "map-picker-diff-row";
   Object.entries(DIFFICULTY_SETTINGS).forEach(([diffId, diffDef]) => {
     const isSaveDiff = save?.difficulty === diffId;
-    const modeIdsForTier = Object.keys(GAME_MODES).filter((id) => GAME_MODES[id].tier === diffId);
+    const modeIdsForTier = Object.keys(GAME_MODES).filter((id) => GAME_MODES[id].tier === diffId && !GAME_MODES[id].secret);
     const modeMedalsEarned = modeIdsForTier.filter((id) => medals[id]).length;
     const diffBtn = document.createElement("button");
     diffBtn.className = "btn map-picker-diff-btn" + (isSaveDiff ? " active has-save" : "");
@@ -2930,15 +2997,19 @@ function renderModeScreen(mapId, diffId) {
   standardBtn.addEventListener("click", () => onDifficultyClick(mapId, diffId));
   mapPickerList.appendChild(standardBtn);
 
+  // Secret modes (just Gauntlet today) only show once this map's own Full
+  // Clear is earned (isMapFullyCleared(medals), see FULL_CLEAR_MEDAL_KEYS)
+  // - a reward unlocked by this map's medals, not another entry in them.
   Object.entries(GAME_MODES)
-    .filter(([, mode]) => mode.tier === diffId)
+    .filter(([, mode]) => mode.tier === diffId && (!mode.secret || isMapFullyCleared(medals)))
     .forEach(([modeId, mode]) => {
       const earned = medals[modeId];
+      const isPrismatic = !!mode.secret; // "prismatic" isn't a real CSS color - a dedicated class draws its gradient instead
       const btn = document.createElement("button");
-      btn.className = "btn mode-card";
-      btn.style.borderLeftColor = mode.medal.color;
+      btn.className = "btn mode-card" + (isPrismatic ? " mode-card-prismatic" : "");
+      if (!isPrismatic) btn.style.borderLeftColor = mode.medal.color;
       btn.innerHTML = `
-        <span class="mode-medal${earned ? " earned" : ""}" style="--medal-color:${mode.medal.color}" title="${mode.name} medal: sprint ${MEDAL_THRESHOLDS[diffId]}+">${earned ? mode.medal.emoji : "⚪"}</span>
+        <span class="mode-medal${earned ? " earned" : ""}${isPrismatic ? " mode-medal-prismatic" : ""}"${isPrismatic ? "" : ` style="--medal-color:${mode.medal.color}"`} title="${mode.name} medal: sprint ${MEDAL_THRESHOLDS[diffId]}+">${earned ? mode.medal.emoji : "⚪"}</span>
         <span class="mode-card-text"><span class="mode-name">${mode.name}</span><span class="mode-desc">${mode.desc}</span></span>
       `;
       btn.addEventListener("click", () => onModeClick(mapId, diffId, modeId, mode.name));

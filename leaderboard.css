@@ -72,6 +72,10 @@
   white-space: nowrap;
 }
 
+.lb-badge {
+  margin-right: 5px;
+}
+
 .lb-score {
   color: var(--cyan);
   font-weight: bold;

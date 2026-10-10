@@ -16,7 +16,12 @@ lbAccountsToggle.addEventListener("click", () => {
   lbAccountsCaret.innerHTML = lbAccountList.hidden ? "&#9656;" : "&#9662;";
 });
 
-function renderBoard(container, rows, scoreKey, scoreLabel) {
+// badgeKey: an optional row field that, when truthy, prepends a small
+// trophy badge before the name - used for td_full_clear (every medal,
+// every difficulty and mode, on all 5 maps - see hasFullClearEverywhere
+// in towerdefense.js) on the sprint board, the game's single hardest
+// account-wide achievement.
+function renderBoard(container, rows, scoreKey, scoreLabel, badgeKey) {
   if (!rows || rows.length === 0) {
     container.innerHTML = `<p class="lb-loading">no scores yet - be the first!</p>`;
     return;
@@ -25,10 +30,11 @@ function renderBoard(container, rows, scoreKey, scoreLabel) {
     .map((row, i) => {
       const name = row.display_name || "anonymous";
       const score = row[scoreKey] || 0;
+      const badge = badgeKey && row[badgeKey] ? `<span class="lb-badge" title="Full Clear - every medal on every map">🏆</span>` : "";
       return `
         <div class="lb-row">
           <span class="lb-rank">#${i + 1}</span>
-          <span class="lb-name">${name}</span>
+          <span class="lb-name">${badge}${name}</span>
           <span class="lb-score">${score.toLocaleString()} ${scoreLabel}</span>
         </div>
       `;
@@ -65,7 +71,7 @@ async function loadLeaderboards() {
 
   const { data: towerRows, error: towerError } = await sb
     .from("leaderboard")
-    .select("display_name, td_best_wave")
+    .select("display_name, td_best_wave, td_full_clear")
     .order("td_best_wave", { ascending: false })
     .limit(15);
 
@@ -73,7 +79,7 @@ async function loadLeaderboards() {
     console.error("towerBoard load failed:", towerError);
     towerBoard.innerHTML = `<p class="lb-loading">couldn't load leaderboard.</p>`;
   } else {
-    renderBoard(towerBoard, towerRows.filter((r) => r.td_best_wave > 0), "td_best_wave", "sprint");
+    renderBoard(towerBoard, towerRows.filter((r) => r.td_best_wave > 0), "td_best_wave", "sprint", "td_full_clear");
   }
 
   const { data: goldRows, error: goldError } = await sb
