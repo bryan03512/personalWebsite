@@ -600,13 +600,27 @@ canvas {
 
 /* All 14 medals (3 difficulties + 11 modes) at a glance per map, so
    earning one shows up right on the map-select screen, not just the
-   difficulty/mode screens behind it. */
+   difficulty/mode screens behind it. Grouped into one tinted cluster per
+   difficulty tier (see .medal-tier-group) with a visible gap between
+   clusters, rather than one flat row. */
 .map-thumb-medals {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 2px;
+  align-items: flex-start;
+  gap: 6px;
   max-width: 100%;
+}
+
+.medal-tier-group {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--tier-color, var(--border)) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--tier-color, var(--border)) 40%, transparent);
 }
 
 .medal-dot {

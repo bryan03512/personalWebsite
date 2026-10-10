@@ -422,13 +422,22 @@ function medalStyleFor(key) {
 
 // Small grey/colored dot strip - every medal key at a glance, used on the
 // map-select screen so all 14 medals (3 difficulties + 11 modes) show up
-// per map without having to drill into the difficulty/mode screens.
+// per map without having to drill into the difficulty/mode screens. Split
+// into one tinted group per difficulty tier (that tier's own medal first,
+// then its modes) rather than one flat row of 14 - same grouped-by-
+// difficulty layout BTD6's own map-select medal row uses, so Easy/Normal/
+// Hard read as three distinct clusters instead of a wall of dots.
 function renderMedalStrip(medals) {
-  return Object.keys(emptyMedals())
-    .map((key) => {
-      const style = medalStyleFor(key);
-      const earned = medals[key];
-      return `<span class="medal-dot${earned ? " earned" : ""}" style="--medal-color:${style.color}" title="${style.label}${earned ? " - earned" : " - not earned yet"}">${earned ? style.emoji : "⚪"}</span>`;
+  return ["easy", "normal", "hard"]
+    .map((diffId) => {
+      const dots = tierMedalKeys(diffId)
+        .map((key) => {
+          const style = medalStyleFor(key);
+          const earned = medals[key];
+          return `<span class="medal-dot${earned ? " earned" : ""}" style="--medal-color:${style.color}" title="${style.label}${earned ? " - earned" : " - not earned yet"}">${earned ? style.emoji : "⚪"}</span>`;
+        })
+        .join("");
+      return `<div class="medal-tier-group" style="--tier-color:${DIFFICULTY_MEDAL_STYLES[diffId].color}">${dots}</div>`;
     })
     .join("");
 }
